@@ -13,9 +13,9 @@
 VIVADO_ROOT ?= $(HOME)/Xilinx/Vivado/2021.1
 VIVADO      := $(VIVADO_ROOT)/bin/vivado
 
-.PHONY: all sim sim-streamer sim-player sim-fmt sim-max sim-wide sim-interleave sim-bf sim-rbf package ooc clean
+.PHONY: all sim sim-streamer sim-player sim-fmt sim-max sim-wide sim-interleave sim-bf sim-rbf sim-arb package ooc clean
 
-all: sim sim-fmt sim-max sim-wide sim-interleave sim-bf sim-rbf
+all: sim sim-fmt sim-max sim-wide sim-interleave sim-bf sim-rbf sim-arb
 
 # sc16 regression: S_WIDTH/M_WIDTH 128/256/512 x TICK_STEP 1/2
 sim: sim-streamer sim-player
@@ -47,6 +47,11 @@ sim-wide:
 
 sim-interleave:
 	VIVADO_ROOT=$(VIVADO_ROOT) sim/run_sim_interleave.sh
+
+# axis_pkt_arb against its previous skid-buffer form (sim/axis_pkt_arb_skid_ref.v):
+# every port, every cycle, random traffic and backpressure
+sim-arb:
+	VIVADO_ROOT=$(VIVADO_ROOT) sim/run_sim_arb.sh
 
 # beamformers (PROTOCOL.md 11), every v49 (N_CH, BEAT_W, clock) geometry
 sim-bf:

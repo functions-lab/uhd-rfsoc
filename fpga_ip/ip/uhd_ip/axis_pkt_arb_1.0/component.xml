@@ -236,7 +236,7 @@
         <spirit:parameters>
           <spirit:parameter>
             <spirit:name>viewChecksum</spirit:name>
-            <spirit:value>b8e841ec</spirit:value>
+            <spirit:value>76e30e2f</spirit:value>
           </spirit:parameter>
         </spirit:parameters>
       </spirit:view>
@@ -252,7 +252,7 @@
         <spirit:parameters>
           <spirit:parameter>
             <spirit:name>viewChecksum</spirit:name>
-            <spirit:value>b8e841ec</spirit:value>
+            <spirit:value>76e30e2f</spirit:value>
           </spirit:parameter>
         </spirit:parameters>
       </spirit:view>
@@ -605,7 +605,7 @@
       <spirit:file>
         <spirit:name>src/axis_pkt_arb.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
-        <spirit:userFileType>CHECKSUM_b8e841ec</spirit:userFileType>
+        <spirit:userFileType>CHECKSUM_76e30e2f</spirit:userFileType>
         <spirit:userFileType>IMPORTED_FILE</spirit:userFileType>
       </spirit:file>
     </spirit:fileSet>
@@ -651,12 +651,12 @@
       <xilinx:definitionSource>package_project</xilinx:definitionSource>
       <xilinx:vendorDisplayName>SPEAR</xilinx:vendorDisplayName>
       <xilinx:coreRevision>1</xilinx:coreRevision>
-      <xilinx:coreCreationDateTime>2026-10-09T19:17:50Z</xilinx:coreCreationDateTime>
+      <xilinx:coreCreationDateTime>2026-10-12T19:22:29Z</xilinx:coreCreationDateTime>
     </xilinx:coreExtensions>
     <xilinx:packagingInfo>
       <xilinx:xilinxVersion>2021.1</xilinx:xilinxVersion>
       <xilinx:checksum xilinx:scope="busInterfaces" xilinx:value="0bc06511"/>
-      <xilinx:checksum xilinx:scope="fileGroups" xilinx:value="2a2662dd"/>
+      <xilinx:checksum xilinx:scope="fileGroups" xilinx:value="3ecc49d2"/>
       <xilinx:checksum xilinx:scope="ports" xilinx:value="9a03e539"/>
       <xilinx:checksum xilinx:scope="hdlParameters" xilinx:value="431ef41c"/>
       <xilinx:checksum xilinx:scope="parameters" xilinx:value="3f247c8d"/>

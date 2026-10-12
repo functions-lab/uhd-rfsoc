@@ -30,7 +30,7 @@ for c in $COMBOS; do
     echo "== tx_beamformer N_CH=$N BEAT_W=$BW PIPE=$P aclk ${PS} ps"
     mkdir -p "$work" && cd "$work"
     python3 "$HERE/check_bf.py" gen --nch "$N" --out weights.hex > gen.log
-    xvlog -sv "$XPM/xpm_cdc/hdl/xpm_cdc.sv" --work xpm > xvlog_xpm.log
+    xvlog -sv "$XPM/xpm_cdc/hdl/xpm_cdc.sv" --work xpm=xsim.dir/xpm > xvlog_xpm.log
     xvlog -sv "$IP/beamformer_channel.sv" "$IP/beamformer_v1_0.sv" > xvlog_ip.log
     xvlog "$VIVADO_ROOT/data/verilog/src/glbl.v" "$HERE/../src/tx_beamformer.v" > xvlog_rtl.log
     xvlog -sv "$HERE/tb_tx_beamformer.sv" > xvlog_tb.log

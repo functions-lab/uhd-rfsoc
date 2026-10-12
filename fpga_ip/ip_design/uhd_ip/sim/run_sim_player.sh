@@ -25,7 +25,7 @@ run() {   # $1 = build dir, $2 = TICK_STEP, $3 = M_WIDTH, $4 = FMT, rest = extra
     local work=$1 ts=$2 w=$3 f=$4; shift 4
     mkdir -p "$work" && cd "$work"
     xvlog -sv "$XPM/xpm_cdc/hdl/xpm_cdc.sv" "$XPM/xpm_memory/hdl/xpm_memory.sv" \
-              "$XPM/xpm_fifo/hdl/xpm_fifo.sv" --work xpm > xvlog_xpm.log
+              "$XPM/xpm_fifo/hdl/xpm_fifo.sv" --work xpm=xsim.dir/xpm > xvlog_xpm.log
     xvlog "$VIVADO_ROOT/data/verilog/src/glbl.v" "$HERE/../src/udp_player.v" \
           "$HERE/../src/axis_pkt_arb.v" "$HERE/../src/udp_streamer.v" > xvlog_rtl.log
     xvlog -sv "$@" "$HERE/tb_udp_player.sv" > xvlog_tb.log

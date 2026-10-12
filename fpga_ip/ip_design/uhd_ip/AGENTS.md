@@ -11,8 +11,10 @@ Working directory of the ZCU216 UHD data-plane IP. Read before touching `src/`.
   against an exact Python model; "PASS" means bit-exact, not "looks right".
   - `run_sim.sh` / `run_sim_player.sh` (FMTS, WIDTHS 128..1024, TICK_STEPS, FAST, TXBW env knobs),
     `run_sim_interleave.sh`, `run_sim_bf.sh` (TX beamformer, PIPE 0/1),
-    `run_sim_rbf.sh` (RX beamformer). Make targets: `sim sim-fmt sim-max
-    sim-wide sim-interleave sim-bf sim-rbf` (`all` runs them all).
+    `run_sim_rbf.sh` (RX beamformer), `run_sim_arb.sh` (axis_pkt_arb against
+    its previous skid-buffer form `sim/axis_pkt_arb_skid_ref.v`, every port
+    every cycle). Make targets: `sim sim-fmt sim-max sim-wide sim-interleave
+    sim-bf sim-rbf sim-arb` (`all` runs them all).
   - `otw_ref.py` = reference sc8/sc12/fc32 converters (shared with the checkers).
 - `package_ip.tcl` (`make package`) → `../../ip/uhd_ip/<core>_1.0`
   (`user.org:uhd:<core>:1.0`). It refuses to save a core whose bus interfaces,
@@ -34,6 +36,11 @@ Working directory of the ZCU216 UHD data-plane IP. Read before touching `src/`.
   and the board driver (`rfsoc_lib/uhd/server/`) in the same change.
 
 ## Key facts
+- axis_pkt_arb feeds the CMAC TX, whose tready is the hard block's tx_rdy:
+  late at 322 MHz. It must stay off wide enables: the output is a two-entry
+  FIFO whose entries are written from the arbiter side only, tready moves just
+  the read pointer and count. (The previous output+skid register form missed
+  timing by ~0.2 ns on ~860 CE endpoints, placement-dependent.)
 - RX beamformer: ch0 = sat16((Σ x_c·w_c + 2^(14+SHIFT)) >> (15+SHIFT)); SHIFT
   reset log2(N); LOAD applies W[] and SHIFT atomically; latency 7+log2(N).
   The §5 test pattern is inserted AFTER it (a pattern capture is never beamformed).

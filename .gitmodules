@@ -1,0 +1,6 @@
+[submodule "host/uhd"]
+	path = host/uhd
+	url = https://github.com/EttusResearch/uhd.git
+[submodule "host/gnuradio/gnuradio"]
+	path = host/gnuradio/gnuradio
+	url = https://github.com/gnuradio/gnuradio.git

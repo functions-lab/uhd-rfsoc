@@ -27,7 +27,7 @@ for TS in ${TICK_STEPS:-1 2}; do
     if [ "${FAST:-0}" != 0 ]; then WORK=${WORK}_fast; fi
     mkdir -p "$WORK" && cd "$WORK"
     xvlog -sv "$XPM/xpm_cdc/hdl/xpm_cdc.sv" "$XPM/xpm_memory/hdl/xpm_memory.sv" \
-              "$XPM/xpm_fifo/hdl/xpm_fifo.sv" --work xpm > xvlog_xpm.log
+              "$XPM/xpm_fifo/hdl/xpm_fifo.sv" --work xpm=xsim.dir/xpm > xvlog_xpm.log
     xvlog "$VIVADO_ROOT/data/verilog/src/glbl.v" "$HERE/../src/udp_streamer.v" > xvlog_rtl.log
     xvlog -sv "$HERE/tb_udp_streamer.sv" > xvlog_tb.log
     xelab -L xpm -debug off --timescale 1ns/1ps -generic_top "TICK_STEP=$TS" \

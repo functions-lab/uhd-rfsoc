@@ -27,7 +27,7 @@ for c in $COMBOS; do
     echo "== rx_beamformer N_CH=$N BEAT_W=$BW aclk ${PS} ps"
     mkdir -p "$work" && cd "$work"
     python3 "$HERE/check_rbf.py" gen --nch "$N" --out weights.hex --shifts shifts.hex > gen.log
-    xvlog -sv "$XPM/xpm_cdc/hdl/xpm_cdc.sv" --work xpm > xvlog_xpm.log
+    xvlog -sv "$XPM/xpm_cdc/hdl/xpm_cdc.sv" --work xpm=xsim.dir/xpm > xvlog_xpm.log
     xvlog "$VIVADO_ROOT/data/verilog/src/glbl.v" "$HERE/../src/rx_beamformer.v" > xvlog_rtl.log
     xvlog -sv "$HERE/tb_rx_beamformer.sv" > xvlog_tb.log
     xelab -L xpm -debug off --timescale 1ns/1ps -generic_top "N_CH=$N" -generic_top "BEAT_W=$BW" \

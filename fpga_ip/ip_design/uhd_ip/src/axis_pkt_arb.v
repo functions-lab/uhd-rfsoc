@@ -11,10 +11,19 @@
 // next packet in the cycle right after a tlast, so back-to-back frames stay
 // back-to-back. All in m_axis' clock (tx_clk).
 //
-// REG_OUT=1 adds a full-throughput register slice (two-entry skid buffer) on
-// the output. Its m_axis_tvalid drops only when the selected source itself
-// has no data, so it preserves the no-bubble property; m_axis_tready and
-// every m_axis output then come straight from flops.
+// REG_OUT=1 adds a full-throughput two-entry FIFO on the output. Its
+// m_axis_tvalid drops only when the selected source itself has no data, so it
+// preserves the no-bubble property, and the sources' tready comes straight
+// from a flop. The entries are written only from the arbiter side: their
+// enables never see m_axis_tready, which moves just the read pointer and the
+// count. The CMAC's tready is its hard block's tx_rdy -- late (clock-to-out
+// plus a long route) at 322 MHz -- and as the enable of a 578-bit output
+// register and a 578-bit skid register (the previous form, kept as
+// sim/axis_pkt_arb_skid_ref.v) it missed timing by ~0.2 ns on ~860 endpoints
+// depending on placement. Here it reaches three flops through one LUT;
+// m_axis_* is entry[rd] through one 2:1 mux (that path has > 1 ns of slack).
+// Port behaviour is cycle-for-cycle that of the previous form
+// (sim/tb_axis_pkt_arb.sv).
 
 `timescale 1ns / 1ps
 `default_nettype none
@@ -76,23 +85,23 @@ module axis_pkt_arb #(
 
     wire [W-1:0] m_bus;
     generate if (REG_OUT != 0) begin : g_reg
-        reg  [W-1:0] m_q, sk_q;
-        reg          m_v, sk_v;
-        assign a_ready       = !sk_v;
-        assign m_bus         = m_q;
-        assign m_axis_tvalid = m_v;
+        reg  [W-1:0] e0, e1;        // the two entries
+        reg          wr, rd;        // write / read pointer
+        reg  [1:0]   cnt;           // entries held: 0, 1 or 2
+        wire         pop = m_axis_tready && cnt != 2'd0;
+        assign a_ready       = !cnt[1];        // room for one more
+        assign m_bus         = rd ? e1 : e0;
+        assign m_axis_tvalid = cnt != 2'd0;
         always @(posedge clk) begin
+            // data: written on the arbiter's handshake only (no reset)
+            if (a_hs && !wr) e0 <= a_bus;
+            if (a_hs &&  wr) e1 <= a_bus;
             if (!aresetn) begin
-                m_v <= 1'b0; sk_v <= 1'b0;
-            end else if (m_axis_tready || !m_v) begin
-                // output register free this cycle: refill from skid first
-                if (sk_v) begin
-                    m_q <= sk_q; m_v <= 1'b1; sk_v <= 1'b0;
-                end else begin
-                    m_q <= a_bus; m_v <= a_valid;
-                end
-            end else if (a_hs) begin
-                sk_q <= a_bus; sk_v <= 1'b1;   // output stalled: park one beat
+                wr <= 1'b0; rd <= 1'b0; cnt <= 2'd0;
+            end else begin
+                if (a_hs) wr <= !wr;
+                if (pop)  rd <= !rd;
+                cnt <= cnt + {1'b0, a_hs} - {1'b0, pop};
             end
         end
     end else begin : g_comb

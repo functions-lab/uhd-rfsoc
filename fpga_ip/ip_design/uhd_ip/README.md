@@ -2,7 +2,7 @@
 
 Sources, testbenches and packaging of the FPGA cores that make the ZCU216 a UHD
 device (`rfsoc_lib/uhd`). Packaged IP goes to `hw_design/ip/uhd_ip`, which the
-`zcu216_v49_<N>ch_qsfp` block designs import.
+v49 block designs (`zcu216_v49_qsfp`, `zcu208_v49_qsfp`) import.
 
 | core | job |
 |---|---|
@@ -14,7 +14,7 @@ device (`rfsoc_lib/uhd`). Packaged IP goes to `hw_design/ip/uhd_ip`, which the
 | `rx_beamformer` | RX ch0 = Σ x[c]·w[c], channels 1..N−1 raw, or bypass |
 
 ```
-make sim sim-fmt sim-max sim-wide sim-interleave sim-bf sim-rbf   # xsim regressions
+make sim sim-fmt sim-max sim-wide sim-interleave sim-bf sim-rbf sim-arb   # xsim regressions
 make package                                             # -> ../../ip/uhd_ip
 ```
 
