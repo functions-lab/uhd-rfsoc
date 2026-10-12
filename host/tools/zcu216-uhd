@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+# zcu216-uhd -- run a UHD application with the ZCU216 module (DPDK data plane).
+#
+#   zcu216-uhd <uhd app> [args...]
+#   zcu216-uhd rx_samples_to_file --args type=zcu216,addr=<board-ip>,pattern=1 \
+#       --rate 1.2e9 --nsamps 100000000 --file /dev/shm/x.dat
+#   zcu216-uhd python3 my_script.py
+#
+# What it does, and why:
+#   root        DPDK needs CAP_NET_ADMIN/NET_RAW/IPC_LOCK and hugepages: the app
+#               runs under `sudo -E` (not when already root).
+#   module      UHD_MODULE_PATH = the installed libuhd_zcu216.so (set by
+#               `cmake --install`), or $ZCU216_MODULE if set (e.g. a build tree
+#               copy; do not mix two different copies in one process).
+#   affinity    the module places itself by the CPU topology (physical cores
+#               C0, C1, ... = hyperthread sibling groups; dpdk::default_layout):
+#               EAL main on C0, the RX and TX polling lcores on the two threads
+#               of C1, one conversion worker per middle core, and the app is
+#               started with taskset on the threads of the FIRST core, with
+#               the EAL main lcore (the application thread itself)
+#               (wei-duke-wsp5: main/app 0+6, lcores 1+7, workers 2,3,4,5).
+#               ZCU216_APP_CPUS=<list> overrides the app set, =all skips
+#               taskset. When the lcores or workers are moved with the device
+#               args dpdk_*_core(s)= / worker_cpus=, also export
+#               ZCU216_LCORE_CPUS / ZCU216_WORKER_CPUS (and ZCU216_RX_WORKERS)
+#               to match: the app then gets every online CPU they leave free.
+#   app lookup  a bare name that is not on PATH is looked up in UHD's example
+#               directory (/usr/libexec/uhd/examples), so `zcu216-uhd
+#               benchmark_rate ...` works. Resolved before sudo resets PATH.
+set -euo pipefail
+
+MODULE_DEFAULT='@ZCU216_MODULE_FILE@'
+EXAMPLES=${UHD_EXAMPLES_DIR:-/usr/libexec/uhd/examples}
+LCORE_CPUS=${ZCU216_LCORE_CPUS:-}
+
+usage() { sed -n '2,/^set -e/p' "$0" | grep '^#' | sed 's/^# \{0,1\}//'; }
+[ $# -ge 1 ] || { usage >&2; exit 2; }
+case "$1" in -h|--help) usage; exit 0 ;; esac
+
+# ---- module
+if [ -n "${ZCU216_MODULE:-}" ]; then
+    MOD=$ZCU216_MODULE
+elif [ "${MODULE_DEFAULT#@}" = "$MODULE_DEFAULT" ]; then
+    MOD=$MODULE_DEFAULT                                  # configured by CMake at install
+else
+    MOD=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)/build/libuhd_zcu216.so   # source tree
+fi
+[ -f "$MOD" ] || { echo "zcu216-uhd: no module at $MOD (build and install it, or set ZCU216_MODULE)" >&2; exit 1; }
+MOD=$(readlink -f "$MOD")
+
+# ---- application
+APP=$1; shift
+if [[ $APP != */* ]]; then
+    if P=$(command -v -- "$APP" 2>/dev/null) && [ -x "$P" ]; then APP=$P
+    elif [ -x "$EXAMPLES/$APP" ]; then APP=$EXAMPLES/$APP
+    else echo "zcu216-uhd: $APP not found on PATH or in $EXAMPLES" >&2; exit 127; fi
+fi
+
+# ---- CPUs for the application: online CPUs minus the lcores
+expand() { # "0-3,8" -> "0 1 2 3 8"
+    local r a b
+    for r in ${1//,/ }; do
+        if [[ $r == *-* ]]; then a=${r%-*}; b=${r#*-}; seq "$a" "$b"; else echo "$r"; fi
+    done
+}
+# physical cores, ordered by their lowest CPU: one line "a,b" per core
+cores() {
+    local c sib
+    for c in $(expand "$(cat /sys/devices/system/cpu/online)"); do
+        sib=$(cat /sys/devices/system/cpu/cpu$c/topology/thread_siblings_list 2>/dev/null || echo "$c")
+        echo "$(expand "$sib" | sort -n | paste -sd, -)"
+    done | sort -u -t, -k1,1n
+}
+TASKSET=()
+CPUS=${ZCU216_APP_CPUS:-}
+if [ "$CPUS" != all ]; then
+    if [ -z "$CPUS" ] && [ -z "$LCORE_CPUS" ] && [ -z "${ZCU216_WORKER_CPUS:-}" ] \
+       && [ "$(cores | wc -l)" -ge 4 ]; then
+        CPUS=$(cores | head -1)               # the module's default layout
+    fi
+    if [ -z "$CPUS" ]; then
+        LCORE_CPUS=${LCORE_CPUS:-1-5}
+        declare -A busy=()
+        for c in $(expand "$LCORE_CPUS"); do busy[$c]=1; done
+        online=$(expand "$(cat /sys/devices/system/cpu/online)")
+        # the module's default worker CPUs: the last ZCU216_RX_WORKERS of the
+        # online CPUs that are neither lcores nor the EAL main core (0)
+        if [ -n "${ZCU216_WORKER_CPUS:-}" ]; then
+            workers=$(expand "$ZCU216_WORKER_CPUS")
+        else
+            cand=()
+            for c in $online; do [ -n "${busy[$c]:-}" ] || [ "$c" = 0 ] || cand+=("$c"); done
+            nw=${ZCU216_RX_WORKERS:-4}
+            workers=$(printf '%s\n' "${cand[@]}" | tail -n "$nw")
+        fi
+        for c in $workers; do busy[$c]=1; done
+        free=()
+        for c in $online; do
+            [ -n "${busy[$c]:-}" ] || free+=("$c")
+        done
+        CPUS=$(IFS=,; echo "${free[*]}")
+    fi
+    [ -n "$CPUS" ] && command -v taskset >/dev/null && TASKSET=(taskset -c "$CPUS")
+fi
+
+# ---- run (as root)
+SUDO=()
+[ "$(id -u)" -eq 0 ] || SUDO=(sudo -E)
+exec "${SUDO[@]}" env "UHD_MODULE_PATH=$MOD" "${TASKSET[@]}" "$APP" "$@"

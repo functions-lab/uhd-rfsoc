@@ -1,0 +1,31 @@
+# systemd unit TEMPLATE for the ZCU216 UHD daemon (hardware mode).
+# Not installed or enabled by deploy.sh. To use:
+#   sudo cp zcu216-uhd.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl start zcu216-uhd        # loads the bitstream!
+#   journalctl -u zcu216-uhd -f
+# Only enable it (systemctl enable) on a board that is NOT shared: starting it
+# downloads zcu216_v49_1ch_qsfp.bit and re-runs the RFDC/clock bring-up.
+# The FPGA data IP/MAC and the name come from zcu216_uhd.conf in the working
+# directory (see zcu216_uhd.conf.example); no address is set here.
+[Unit]
+Description=ZCU216 UHD device daemon (rfsoc_lib/uhd, PROTOCOL.md)
+After=network-online.target
+Wants=network-online.target
+# a refusal (bad geometry, unlocked tiles) exits 1; do not hammer the board
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/xilinx/jupyter_notebooks/rfsoc-uhd/rfsoc/server
+# PYNQ needs its venv + XILINX_XRT/BOARD env, which pynq_venv.sh sets up.
+ExecStart=/bin/bash -c 'source /etc/profile.d/pynq_venv.sh && exec python3 -u zcu216_uhd_daemon.py --bitstream /home/xilinx/jupyter_notebooks/rfsoc-uhd/rfsoc/server/zcu216_v49_1ch_qsfp_f2_fs2500.bit'
+KillSignal=SIGTERM
+TimeoutStopSec=10
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

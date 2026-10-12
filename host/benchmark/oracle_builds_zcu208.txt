@@ -1,0 +1,33 @@
+# The ZCU208 builds (hw_design/ZCU208/scripts/v49_ladder.sh), in the format of
+# oracle_builds.txt:
+#   <family> <N> <rate per channel> <bitstream basename> <wire formats> <4T4R beamforming>
+# fs 5000 MS/s (dual RF-ADC tiles), 1T1R and 2T2R only. family normal: every
+# RFDC factor from the 1ch / 2ch maximum (F2 / F4: 2500 / 1250 MS/s per
+# channel, the highest rate whose sc16 stream fits the 100G link) down to 40;
+# family sc8max, sc8 only: 2ch F2, 2500 MS/s per channel (512-bit beat). Wire
+# formats: those backend.link_problem accepts in both directions at full rate.
+# BUILT, NOT BOARD-TESTED: no ZCU208 has run these (hw_design/ZCU208/CLAUDE.md).
+# deploy.sh with BOARD=zcu208 FORCE=1 deploys exactly this list.
+normal    1  2500000000     zcu208_v49_1ch_qsfp_f2_fs5000   sc16,sc12,sc8      no
+normal    1  1666666666.7   zcu208_v49_1ch_qsfp_f3_fs5000   sc16,sc12,sc8      no
+normal    1  1250000000     zcu208_v49_1ch_qsfp_f4_fs5000   sc16,sc12,sc8,fc32 no
+normal    1  1000000000     zcu208_v49_1ch_qsfp_f5_fs5000   sc16,sc12,sc8,fc32 no
+normal    1  833333333.3    zcu208_v49_1ch_qsfp_f6_fs5000   sc16,sc12,sc8,fc32 no
+normal    1  625000000      zcu208_v49_1ch_qsfp_f8_fs5000   sc16,sc12,sc8,fc32 no
+normal    1  500000000      zcu208_v49_1ch_qsfp_f10_fs5000  sc16,sc12,sc8,fc32 no
+normal    1  416666666.7    zcu208_v49_1ch_qsfp_f12_fs5000  sc16,sc12,sc8,fc32 no
+normal    1  312500000      zcu208_v49_1ch_qsfp_f16_fs5000  sc16,sc12,sc8,fc32 no
+normal    1  250000000      zcu208_v49_1ch_qsfp_f20_fs5000  sc16,sc12,sc8,fc32 no
+normal    1  208333333.3    zcu208_v49_1ch_qsfp_f24_fs5000  sc16,sc12,sc8,fc32 no
+normal    1  125000000      zcu208_v49_1ch_qsfp_f40_fs5000  sc16,sc12,sc8,fc32 no
+normal    2  1250000000     zcu208_v49_2ch_qsfp_f4_fs5000   sc16,sc12,sc8      no
+normal    2  1000000000     zcu208_v49_2ch_qsfp_f5_fs5000   sc16,sc12,sc8      no
+normal    2  833333333.3    zcu208_v49_2ch_qsfp_f6_fs5000   sc16,sc12,sc8      no
+normal    2  625000000      zcu208_v49_2ch_qsfp_f8_fs5000   sc16,sc12,sc8,fc32 no
+normal    2  500000000      zcu208_v49_2ch_qsfp_f10_fs5000  sc16,sc12,sc8,fc32 no
+normal    2  416666666.7    zcu208_v49_2ch_qsfp_f12_fs5000  sc16,sc12,sc8,fc32 no
+normal    2  312500000      zcu208_v49_2ch_qsfp_f16_fs5000  sc16,sc12,sc8,fc32 no
+normal    2  250000000      zcu208_v49_2ch_qsfp_f20_fs5000  sc16,sc12,sc8,fc32 no
+normal    2  208333333.3    zcu208_v49_2ch_qsfp_f24_fs5000  sc16,sc12,sc8,fc32 no
+normal    2  125000000      zcu208_v49_2ch_qsfp_f40_fs5000  sc16,sc12,sc8,fc32 no
+sc8max    2  2500000000     zcu208_v49_2ch_qsfp_f2_fs5000   sc8                no

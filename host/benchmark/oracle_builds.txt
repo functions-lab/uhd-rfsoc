@@ -1,0 +1,63 @@
+# The builds the oracle (oracle.sh) covers, one per line:
+#   <family> <N> <rate per channel> <bitstream basename> <wire formats> <4T4R beamforming>
+# family normal: for each channel count the highest rate whose sc16 stream
+# fits the 100G link, and one bitstream per RFDC factor below it (down to 40),
+# fs 2500 MS/s at 1-2 channels, 2250 at 4-16; family sc8max, sc8 only: twice
+# the normal maximum per channel at 8 and 16 channels (fs 2250, 1024-bit beat),
+# 1250 MS/s at 4 (fs 2500; the ADC's limit). The daemon serves a requested rate with the
+# highest of these at or below it (for the client's wire format). Wire formats:
+# those the daemon accepts for the build at full rate (12.38 GB/s link payload;
+# no RX fc32 on 512-bit-beat builds, sc8 only on 1024-bit ones). The beamforming suite runs on the
+# max-rate 4-channel normal build: channels 0-3 are the over-the-air 4T4R link.
+# hw_design/ZCU216/scripts/v49_ladder.sh builds the same list.
+normal    1  1250000000    zcu216_v49_1ch_qsfp_f2_fs2500    sc16,sc12,sc8,fc32  no
+normal    1  833333333.3   zcu216_v49_1ch_qsfp_f3_fs2500    sc16,sc12,sc8,fc32  no
+normal    1  625000000     zcu216_v49_1ch_qsfp_f4_fs2500    sc16,sc12,sc8,fc32  no
+normal    1  500000000     zcu216_v49_1ch_qsfp_f5_fs2500    sc16,sc12,sc8,fc32  no
+normal    1  416666666.7   zcu216_v49_1ch_qsfp_f6_fs2500    sc16,sc12,sc8,fc32  no
+normal    1  312500000     zcu216_v49_1ch_qsfp_f8_fs2500    sc16,sc12,sc8,fc32  no
+normal    1  250000000     zcu216_v49_1ch_qsfp_f10_fs2500   sc16,sc12,sc8,fc32  no
+normal    1  208333333.3   zcu216_v49_1ch_qsfp_f12_fs2500   sc16,sc12,sc8,fc32  no
+normal    1  156250000     zcu216_v49_1ch_qsfp_f16_fs2500   sc16,sc12,sc8,fc32  no
+normal    1  125000000     zcu216_v49_1ch_qsfp_f20_fs2500   sc16,sc12,sc8,fc32  no
+normal    1  104166666.7   zcu216_v49_1ch_qsfp_f24_fs2500   sc16,sc12,sc8,fc32  no
+normal    1  62500000      zcu216_v49_1ch_qsfp_f40_fs2500   sc16,sc12,sc8,fc32  no
+normal    2  1250000000    zcu216_v49_2ch_qsfp_f2_fs2500    sc16,sc12,sc8       no
+normal    2  833333333.3   zcu216_v49_2ch_qsfp_f3_fs2500    sc16,sc12,sc8       no
+normal    2  625000000     zcu216_v49_2ch_qsfp_f4_fs2500    sc16,sc12,sc8,fc32  no
+normal    2  500000000     zcu216_v49_2ch_qsfp_f5_fs2500    sc16,sc12,sc8,fc32  no
+normal    2  416666666.7   zcu216_v49_2ch_qsfp_f6_fs2500    sc16,sc12,sc8,fc32  no
+normal    2  312500000     zcu216_v49_2ch_qsfp_f8_fs2500    sc16,sc12,sc8,fc32  no
+normal    2  250000000     zcu216_v49_2ch_qsfp_f10_fs2500   sc16,sc12,sc8,fc32  no
+normal    2  208333333.3   zcu216_v49_2ch_qsfp_f12_fs2500   sc16,sc12,sc8,fc32  no
+normal    2  156250000     zcu216_v49_2ch_qsfp_f16_fs2500   sc16,sc12,sc8,fc32  no
+normal    2  125000000     zcu216_v49_2ch_qsfp_f20_fs2500   sc16,sc12,sc8,fc32  no
+normal    2  104166666.7   zcu216_v49_2ch_qsfp_f24_fs2500   sc16,sc12,sc8,fc32  no
+normal    2  62500000      zcu216_v49_2ch_qsfp_f40_fs2500   sc16,sc12,sc8,fc32  no
+normal    4  750000000     zcu216_v49_4ch_qsfp_f3_fs2250    sc16,sc12,sc8       yes
+normal    4  562500000     zcu216_v49_4ch_qsfp_f4_fs2250    sc16,sc12,sc8       no
+normal    4  450000000     zcu216_v49_4ch_qsfp_f5_fs2250    sc16,sc12,sc8       no
+normal    4  375000000     zcu216_v49_4ch_qsfp_f6_fs2250    sc16,sc12,sc8       no
+normal    4  281250000     zcu216_v49_4ch_qsfp_f8_fs2250    sc16,sc12,sc8       no
+normal    4  225000000     zcu216_v49_4ch_qsfp_f10_fs2250   sc16,sc12,sc8       no
+normal    4  187500000     zcu216_v49_4ch_qsfp_f12_fs2250   sc16,sc12,sc8       no
+normal    4  140625000     zcu216_v49_4ch_qsfp_f16_fs2250   sc16,sc12,sc8       no
+normal    4  112500000     zcu216_v49_4ch_qsfp_f20_fs2250   sc16,sc12,sc8       no
+normal    4  93750000      zcu216_v49_4ch_qsfp_f24_fs2250   sc16,sc12,sc8       no
+normal    4  56250000      zcu216_v49_4ch_qsfp_f40_fs2250   sc16,sc12,sc8       no
+normal    8  375000000     zcu216_v49_8ch_qsfp_f6_fs2250    sc16,sc12,sc8       no
+normal    8  281250000     zcu216_v49_8ch_qsfp_f8_fs2250    sc16,sc12,sc8       no
+normal    8  225000000     zcu216_v49_8ch_qsfp_f10_fs2250   sc16,sc12,sc8       no
+normal    8  187500000     zcu216_v49_8ch_qsfp_f12_fs2250   sc16,sc12,sc8       no
+normal    8  140625000     zcu216_v49_8ch_qsfp_f16_fs2250   sc16,sc12,sc8       no
+normal    8  112500000     zcu216_v49_8ch_qsfp_f20_fs2250   sc16,sc12,sc8       no
+normal    8  93750000      zcu216_v49_8ch_qsfp_f24_fs2250   sc16,sc12,sc8       no
+normal    8  56250000      zcu216_v49_8ch_qsfp_f40_fs2250   sc16,sc12,sc8       no
+normal    16 187500000     zcu216_v49_16ch_qsfp_f12_fs2250  sc16,sc12,sc8       no
+normal    16 140625000     zcu216_v49_16ch_qsfp_f16_fs2250  sc16,sc12,sc8       no
+normal    16 112500000     zcu216_v49_16ch_qsfp_f20_fs2250  sc16,sc12,sc8       no
+normal    16 93750000      zcu216_v49_16ch_qsfp_f24_fs2250  sc16,sc12,sc8       no
+normal    16 56250000      zcu216_v49_16ch_qsfp_f40_fs2250  sc16,sc12,sc8       no
+sc8max    4  1250000000    zcu216_v49_4ch_qsfp_f2_fs2500    sc8                 no
+sc8max    8  750000000     zcu216_v49_8ch_qsfp_f3_fs2250    sc8                 no
+sc8max    16 375000000     zcu216_v49_16ch_qsfp_f6_fs2250   sc8                 no

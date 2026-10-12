@@ -1,0 +1,7 @@
+# xsim work directories, OOC runs and packaging scratch
+sim/build*/
+ooc/
+.pkg_tmp/
+.Xil/
+*.jou
+*.log

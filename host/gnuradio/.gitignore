@@ -1,0 +1,3 @@
+# GRC writes the generated flowgraph code next to the .grc
+grc/*.py
+grc/__pycache__/

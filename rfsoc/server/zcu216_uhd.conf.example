@@ -1,0 +1,23 @@
+# zcu216_uhd.conf -- board-local settings of the ZCU216 UHD daemon.
+#
+# Copy to zcu216_uhd.conf (next to zcu216_uhd_daemon.py, or /etc/zcu216_uhd.conf,
+# or point $ZCU216_UHD_CONF at it) and fill in. zcu216_uhd.conf is git-ignored:
+# addresses belong to the installation, not to the code.
+#
+# The board's LAN (management) address is NOT set here: the daemon answers
+# discovery and control with whatever address the request arrived on, so a
+# DHCP change needs nothing. Only the FPGA's 100G data-plane identity is
+# configured, because the FPGA has no DHCP:
+#
+#   data_ip   the FPGA's IPv4 address on the 100G link. It must be on the
+#             subnet of the PC's 100G port, which host/setup_cx5.sh <iface>
+#             <host-data-ip>/<prefix> configures. REQUIRED in hardware mode.
+#   data_mac  the FPGA's MAC on the 100G link. Optional: by default a locally
+#             administered MAC derived from the board's eth0 MAC.
+#   name      discovery name (UHD device arg name=). Optional, default zcu216-0.
+#
+# Command-line --data-ip / --data-mac / --name override these.
+
+data_ip  = <fpga-data-ip>
+# data_mac = <fpga-data-mac>
+# name     = zcu216-0

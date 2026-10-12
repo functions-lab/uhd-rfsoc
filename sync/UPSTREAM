@@ -1,0 +1,3 @@
+# spear_sync.py state: the SPEAR repository and the revision this tree matches
+repo = /home/wei/git/SPEAR-qsfp-v49-standalone
+source = /home/wei/git/SPEAR-qsfp-v49-standalone working tree
