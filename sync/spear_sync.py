@@ -113,6 +113,14 @@ class Upstream:
                              capture_output=True, text=True, check=True).stdout
         return [f for f in out.split('\n') if f]
 
+    def executable(self, path):
+        """upstream's executable bit (git mode 100755, or the worktree file's x bit)"""
+        if self.rev is None:
+            return os.access(os.path.join(self.repo, path), os.X_OK)
+        out = subprocess.run(['git', '-C', self.repo, 'ls-tree', self.rev, '--', path],
+                             capture_output=True, text=True).stdout
+        return out.startswith('100755')
+
     def read(self, path):
         if self.rev is None:
             p = os.path.join(self.repo, path)
@@ -133,6 +141,12 @@ def snapshot(man, up):
     return snap
 
 
+def set_mode(path, executable):
+    """carry upstream's executable bit (the content alone loses it)"""
+    m = os.stat(path).st_mode
+    os.chmod(path, (m | 0o111) if executable else (m & ~0o111))
+
+
 def merge3(ours, base, theirs, labels):
     """git merge-file on three byte strings -> (result, conflicted)."""
     with tempfile.TemporaryDirectory() as d:
@@ -150,7 +164,8 @@ def cmd_status(man, st, repo):
     base = st.get('base')
     if not base:
         sys.exit('no base revision in sync/UPSTREAM: run `pull --rev <commit>` first')
-    snap = snapshot(man, Upstream(repo, base))
+    up = Upstream(repo, base)
+    snap = snapshot(man, up)
     n = 0
     for l, (f, data) in sorted(snap.items()):
         p = os.path.join(ROOT, l)
@@ -158,6 +173,8 @@ def cmd_status(man, st, repo):
             print(f'missing   {l}  ({f})'); n += 1
         elif open(p, 'rb').read() != data:
             print(f'modified  {l}  ({f})'); n += 1
+        elif os.access(p, os.X_OK) != up.executable(f):
+            print(f'mode      {l}  ({f})'); n += 1
     print(f'{n} local difference(s) against {repo}@{base[:12]}')
 
 
@@ -184,9 +201,12 @@ def cmd_pull(man, st, repo, rev, worktree):
                 os.makedirs(os.path.dirname(p), exist_ok=True)
                 open(p, 'wb').write(t); changed += 1
                 print(f'{"added  " if ours is None else "updated"}   {l}')
+            if os.access(p, os.X_OK) != new.executable(theirs[l][0]):
+                set_mode(p, new.executable(theirs[l][0])); print(f'mode      {l}')
             continue
         res, bad = merge3(ours, b or b'', t, ('local', 'base', 'upstream'))
         open(p, 'wb').write(res); changed += 1
+        set_mode(p, new.executable(theirs[l][0]))
         if bad:
             conflicts.append(l); print(f'CONFLICT  {l}')
         else:
