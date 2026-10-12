@@ -18,6 +18,19 @@ it by `sync/` (see below).
 | `PROTOCOL.md` | the daemon <-> host <-> FPGA contract (wire format, registers, control) | -- |
 | `sync/` | the SPEAR sync tool and manifest | -- |
 
+Pinned upstream sources (git submodules, shallow, at the exact releases this
+PC builds and runs against -- the Ubuntu 24.04 packages `libuhd 4.6.0.0` and
+`gnuradio 3.10.9.2`):
+
+| path | source | pinned to |
+|---|---|---|
+| `host/uhd/` | EttusResearch/uhd | `v4.6.0.0` (50fa3baa) -- the UHD `host/` module is built against (`host/CMakeLists.txt` requires 4.6) |
+| `host/gnuradio/gnuradio/` | gnuradio/gnuradio | `v3.10.9.2` (c7c828a1) -- the GNU Radio the flowgraphs in `host/gnuradio/` target |
+
+```
+git submodule update --init --depth 1     # after cloning; reference sources, not needed to build host/
+```
+
 Boards: ZCU216 (1, 2, 4, 8, 16 channels; tested on hardware), ZCU208 (1, 2
 channels; built, not yet tested on a board), RFSoC 4x2 (not ported:
 `fpga_board/rfsoc4x2/README.md`).
