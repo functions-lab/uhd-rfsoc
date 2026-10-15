@@ -216,6 +216,12 @@ GEN3_FACTORS = (1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 40)
 # the lowest converter AXIS clock a run-time factor may need (the ladder's
 # lowest is 14.06 MHz: 4ch F40 at 2250 MS/s)
 FABRIC_MIN_MHZ = 10.0
+# MTS attempts before refusing to serve. An attempt can fail its DAC alignment
+# ("Alignment correction delay 31 required exceeds maximum (31) for DAC Tile
+# n", any Target_Latency): F4 on the 1ch and 2ch templates ~35 % of attempts,
+# the 4ch F3 template's bring-up twice in a row (zcu216-0, 2026-10-14/15).
+# The next attempt locks; each is ~0.3 s.
+MTS_ATTEMPTS = 10
 
 
 def clk_wiz_lib():
@@ -981,8 +987,7 @@ class HwBackend(Backend):
 
     def _retune_hw(self, v: Variant) -> None:
         """The loaded (retunable) bitstream to v.factor, in place: MMCM to
-        fs/F/spc over clk_wiz DRP, the factor on every enabled block, MTS (up
-        to 10 attempts) with the two things its tile-sync reset undoes put back
+        fs/F/spc over clk_wiz DRP, the factor on every enabled block, MTS with the two things its tile-sync reset undoes put back
         (the MMCM setting after the clk_wiz reset, the DAC factor after the
         DAC tile resets), NCOs re-programmed and phase-reset, then checked:
         factor readback of every enabled block, MMCM locked, the converter
@@ -996,11 +1001,7 @@ class HwBackend(Backend):
         self._set_factor(f)
         self.rx_decim = self.tx_interp = f
         self.variant = v
-        # (F4 on the 1ch template fails its DAC alignment ~35 % of the time,
-        # "Alignment correction delay 31 required exceeds maximum", any
-        # Target_Latency, 2026-10-14: each attempt is ~0.3 s, so allow 10)
-        self.mts = self._mts_lock(attempts=10,
-                                  after_clkwiz_reset=lambda: cw.program(v.fabric_mhz),
+        self.mts = self._mts_lock(after_clkwiz_reset=lambda: cw.program(v.fabric_mhz),
                                   after_dac_reset=lambda: self._set_factor(f, kinds=("dac",)))
         # the DAC tile reset restored the build's mixer settings: the NCOs again
         for ch in range(self.num_rx):
@@ -1167,13 +1168,14 @@ class HwBackend(Backend):
         t, b = self.tx_chans[ch]
         return self.my.dac_tiles[t], b, self.my.dac_tiles[t].blocks[b]
 
-    def _mts_lock(self, attempts: int = 2, after_clkwiz_reset=None,
+    def _mts_lock(self, attempts: int = MTS_ATTEMPTS, after_clkwiz_reset=None,
                   after_dac_reset=None) -> Dict[str, object]:
         """Multi-tile sync of every DAC and ADC tile (rfsoc_lib MyMTS.init():
         tile-sync reset, MTS clocking-wizard MMCM lock, mts_dac, mts_adc).
-        It must end LOCKED, or the daemon refuses to serve. The first attempt
-        after a board reboot fails on zcu216-0 and the second succeeds, so it
-        runs at most twice; the attempt that locked is logged. MyMTS takes
+        It must end LOCKED, or the daemon refuses to serve. An attempt can
+        fail (the first after a board reboot on zcu216-0; DAC alignment, see
+        MTS_ATTEMPTS), so it runs up to MTS_ATTEMPTS times; the attempt that
+        locked is logged. MyMTS takes
         the board's tile mask and reference tile (ZCU208: tiles 0 and 2,
         RefTile 2)."""
         from rfsoc_lib.mts import MyMTS

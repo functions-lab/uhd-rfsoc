@@ -181,10 +181,32 @@ converter clock measured by the timekeeper within 1 %, and
 over the median in every trial, at the rate asked. Latency is not a criterion
 (it moves by whole samples between MTS runs).
 
+**Every template, 1 to 16 channels: every rate asked PASS (71 of 71), MTS
+locked at every bring-up and retune (71 of 71, all four DAC and ADC tiles),
+after one 4ch bring-up refused under the old 2-attempt limit (below).**
+
+| template | rates served (MS/s) | rates asked | PASS | MTS locks | failed attempts before a lock | retune s | clock error max |
+|---|---|---|---|---|---|---|---|
+| 1ch F2 fs2500 | 1250, 833.333, 625, 500, 416.667, 312.5, 250, 208.333, 156.25, 125, 104.167, 62.5 | 19 | 19 | 19 | 3 (F4) | 1.0-1.9 | 0.02 % |
+| 2ch F2 fs2500 | same as 1ch | 16 | 16 | 16 | 2 (F4) | 1.0-1.4 | 0.008 % |
+| 4ch F3 fs2250 | 750, 562.5, 450, 375, 281.25, 225, 187.5, 140.625, 112.5, 93.75, 56.25 | 15 | 15 | 15 | 0 | 1.1 | 0.011 % |
+| 8ch F6 fs2250 | 375, 281.25, 225, 187.5, 140.625, 112.5, 93.75, 56.25 | 12 | 12 | 12 | 3 (F6) | 1.2-2.0 | 0.004 % |
+| 16ch F12 fs2250 | 187.5, 140.625, 112.5, 93.75, 56.25 | 9 | 9 | 9 | 0 | 1.3 | 0.006 % |
+
+Each run: down the ladder, back to the top, then jumps (e.g. 8ch 375 -> 140.625
+-> 281.25 -> 375). A failed attempt is the DAC alignment error ("Alignment
+correction delay 31 required exceeds maximum (31) for DAC Tile n"): it comes
+at the 156.25 MHz (F4 at fs2500) and 187.5 MHz (F3 / F6 at fs2250) converter
+clocks, and locking MTS again clears it. One 4ch bring-up failed both of the
+2 attempts the daemon then allowed and refused to serve; since then bring-up
+and retune both allow 10 (`MTS_ATTEMPTS`), and the rerun above locked first
+time. Run with `rate_loopback.py`, 2 trials per rate, 2026-10-15 (2ch with
+the 2-attempt bring-up).
+
 ### 1ch F2 fs2500 (`zcu216_v49_1ch_qsfp_f2_fs2500`), 2026-10-14
 
 **12 of 12 rates PASS, 1250 to 62.5 MS/s, from one bitstream; MTS locked at
-every retune (18 of 18).** Down the ladder and back to 1250, then a jumping
+every bring-up and retune (19 of 19).** Down the ladder and back to 1250, then a jumping
 sequence (1250, 625, 312.5, 62.5, 500, 1250): each retune 1.0-1.9 s.
 
 | MS/s | F | converter clock MHz (measured) | MTS | pulse dB |
@@ -203,10 +225,10 @@ sequence (1250, 625, 312.5, 62.5, 500, 1250): each retune 1.0-1.9 s.
 | 62.5 | 40 | 15.6253 | attempt 1 | 79.4 |
 | 1250 (back) | 2 | 312.4764 | attempt 1 | 49.4 |
 
-Every measured clock is within 0.02 % of fs/F/4. F=4 is the one factor whose
-first MTS attempt can fail ("Alignment correction delay 31 required exceeds
+Every measured clock is within 0.02 % of fs/F/4. On this template F=4 is the
+one factor whose first MTS attempt failed ("Alignment correction delay 31 required exceeds
 maximum (31) for DAC Tile n", with or without a target latency): attempt 2 in
-the ladder, attempt 3 in the jumping sequence; the retune allows 10. Measured
+the ladder, attempt 3 in the jumping sequence. Measured
 with the predecessor of `rate_loopback.py` (same pulse and criterion, 2
 trials per rate).
 

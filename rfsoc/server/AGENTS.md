@@ -163,8 +163,9 @@ MTS is not optional: every bitstream load runs multi-tile sync on all DAC and
 ADC tiles (`HwBackend._mts_lock`: rfsoc_lib `MyMTS.init()` -- tile-sync reset,
 MTS clocking-wizard MMCM lock, `mts_dac`, `mts_adc`) after the RfdcTask
 bring-up and before the NCOs. It must end locked or the daemon refuses to
-serve; it runs at most twice, because the first attempt after a board reboot
-fails on zcu216-0 and the second succeeds. The log line `[m] MTS LOCKED
+serve; it runs up to `MTS_ATTEMPTS` (10) times, because an attempt can fail
+(the first after a board reboot on zcu216-0; on the templates, DAC alignment
+"delay 31 exceeds maximum" at some factors) and the next locks. The log line `[m] MTS LOCKED
 (attempt n)` carries the per-tile latency and offset; the mboard sensor
 `mts_locked` reports it (and that the MMCM is still locked) to the host.
 
