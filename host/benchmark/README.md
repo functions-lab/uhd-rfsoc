@@ -36,6 +36,7 @@ DRAM) and the FPGA simulations (`hw_design/ip_design/uhd_ip/sim`).
 | `dpdk_rx_test.sh` | real-link check: probe, full-rate RX/TX, bit-exact capture |
 | `otw_rx_check.py`, `otw_tx_ota.py`, `otw_ctl_refusal.py` | FPGA wire-format converters (RX bit-exact, TX over the air, refusals) |
 | `tx_start_test.py` | TX start-of-stream underflows |
+| `rate_sweep.sh`, `rate_loopback.py` | run-time rate change on a template build: per rate the in-place retune, then a TX->RX pulse at it |
 | `bf_air_test.py`, `rx_bf_air_test.py` | TX / RX beamformer over the air |
 | `bf_cal_sweep.py` | channel phase offsets with the beamformers (power sweep), calibration |
 | `phase_matrix_ota.py`, `bf_phase_ota.py`, `phase_check.py` | NTNR phase matrix, NT1R/1TNR offsets, phase after retune |

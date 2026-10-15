@@ -488,6 +488,7 @@ proc verify_rate_variant {F {nch 1}} {
   set hz [get_property CONFIG.FREQ_HZ [get_bd_pins MTS_block/MTS_clk_wiz/clk_out1]]
   set clk [expr {$hz / 1e6}]
   if {abs($clk - $fabric) > 0.01} { error "v49: MTS_clk_wiz clk_out1 is $clk MHz, expected $fabric" }
+  if {[get_property CONFIG.USE_DYN_RECONFIG [get_bd_cells MTS_block/MTS_clk_wiz]] ne "true"} { error "v49: MTS_clk_wiz has no dynamic reconfiguration (run-time rate change)" }
   foreach pin {rfdc/M_ADC_AXIS rfdc/S_DAC_AXIS eth100g/udp_streamer/s_axis eth100g/udp_player/m_axis_dac} {
     set nb [get_property CONFIG.TDATA_NUM_BYTES [get_bd_intf_pins $pin]]
     if {$nb ne "" && $nb * 8 != $beat_w} { error "v49: $pin is [expr {$nb*8}] bits, expected $beat_w" }
@@ -737,6 +738,10 @@ proc create_hier_cell_MTS_block { parentCell nameHier } {
  ] $IBUFDS_SYSREF
 
   # Create instance: MTS_clk_wiz, and set properties
+  # USE_DYN_RECONFIG: the daemon retunes clk_out1 (the converter AXIS clock)
+  # at run time over s_axi_lite (register file at 0x200, shared with the
+  # clock monitor), so one bitstream serves every factor F of its row. The
+  # build is timed at the clk_out1 it is generated with: the highest.
   set MTS_clk_wiz [ create_bd_cell -type ip -vlnv xilinx.com:ip:clk_wiz:6.0 MTS_clk_wiz ]
   set_property -dict [ list \
    CONFIG.CLKIN1_JITTER_PS {100.0} \
@@ -762,6 +767,7 @@ proc create_hier_cell_MTS_block { parentCell nameHier } {
    CONFIG.PRIM_IN_FREQ {300} \
    CONFIG.PRIM_SOURCE {Global_buffer} \
    CONFIG.SECONDARY_SOURCE {Single_ended_clock_capable_pin} \
+   CONFIG.USE_DYN_RECONFIG {true} \
    CONFIG.USE_PHASE_ALIGNMENT {true} \
  ] $MTS_clk_wiz
 

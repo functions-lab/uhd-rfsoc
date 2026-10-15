@@ -582,8 +582,8 @@ double dev_state::set_rate(bool rx, size_t ch, double rate)
         const double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
         ZLOG_INFO("Rate changed to " << actual / 1e6 << " MS/s per channel (tick rate "
                                      << tick_rate.load() / 1e6 << " MHz, " << beat_slots()
-                                     << "-slot beat): the daemon reloaded the FPGA (" << secs
-                                     << " s). Streaming stopped; streamers re-setup on "
+                                     << "-slot beat): the daemon retuned or reloaded the FPGA ("
+                                     << secs << " s). Streaming stopped; streamers re-setup on "
                                      << "next use; re-issue set_time if alignment matters.");
     }
     return actual;

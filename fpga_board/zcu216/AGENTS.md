@@ -8,6 +8,13 @@
   ADC and DAC tile and slice; `verify_rate_variant` enforces it. Fabric clock
   = fs / F / (Data_Width / 2) = MTS_clk_wiz clk_out1 (`v49_clk_exact` when the
   wizard's solver misses).
+- Run-time rate (PROTOCOL.md §8): MTS_clk_wiz is built with dynamic
+  reconfiguration (`USE_DYN_RECONFIG`, `verify_rate_variant` checks it), so
+  every build is a template: built and timed at its top factor, it serves
+  every Gen3 factor above it at run time (the daemon retunes the MMCM and
+  the RFDC factor, then re-runs MTS). The 5 templates (`make v49-templates`)
+  cover the normal family; Data_Width, the beat and fs stay the build's, so
+  the sc8max builds and another fs remain separate bitstreams.
 - fs is set when the RFDC is created: rewriting Sampling_Rate afterwards
   detaches tiles 0, 2, 3 from tile 1's clock distribution.
 - Channel c = ADC/DAC tile c/4 block c%4; N > 1 joins them with

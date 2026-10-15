@@ -80,7 +80,7 @@ N-channel build; channel c = ADC / DAC tile c/4, block c%4 (§9).
 | `set_channels <N> [otw=<fmt>]` | `OK <N> <tick_rate>` | switch to N's DEFAULT build, the sc16-max one (§9). `otw=` first declares the client's format (it becomes the current otw, as with `set_*_rate`), so a loaded build only that format fits, e.g. sc8-max with `otw=sc8`, is kept. **If N is not the loaded build's -- or it is, but at a rate the current otw cannot carry -- the daemon reloads the FPGA and redoes the full bring-up exactly as for a rate change (§8): SECONDS, budget 60 s, streaming stops.** The tick rate is that build's: re-read it. `ERR` if no N-channel build is installed |
 | `get_channels` | `OK <N> <tick_rate>` | the loaded build's channel count |
 | `get_rx_rates <ch>` | `OK r1 r2 ...` | the sample rates the installed bitstream variants deliver (Hz, descending; §8) |
-| `set_rx_rate <ch> <hz> [otw=<fmt>]` | `OK <actual hz> <tick_rate>` | coerces to the highest rate of this N at or below `<hz>` (1 ppm tolerance) among the builds that carry the client's formats; below every one of them, the lowest (§8). **If that is not the loaded build's rate the daemon reloads the FPGA and redoes the full bring-up: this takes SECONDS (budget 60 s) and stops streaming** (§8). RX and TX change together. The 2nd token is the new build's tick rate (it can differ between builds of one N): the host must take it. `otw=` declares the format the client will stream (§10) and becomes the current otw (otherwise: the last `otw=` of a stream setup or rate request, `sc16` after `claim`). Refused BEFORE any reload, with `ERR set_rx_rate <hz> refused: ...`, only if no build of this N carries the current otw and the formats of the existing stream setups at 100GbE. E.g. 4ch, `set_rx_rate 0 1.25e9` gives 750 MS/s (the fastest sc16 build); `set_rx_rate 0 1.25e9 otw=sc8` gives 1250 MS/s (sc8max) |
+| `set_rx_rate <ch> <hz> [otw=<fmt>]` | `OK <actual hz> <tick_rate>` | coerces to the highest rate of this N at or below `<hz>` (1 ppm tolerance) among the builds that carry the client's formats; below every one of them, the lowest (§8). **If that is not the rate in effect, the daemon retunes the loaded template in place (~1-1.5 s) or, for another bitstream's rate, reloads the FPGA and redoes the full bring-up: either stops streaming, a reload takes SECONDS (budget 60 s)** (§8). RX and TX change together. The 2nd token is the new tick rate (it differs between rates of one N): the host must take it. `otw=` declares the format the client will stream (§10) and becomes the current otw (otherwise: the last `otw=` of a stream setup or rate request, `sc16` after `claim`). Refused BEFORE any reload, with `ERR set_rx_rate <hz> refused: ...`, only if no build of this N carries the current otw and the formats of the existing stream setups at 100GbE. E.g. 4ch, `set_rx_rate 0 1.25e9` gives 750 MS/s (the fastest sc16 build); `set_rx_rate 0 1.25e9 otw=sc8` gives 1250 MS/s (sc8max) |
 | `get_rx_rate <ch>` | `OK <hz>` | |
 | `set_rx_freq <ch> <hz> [dsp=<hz>] [at=<ticks>]` | `OK <actual hz>` (`OK <rf> <dsp>` with `dsp=`) | RF centre: programs the ADC fine-mixer NCO (`-hz` sign convention handled in daemon). `dsp=`: the DSP part of a UHD tune request, folded into the same NCO (§3b). `at=`: applied when the timekeeper reaches `<ticks>`, replying at once with the values it will set (§3c) |
 | `get_rx_freq <ch>` | `OK <hz>` | the RF part (= the NCO frequency when the DSP part is 0) |
@@ -147,8 +147,9 @@ and applies the request when the FPGA timekeeper reaches `<ticks>`:
   `set_command_time()` + per-channel tune loop thus retunes all channels in one
   batch.
 * Untimed requests do not wait for pending timed ones. Pending timed requests
-  are dropped when their time base goes away: an FPGA reload (`set_channels`,
-  a rate change) and the release of the claim.
+  are dropped when their time base goes away: an FPGA reload or retune
+  (`set_channels`, a rate change: the bitstream or the tick rate changed)
+  and the release of the claim.
 * The host sends `at=` while a command time is set (`set_command_time`), and
   emulates `set_time_next_pps(t)` as `set_time t at=<next whole second of
   device time>` (there is no PPS input, `pps_present` = false).
@@ -373,14 +374,25 @@ Control commands for TX:
 | `stream_setup_tx <ch> <host_ip> <host_mac> <async_port> [otw=<fmt>]` | `OK <tx_buf_words> <fc_interval> <consumed_baseline>` | program the async/FC destination, switch the DAC source to the UDP player; `consumed_baseline` is the current value of the monotonic consumed-word count (in-flight = sent − (consumed − baseline)). `tx_buf_words` = 32752 on every build |
 | `stream_stop_tx <ch>` | `OK` | flush the TX buffer, DAC back to zeros (the player stays the DAC source: no build has a DRAM/DMA DAC path any more) |
 
-## 8. Sample-rate variants (one bitstream per rate)
+## 8. Sample-rate variants: run-time factors and separate bitstreams
 
-The RFDC decimation/interpolation factor F is compiled into the block design;
-it is never a run-time setting (`hw_design/ZCU216/CLAUDE.md`). Each sample
-rate is therefore a separate bitstream, all with the same register map and
-the same 100G path. Names: `zcu216_v49_<N>ch_qsfp_f<F>[_fs<fs>].bit` (+
-`.hwh`), `_fs<fs>` when the converter rate fs (MS/s, ADC = DAC, every tile)
-is not 2400. Per-channel rate = fs / F (§9). The board needs
+The per-channel rate is fs / F, F the RFDC decimation (= interpolation)
+factor (§9). A bitstream serves one F or many:
+
+* **Template builds (run-time F).** A build whose converter clock comes from
+  an MTS clocking wizard with dynamic reconfiguration (`.hwh`: `MTS_clk_wiz`
+  `USE_DYN_RECONFIG true`) is built at its highest rate and timed at that
+  converter clock; at run time it serves every Gen3 factor F >= its own
+  (1 2 3 4 5 6 8 10 12 16 20 24 40) whose converter clock fs/F/(Data_Width/2)
+  the MMCM makes exactly and that is >= 10 MHz. Data_Width, the beat, N,
+  fs and the cores stay the build's. One bitstream per channel count then
+  covers that N's whole ladder.
+* **Fixed builds.** Without dynamic reconfiguration the factor is the
+  compiled one: one bitstream per rate, as before.
+
+Names: `zcu216_v49_<N>ch_qsfp_f<F>[_fs<fs>].bit` (+ `.hwh`), F the built
+(template: highest-rate) factor, `_fs<fs>` when the converter rate fs (MS/s,
+ADC = DAC, every tile) is not 2400. The board needs
 `rfsoc_lib/xrfclk/ZCU216/LMX2594_250.0_<fs>.0.txt` for each fs it serves
 (`server/deploy.sh` checks).
 
@@ -389,8 +401,11 @@ is not 2400. Per-channel rate = fs / F (§9). The board needs
   enabled slice; `Fabric_Freq = fs / F / (Data_Width/2)` must hold, and
   decimation must equal interpolation), the fabric beat (N x Data_Width/2
   slots = udp_streamer `S_WIDTH`), udp_streamer/udp_player `TICK_STEP`, the
-  TX buffer and the `tx_beamformer`. `get_rx_rates`/`get_tx_rates`/`info
-  rx_rates=` list the rates of the loaded N. Only the files present count.
+  TX buffer and the `tx_beamformer`; a template is listed once per run-time
+  factor. `get_rx_rates`/`get_tx_rates`/`info rx_rates=` list the rates of
+  the loaded N. Only the files present count; when a template and a fixed
+  build give the same (N, rate), the one scanned first is used, and the
+  loaded bitstream's own run-time rates always win.
 * **Tick rate per build** = aggregate slot rate x TICK_STEP, TICK_STEP read
   from the `.hwh` (1 on every build): N x the per-channel rate, so two builds
   of one N tick differently. `set_channels` and `set_rx_rate` reply with the
@@ -405,7 +420,20 @@ is not 2400. Per-channel rate = fs / F (§9). The board needs
   capacity) is not chosen; if no build of this N carries it, the request is
   refused before anything is reloaded (§3). The sc8max builds (§9) are chosen
   only with `otw=sc8`.
-* `set_rx_rate`/`set_tx_rate` to another build's rate **reloads the FPGA**:
+* `set_rx_rate`/`set_tx_rate` to a run-time rate of the **loaded** template
+  **retunes in place** (no reload, ~1-1.5 s): streaming (RX and TX) stops;
+  the MMCM is retuned to the new converter clock over the clocking wizard's
+  dynamic-reconfiguration registers; every enabled ADC/DAC block gets the
+  factor (FIFOs off, factor, the build's fabric word count, FIFOs on); MTS
+  runs (up to 10 attempts; its clocking-wizard and DAC-tile resets restore
+  the build's MMCM setting and DAC factor, so both are put back inside it);
+  the NCOs are re-programmed and phase-reset (§3d). It must end with MTS
+  locked, the MMCM locked, the factor read back on every enabled block and
+  the converter clock measured by the timekeeper within 1 %; otherwise the
+  previous factor is retuned back (then the build reloaded) and the reply is
+  `ERR ... restored`. The CMAC link stays up. Carried over as for a reload
+  (below), including a new TX flow-control baseline from `stream_setup_tx`.
+* `set_rx_rate`/`set_tx_rate` to another bitstream's rate **reloads the FPGA**:
   streaming (RX and TX) stops, the overlay is loaded and the whole bring-up is
   redone (RFDC with that bitstream's compiled geometry and its readbacks; the
   8A34001 is programmed only if its status says it is unconfigured; GT reset

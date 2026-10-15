@@ -1,11 +1,19 @@
+import os
 import time
 import logging
 
 
 class MyMTS:
 
-    def __init__(self, rfdc_ip, overlay, board="ZCU216", debug=False):
+    def __init__(self, rfdc_ip, overlay, board="ZCU216", debug=False,
+                 after_clkwiz_reset=None, after_dac_reset=None):
+        """after_clkwiz_reset / after_dac_reset: called in init_tile_sync right
+        after the MTS clocking-wizard reset and after the DAC tile resets.
+        Both resets restore the BUILD setting (MMCM frequency, DAC
+        interpolation); a run-time rate change puts its own back there."""
         self.rfdc = rfdc_ip
+        self.after_clkwiz_reset = after_clkwiz_reset
+        self.after_dac_reset = after_dac_reset
         self.mts_monitor = overlay.MTS_block.MTS_clk_wiz
         self.debug = debug
         self.board = board
@@ -65,7 +73,16 @@ class MyMTS:
         self.verify_clock_tree()
         # Actually sync tiles with measured latency
         latency = self.mts_latency_margin + 144  # from experiment
-        self.sync_tiles()
+        # Target latency: -1 aligns every tile to the slowest one, and that
+        # latency can move by a fabric clock from one sync to the next; a
+        # fixed target pads every tile up to it. $RFSOC_MTS_TARGET =
+        # "<dac>,<adc>" sets one (opt-in while it is being characterised)
+        target = os.environ.get("RFSOC_MTS_TARGET", "").strip()
+        if target:
+            dac_t, adc_t = (int(v) for v in target.split(","))
+            self.sync_tiles(dac_target_latency=dac_t, adc_target_latency=adc_t)
+        else:
+            self.sync_tiles()
         # TODO: Figure out how to set target latency for DACs and ADCs
         # self.sync_tiles(dac_target_latency=latency, adc_target_latency=latency)
 
@@ -118,12 +135,16 @@ class MyMTS:
         self.mts_monitor.mmio.write_reg(
             self.CLOCKWIZARD_RESET_ADDRESS, self.CLOCKWIZARD_RESET_TOKEN)
         time.sleep(0.1)
+        if self.after_clkwiz_reset is not None:
+            self.after_clkwiz_reset()
         # Reset only user selected DAC tiles
         bitvector = self.ACTIVE_DAC_TILES
         for n in range(4):
             if (bitvector & 0x1):
                 self.rfdc.dac_tiles[n].Reset()
             bitvector = bitvector >> 1
+        if self.after_dac_reset is not None:
+            self.after_dac_reset()
         # Reset ADC FIFO of only user selected tiles - restarts MTS engine
         for toggleValue in range(0, 2):
             bitvector = self.ACTIVE_ADC_TILES

@@ -377,9 +377,9 @@ class Backend(ABC):
         return ["sc16"]
 
     # -- rates ---------------------------------------------------------------
-    # Each rate is a SEPARATE BITSTREAM (the converter factor is a block-design
-    # parameter, hw_design/ZCU216/CLAUDE.md). RX and TX share the factor, so
-    # the two directions always run at the same rate.
+    # A rate is a converter factor: of a template build at run time, or of a
+    # separate fixed bitstream (PROTOCOL.md §8). RX and TX share the factor,
+    # so the two directions always run at the same rate.
     @property
     def samp_rate(self) -> float:
         """Current complex sample rate (both directions)."""

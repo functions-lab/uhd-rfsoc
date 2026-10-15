@@ -170,6 +170,46 @@ duplex is sustained in 4ch 100 %, 8ch 94-95 %, 16ch 83-87 % of 30 s runs on this
 PC (6 cores, one DIMM channel) -- the mid-run losses at the rate the normal
 family's sc16 shows at the same load (8ch 3 of 25).
 
+## Run-time rate change (template builds)
+
+A template build serves every Gen3 factor at or above its own from one
+bitstream: `set_rx_rate` / `set_tx_rate` retune it in place (RFDC factor,
+MMCM over DRP, MTS; `../../PROTOCOL.md` section 8). Pass per rate: the
+daemon logs `MTS LOCKED`, the factor read back on every enabled block and the
+converter clock measured by the timekeeper within 1 %, and
+`rate_loopback.py` finds its TX->RX pulse (channel 0, over the air) >= 20 dB
+over the median in every trial, at the rate asked. Latency is not a criterion
+(it moves by whole samples between MTS runs).
+
+### 1ch F2 fs2500 (`zcu216_v49_1ch_qsfp_f2_fs2500`), 2026-10-14
+
+**12 of 12 rates PASS, 1250 to 62.5 MS/s, from one bitstream; MTS locked at
+every retune (18 of 18).** Down the ladder and back to 1250, then a jumping
+sequence (1250, 625, 312.5, 62.5, 500, 1250): each retune 1.0-1.9 s.
+
+| MS/s | F | converter clock MHz (measured) | MTS | pulse dB |
+|---|---|---|---|---|
+| 1250 | 2 | 312.5 (bring-up) | attempt 1 | 48.5 |
+| 833.333 | 3 | 208.3369 | attempt 1 | 46.2 |
+| 625 | 4 | 156.2376 | attempt 2 | 48.4 |
+| 500 | 5 | 125.0027 | attempt 1 | 62.1 |
+| 416.667 | 6 | 104.1593 | attempt 1 | 60.7 |
+| 312.5 | 8 | 78.1264 | attempt 1 | 65.6 |
+| 250 | 10 | 62.5005 | attempt 1 | 66.6 |
+| 208.333 | 12 | 52.0845 | attempt 1 | 64.9 |
+| 156.25 | 16 | 39.0630 | attempt 1 | 70.8 |
+| 125 | 20 | 31.2504 | attempt 1 | 71.8 |
+| 104.167 | 24 | 26.0417 | attempt 1 | 74.9 |
+| 62.5 | 40 | 15.6253 | attempt 1 | 79.4 |
+| 1250 (back) | 2 | 312.4764 | attempt 1 | 49.4 |
+
+Every measured clock is within 0.02 % of fs/F/4. F=4 is the one factor whose
+first MTS attempt can fail ("Alignment correction delay 31 required exceeds
+maximum (31) for DAC Tile n", with or without a target latency): attempt 2 in
+the ladder, attempt 3 in the jumping sequence; the retune allows 10. Measured
+with the predecessor of `rate_loopback.py` (same pulse and criterion, 2
+trials per rate).
+
 ## Defects found and fixed during these measurements
 
 | symptom | cause | fix |

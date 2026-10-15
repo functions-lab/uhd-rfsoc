@@ -26,8 +26,14 @@ is the detailed reference of the daemon; `README.md` is the short version.
 (N = 1, 2, 4, 8, 16 channels, PROTOCOL.md §9) look like a USRP to the UHD host
 module (`type=zcu216`). The contract is `../PROTOCOL.md`.
 The rules in `hw_design/ZCU216/CLAUDE.md` bind this code, in particular: the
-converter factors are compiled into the block design and never set at run time,
-and the RFDC comes up only through the proven `RfdcTask` pattern.
+RFDC comes up only through the proven `RfdcTask` pattern, at the factor
+compiled into the block design. A **template** build (its `MTS_clk_wiz` has
+dynamic reconfiguration) then changes the factor at run time, in one place
+only: `HwBackend._retune_hw` (PROTOCOL.md §8). It must end with MTS locked,
+the factor read back on every enabled block and the converter clock measured
+within 1 %, or it is undone. Two resets inside MTS undo a retune and are put
+back there: the clocking-wizard reset (MMCM -> build frequency) and the DAC
+tile reset (interpolation -> build factor); ADC tiles keep theirs.
 
 | file | what |
 |---|---|

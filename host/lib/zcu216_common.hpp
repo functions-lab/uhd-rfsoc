@@ -166,11 +166,12 @@ struct dev_state
     //! re-read `info` (after the daemon reloaded the FPGA)
     void refresh_info();
     std::vector<std::unique_ptr<std::atomic<double>>> rx_rate, tx_rate;
-    //! PROTOCOL §8: a rate change reloads the FPGA (tens of seconds)
+    //! PROTOCOL §8: a rate change retunes the loaded template (~1-1.5 s) or
+    //! reloads the FPGA (tens of seconds)
     double rate_timeout = 120.0;
-    //! Incremented whenever the daemon reloaded the FPGA (rate change). The
-    //! reloaded FPGA stopped all streaming and restarted its TX consumed-word
-    //! count at 0, so streamers compare this with the value they set up under.
+    //! Incremented whenever a rate change retuned or reloaded the FPGA. Either
+    //! stopped all streaming and gave the TX path a new consumed-word baseline,
+    //! so streamers compare this with the value they set up under.
     std::atomic<uint64_t> fpga_generation{0};
 
     //! set_rx_rate/set_tx_rate (the same operation: RX and TX share one

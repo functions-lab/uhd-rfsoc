@@ -17,7 +17,14 @@ what it needs).
 make -C zcu216 v49-package                       # ../fpga_ip/ip_design/uhd_ip -> ../fpga_ip/ip/uhd_ip
 make -C zcu216 v49 N=4 F=3 FS=2250 [STEP=bd]     # one build
 make -C zcu216 v49-ladder [MAXPAR=3] [JOBS=8]    # every build the board's oracle list has
+make -C zcu216 v49-templates                     # one per channel count: run-time rate
 ```
+
+Every build is a run-time-rate template (`PROTOCOL.md` §8): its converter
+clock's MMCM has dynamic reconfiguration, so the daemon serves every RFDC
+factor above the built one by retuning in place. One bitstream per channel
+count (`v49-templates`) covers the normal family; the per-factor ladder is
+only needed for fixed-rate comparisons.
 
 Output: `<board>/build/v49_qsfp/bitstreams/` (timing-clean) or
 `bitstreams_timing_fail/`; the Vivado project is deleted after each build.

@@ -429,9 +429,9 @@ class ControlCore:
             # this N is loaded, but at a rate the current otw cannot carry
             # (an sc8-max build left by an earlier client): its default build
             self.be.set_rate(self.be.default_rate())
-        name = self.be.fpga_name
+        base = self._time_base()
         n, tick = self.be.set_channels(n)
-        self._reloaded(name)
+        self._reloaded(base)
         self._spp = vrt.round_spp(self._spp, self.be.slot_granule)
         self._drop_unfit_setups()
         return "OK %d %s" % (n, fmt_float(tick))
@@ -473,20 +473,25 @@ class ControlCore:
             self._otw_pref = old_pref
             raise
         fn = self.be.set_rx_rate if kind == "rx" else self.be.set_tx_rate
-        name = self.be.fpga_name
+        base = self._time_base()
         rate = fn(ch, target)
-        self._reloaded(name)
+        self._reloaded(base)
         self._drop_unfit_setups()
         return "OK %s %s" % (fmt_float(rate), fmt_float(self.be.tick_rate))
 
-    def _reloaded(self, old_name: str) -> None:
-        """After set_channels / set_*_rate: another build means another time
-        base (and channel set): pending timed commands are dropped (§3c)."""
-        if self.be.fpga_name != old_name:
+    def _time_base(self) -> Tuple[str, float]:
+        return (self.be.fpga_name, float(self.be.tick_rate))
+
+    def _reloaded(self, old: Tuple[str, float]) -> None:
+        """After set_channels / set_*_rate: another build, or the same build
+        retuned to another rate (§8), means another time base: pending timed
+        commands are dropped (§3c)."""
+        if self._time_base() != old:
             n = self.timer.clear()
             if n:
-                log.warning("%s -> %s: %d pending timed command(s) dropped",
-                            old_name, self.be.fpga_name, n)
+                log.warning("%s at %g Hz -> %s at %g Hz: %d pending timed command(s) "
+                            "dropped", old[0], old[1], self.be.fpga_name,
+                            self.be.tick_rate, n)
 
     @staticmethod
     def _opts(a: List[str], allowed: Tuple[str, ...], usage: str) -> Dict[str, str]:

@@ -5,7 +5,7 @@ RFDC bring-up is the proven pattern of hw_design/ZCU216/CLAUDE.md, nothing else:
   1. RFSoCOverlay(bitstream)
   2. NEW_CONFIG carrying the COMPILED geometry, read from the .hwh (sampling
      rates, reference clock, ADC decimation / DAC interpolation of every
-     enabled slice) -- never a run-time factor
+     enabled slice): the bring-up is always at the built factor
   3. RfdcTask(ol, ...).start(); .join()
   4. print the DAC interp / ADC decim readback of EVERY enabled block and the
      PLL-lock / tile-state readback of every enabled tile, and refuse to run
@@ -17,16 +17,23 @@ only touches: the fine-mixer NCO and Nyquist zone (set_*_freq), the ADC DSA
 (set_rx_gain), the DAC VOP (set_tx_gain, only if the IP was built with VOP),
 and the eth100g registers (eth100g.py, tx_beamformer.py, rx_beamformer.py).
 
-Sample-rate variants are SEPARATE BITSTREAMS (zcu216_v49_<N>ch_qsfp[_f<F>]):
-the converter factor is a block-design parameter, never a run-time one. So is
-the channel count N: every zcu216_v49_{N}ch_qsfp*.bit (N = 1, 2, 4, 8, 16)
+Sample rates (PROTOCOL.md §8): a TEMPLATE build (MTS clocking wizard with
+dynamic reconfiguration in the .hwh) serves every Gen3 factor >= its built
+one at run time -- `_retune_hw`: MMCM retuned (rfsoc_lib.clk_wiz), factor on
+every enabled block, MTS with the build's MMCM setting and DAC factor put
+back inside it, NCOs, then factor / MMCM / measured-clock checks; a FIXED
+build serves its compiled factor only, and another rate is another
+bitstream (zcu216_v49_<N>ch_qsfp[_f<F>]). The channel count N is always a
+build parameter: every zcu216_v49_{N}ch_qsfp*.bit (N = 1, 2, 4, 8, 16)
 streams the first N channels, channel c = RFDC tile c // 4, block c % 4
 (PROTOCOL.md §9). `scan_bitstreams()` reads N from the name and from each
 .hwh the compiled factor, the fabric beat, udp_streamer/udp_player TICK_STEP
 (so the build's own tick rate), the TX buffer, the tx_beamformer and the
 rx_beamformer;
-set_rx_rate/set_tx_rate (within one N) and set_channels (that N's sc16-max
-build) reload that overlay and redo the WHOLE bring-up above (`_switch_to`).
+set_rx_rate/set_tx_rate (within one N) retune the loaded template in place
+(`_retune_to`) or reload another bitstream, and set_channels (that N's
+sc16-max build) reloads; a reload redoes the WHOLE bring-up above
+(`_switch_to`).
 The DAC is always fed by the UDP player (the DRAM/DMA path is gone).
 
 The same daemon serves the ZCU208 (zcu208_v49_<N>ch_qsfp*, N = 1, 2; dual
@@ -38,6 +45,7 @@ built but NOT board-tested (hw_design/ZCU208/CLAUDE.md).
 """
 from __future__ import annotations
 
+import copy
 import glob
 import logging
 import os
@@ -200,13 +208,34 @@ def _rfdc_params(ol) -> Tuple[str, Dict[str, str]]:
 
 
 HWH_CORES = ("udp_streamer", "udp_player", "tx_beamformer", "rx_beamformer")
+# the converter clock's clocking wizard: with USE_DYN_RECONFIG the build
+# serves a run-time rate change (§8, Variant.run_factors)
+MTS_CW = "MTS_clk_wiz"
+# Gen3 RF-ADC decimation / RF-DAC interpolation factors (XRFdc_Set*Factor)
+GEN3_FACTORS = (1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 40)
+# the lowest converter AXIS clock a run-time factor may need (the ladder's
+# lowest is 14.06 MHz: 4ch F40 at 2250 MS/s)
+FABRIC_MIN_MHZ = 10.0
+
+
+def clk_wiz_lib():
+    """rfsoc_lib.clk_wiz (no pynq: the scan of a bitstream directory uses its
+    MMCM solver before HwBackend has put rfsoc_lib on sys.path)."""
+    try:
+        import rfsoc_lib.clk_wiz as m
+    except ImportError:
+        root = find_lib_root(os.path.dirname(os.path.abspath(__file__)))
+        if root and root not in sys.path:
+            sys.path.insert(0, root)
+        import rfsoc_lib.clk_wiz as m
+    return m
 
 
 def _overlay_cores(ol) -> Dict[str, Dict[str, str]]:
     """HWH_CORES parameters from a loaded overlay's ip_dict (no .hwh file at
     hand): keys ending in /<core>."""
     out = {}
-    for core in HWH_CORES:
+    for core in HWH_CORES + (MTS_CW,):
         keys = [k for k in ol.ip_dict if k == core or k.endswith("/" + core)]
         if len(keys) == 1:
             out[core] = dict(ol.ip_dict[keys[0]].get("parameters", {}))
@@ -226,6 +255,8 @@ def hwh_params(hwh_path: str) -> Tuple[Dict[str, str], Dict[str, Dict[str, str]]
             if mt in cores:
                 raise ValueError(f"{os.path.basename(hwh_path)}: two {mt} cores")
             cores[mt] = _module_params(m)
+        elif mt == "clk_wiz" and (m.get("FULLNAME") or "").endswith("/" + MTS_CW):
+            cores[MTS_CW] = _module_params(m)
     if len(rfdc) != 1:
         raise ValueError(f"{os.path.basename(hwh_path)}: expected one "
                          f"usp_rf_data_converter MODULE, found {len(rfdc)}")
@@ -371,6 +402,52 @@ class Variant:
         if rbf_n is not None and rbf_n != self.nch:
             raise RuntimeError(f"rx_beamformer N_CH {rbf_n} != {self.nch} channels")
         self.has_rbf = rbf_n is not None
+        # run-time rate (§8): the MTS clocking wizard built with dynamic
+        # reconfiguration -> this build serves every Gen3 factor >= its own,
+        # at the same Data_Width, by retuning the MMCM to fs/F/spc
+        cw = cores.get(MTS_CW, {})
+        dyn = str(cw.get("USE_DYN_RECONFIG", "")).lower() in ("true", "1")
+        self.retune_fin = float(cw["PRIM_IN_FREQ"]) if dyn and "PRIM_IN_FREQ" in cw else None
+        self.built_factor = self.factor
+        self.spc = next(iter(spc))
+
+    @property
+    def retunable(self) -> bool:
+        return self.retune_fin is not None
+
+    def run_factors(self) -> List[int]:
+        """The factors this bitstream serves: its own, and on a retunable one
+        every Gen3 factor above it whose converter clock fs/F/spc the MMCM
+        makes exactly (rfsoc_lib.clk_wiz.mmcm_exact) and is >= FABRIC_MIN_MHZ."""
+        if not self.retunable:
+            return [self.factor]
+        cw = clk_wiz_lib()
+        out = []
+        for f in GEN3_FACTORS:
+            if f < self.built_factor:
+                continue
+            fab = self.adc_rate / f / self.spc / 1e6
+            if fab < FABRIC_MIN_MHZ:
+                continue
+            try:
+                cw.mmcm_exact(fab, self.retune_fin)
+            except ValueError:
+                continue
+            out.append(f)
+        return out
+
+    def at_factor(self, f: int) -> "Variant":
+        """This bitstream retuned to factor f (run_factors): rate, converter
+        clock and tick rate of f; the beat, TICK_STEP and cores are the build's."""
+        if f not in self.run_factors():
+            raise ValueError(f"{self.name}: factor {f} not in {self.run_factors()}")
+        v = copy.copy(self)
+        v.factor = f
+        v.rate = self.adc_rate / f
+        v.slot_rate = v.nch * v.rate
+        v.fabric_mhz = self.adc_rate / f / self.spc / 1e6
+        v.tick_rate = v.slot_rate * v.tick_step
+        return v
 
     @property
     def beat_bits(self) -> int:
@@ -381,7 +458,10 @@ class Variant:
         return (self.nch, self.rate)
 
     def __repr__(self):
-        return (f"{self.name}: {self.nch} ch, F={self.factor} {self.rate / 1e6:g} "
+        return (f"{self.name}: {self.nch} ch, F={self.factor}"
+                f"{'' if self.factor == self.built_factor else ' (built F=%d)' % self.built_factor}"
+                f"{' run-time F ' + ','.join(map(str, self.run_factors())) if self.retunable else ''} "
+                f"{self.rate / 1e6:g} "
                 f"MS/s/ch, {self.beat_bits}-bit beat @ {self.fabric_mhz:g} MHz, "
                 f"tick_rate {self.tick_rate / 1e6:g} MHz ({self.tick_step} tick(s)/slot, "
                 f"TICK_STEP from {self.tick_step_from}), TX beamformer "
@@ -436,15 +516,17 @@ def scan_bitstreams(directory: str, extra: Tuple[str, ...] = (),
     by_key: Dict[Tuple[int, float], Variant] = {}
     for p in paths:
         try:
-            v = load_variant(p, board=board)
+            v0 = load_variant(p, board=board)
         except ValueError as e:
             log.warning("bitstream variant skipped: %s", e)
             continue
-        if v.key in by_key:
-            log.warning("bitstream variant skipped: %s gives %d ch x %.17g S/s "
-                        "like %s", v.name, v.nch, v.rate, by_key[v.key].name)
-            continue
-        by_key[v.key] = v
+        # a retunable build is one variant per run-time factor (§8)
+        for v in [v0] + [v0.at_factor(f) for f in v0.run_factors() if f != v0.factor]:
+            if v.key in by_key:
+                log.warning("bitstream variant skipped: %s F=%d gives %d ch x %.17g S/s "
+                            "like %s", v.name, v.factor, v.nch, v.rate, by_key[v.key].name)
+                continue
+            by_key[v.key] = v
     return sorted(by_key.values(), key=lambda v: (v.nch, -v.rate))
 
 
@@ -513,9 +595,11 @@ class HwBackend(Backend):
         bitstream = os.path.abspath(bitstream)
         self.variants: Dict[Tuple[int, float], Variant] = {
             v.key: v for v in (variants or [])}
+        # (a retunable bitstream is one variant per run-time factor: the
+        # overlay comes up at its built one)
         initial = next((v for v in self.variants.values()
-                        if os.path.realpath(v.bitstream) == os.path.realpath(bitstream)),
-                       None)
+                        if os.path.realpath(v.bitstream) == os.path.realpath(bitstream)
+                        and v.factor == v.built_factor), None)
         if initial is None:
             try:
                 initial = load_variant(bitstream, board=self.board)
@@ -529,6 +613,12 @@ class HwBackend(Backend):
                             "loaded)", initial.name, other.name, initial.nch,
                             initial.rate)
             self.variants[initial.key] = initial
+            # its run-time factors (§8) are its rates too, and win over other
+            # bitstreams of the same rate: they retune instead of reloading
+            for f in initial.run_factors():
+                if f != initial.factor:
+                    v = initial.at_factor(f)
+                    self.variants[v.key] = v
         for v in sorted(self.variants.values(), key=lambda v: (v.nch, -v.rate)):
             log.info("bitstream variant %r%s", v, "  <- initial" if v is initial else "")
 
@@ -593,10 +683,13 @@ class HwBackend(Backend):
             raise RuntimeError("compiled RFDC geometry is inconsistent: "
                                + "; ".join(problems))
         if variant is not None and (self.geo.decim, self.geo.interp) != (
-                variant.factor, variant.factor):
+                variant.built_factor, variant.built_factor):
             raise RuntimeError(f"{self.fpga_name}: overlay reports decim/interp "
                                f"{self.geo.decim}/{self.geo.interp}, but its .hwh "
-                               f"scan said F={variant.factor}")
+                               f"scan said F={variant.built_factor}")
+        if variant is not None and variant.factor != variant.built_factor:
+            raise RuntimeError(f"{self.fpga_name}: bring-up at F={variant.factor}; "
+                               f"it comes up at its built F={variant.built_factor}")
         self.adc_rate, self.dac_rate = self.geo.fs_adc, self.geo.fs_dac
         self.rx_decim, self.tx_interp = self.geo.decim, self.geo.interp
         # The 100G data plane streams the FIRST N channels of the board's map
@@ -653,6 +746,8 @@ class HwBackend(Backend):
         self.my = self.rfdc_t.my_rfdc
         if errors:
             raise RuntimeError(f"RfdcTask.run() raised: {errors[0]!r}")
+        # the compiled fabric word counts, held across run-time factor changes
+        self._fab_words = self._read_fab_words()
         # MTS before any sample is trusted (hw_design/ZCU216/CLAUDE.md): the
         # NCOs are programmed after it, as RfdcTask orders them
         self.mts = self._mts_lock()
@@ -782,8 +877,150 @@ class HwBackend(Backend):
     def _switch_rate(self, rate: float) -> None:
         v = self.variants[(self.num_channels, rate)]
         old = self.variant
+        if (v.retunable and old is not None
+                and os.path.realpath(v.bitstream) == os.path.realpath(old.bitstream)):
+            self._retune_to(v)
+            return
         self._switch_to(v, f"RATE CHANGE {old.rate / 1e6:g} -> {v.rate / 1e6:g} "
                            f"MS/s", f"rate change to {v.rate:.17g}")
+
+    def _retune_to(self, v: Variant) -> None:
+        """Rate change WITHOUT a reload (§8): the loaded bitstream retuned to
+        v.factor (_retune_hw). Kept like a reload keeps it (_restore: NCOs,
+        gains, stream setups, beamformers, the time in the new ticks). If the
+        retune fails the old factor is retuned back; if that fails too, the
+        old build is reloaded; if that fails, the device is unusable."""
+        old = self.variant
+        pr = self._pr
+        t0 = time.monotonic()
+        with self._lock:
+            pr(f"==== RATE CHANGE {old.rate / 1e6:g} -> {v.rate / 1e6:g} MS/s: "
+               f"{v.name} retuned in place, F {old.factor} -> {v.factor}, "
+               f"converter clock {v.fabric_mhz:g} MHz; streaming stops ====")
+            state = self._quiesce()
+            try:
+                self._retune_hw(v)
+            except Exception as e:
+                log.exception("retune of %s to F=%d failed", v.name, v.factor)
+                msg = f"rate change to {v.rate:.17g} ({v.name} F={v.factor}) failed: {e}"
+                pr(f"==== {msg}; going back to F={old.factor} ====")
+                try:
+                    self._retune_hw(old)
+                    self._restore(state)
+                except Exception as e2:
+                    log.exception("retune back to F=%d failed", old.factor)
+                    try:
+                        self._reload(old, state)
+                    except Exception as e3:
+                        why = (f"{msg}; retune back failed ({e2}); reloading "
+                               f"{old.name} failed too: {e3}")
+                        self.eth = self.my = _Unusable(why)
+                        self.bf = self.rbf = None
+                        raise BackendError(why)
+                raise BackendError(f"{msg}; F={old.factor} restored ({old.rate:.17g} S/s)")
+            self._restore(state)
+            self.reloads += 1
+            pr(f"==== now {v.name} F={v.factor}: {v.nch} channel(s) at "
+               f"{v.rate / 1e6:g} MS/s, tick_rate {self.tick_rate / 1e6:g} MHz; "
+               f"retune took {time.monotonic() - t0:.1f} s ====")
+
+    # -- run-time factor (§8) ------------------------------------------------------
+    def _enabled_blocks(self) -> Tuple[List[Tuple[int, int]], List[Tuple[int, int]]]:
+        """xrfdc (tile, block) of every enabled ADC and DAC (all of them get
+        the factor: one AXIS clock drives them all), minus unpowered tiles."""
+        masked = set(self.board.masked_tiles)
+        adc = sorted({self.board.api_block(s) for s in self.geo.adc_slices
+                      if s[0] not in masked})
+        dac = sorted({s for s in self.geo.dac_slices if s[0] not in masked})
+        return adc, dac
+
+    def _read_fab_words(self) -> Dict[Tuple[str, int, int], int]:
+        """The fabric-side word count of every enabled block (ADC
+        FabRdVldWords, DAC FabWrVldWords): the build's Data_Width side, which
+        a factor write re-derives and so must be put back."""
+        adc, dac = self._enabled_blocks()
+        out = {}
+        for t, b in adc:
+            out[("adc", t, b)] = int(self.my.adc_tiles[t].blocks[b].FabRdVldWords)
+        for t, b in dac:
+            out[("dac", t, b)] = int(self.my.dac_tiles[t].blocks[b].FabWrVldWords)
+        return out
+
+    def _set_factor(self, f: int, kinds=("adc", "dac")) -> None:
+        """Decimation / interpolation f on every enabled block, the fabric
+        words held at the build's: per tile FIFOs off, factor, words, FIFOs
+        on (the order UHD's x4xx_rfdc_ctrl uses)."""
+        adc, dac = self._enabled_blocks()
+        for kind, blocks, tiles in (("adc", adc, self.my.adc_tiles),
+                                    ("dac", dac, self.my.dac_tiles)):
+            if kind not in kinds:
+                continue
+            for t in sorted({t for t, _ in blocks}):
+                tile = tiles[t]
+                tile.SetupFIFO(0)
+                for tt, b in blocks:
+                    if tt != t:
+                        continue
+                    blk = tile.blocks[b]
+                    if kind == "adc":
+                        blk.DecimationFactor = f
+                        blk.FabRdVldWords = self._fab_words[("adc", t, b)]
+                    else:
+                        blk.InterpolationFactor = f
+                        blk.FabWrVldWords = self._fab_words[("dac", t, b)]
+                tile.SetupFIFO(1)
+
+    def _measure_fabric_mhz(self, secs: float = 0.25) -> float:
+        """The converter clock, measured: the timekeeper advances
+        beat_slots x tick_step ticks per converter beat."""
+        bt = self.beat_slots * self.tick_step
+        n0, t0 = self.eth.get_time(), time.monotonic()
+        time.sleep(secs)
+        n1, t1 = self.eth.get_time(), time.monotonic()
+        return (n1 - n0) / (t1 - t0) / bt / 1e6
+
+    def _retune_hw(self, v: Variant) -> None:
+        """The loaded (retunable) bitstream to v.factor, in place: MMCM to
+        fs/F/spc over clk_wiz DRP, the factor on every enabled block, MTS (up
+        to 10 attempts) with the two things its tile-sync reset undoes put back
+        (the MMCM setting after the clk_wiz reset, the DAC factor after the
+        DAC tile resets), NCOs re-programmed and phase-reset, then checked:
+        factor readback of every enabled block, MMCM locked, the converter
+        clock measured within 1 %. Raises on any failure."""
+        pr = self._pr
+        cw = clk_wiz_lib().ClkWiz(self.ol.MTS_block.MTS_clk_wiz.mmio, v.retune_fin)
+        f = v.factor
+        res = cw.program(v.fabric_mhz)
+        pr(f"[t] MMCM -> {v.fabric_mhz:g} MHz (D {res['d']} M {res['m']} O {res['o']}, "
+           f"VCO {res['vco']:g} MHz), locked in {res['lock_ms']} ms")
+        self._set_factor(f)
+        self.rx_decim = self.tx_interp = f
+        self.variant = v
+        # (F4 on the 1ch template fails its DAC alignment ~35 % of the time,
+        # "Alignment correction delay 31 required exceeds maximum", any
+        # Target_Latency, 2026-10-14: each attempt is ~0.3 s, so allow 10)
+        self.mts = self._mts_lock(attempts=10,
+                                  after_clkwiz_reset=lambda: cw.program(v.fabric_mhz),
+                                  after_dac_reset=lambda: self._set_factor(f, kinds=("dac",)))
+        # the DAC tile reset restored the build's mixer settings: the NCOs again
+        for ch in range(self.num_rx):
+            self._program_nco("rx", ch, self._rx_freq[ch])
+        for ch in range(self.num_tx):
+            self._program_nco("tx", ch, self._tx_freq[ch])
+        self.reset_nco_phases("rx", range(self.num_rx))
+        self.reset_nco_phases("tx", range(self.num_tx))
+        self.readback = self._readback(print_it=True)
+        bad = [f"{k}: {x}" for k, x in self.readback["factor_errors"].items()]
+        if bad:
+            raise RuntimeError("factor readback after the retune: " + "; ".join(bad))
+        if not cw.locked():
+            raise RuntimeError("MMCM not locked after MTS")
+        meas = self._measure_fabric_mhz()
+        if abs(meas / v.fabric_mhz - 1.0) > 0.01:
+            raise RuntimeError(f"converter clock measured {meas:.4f} MHz, want "
+                               f"{v.fabric_mhz:g} MHz")
+        pr(f"[t] converter clock measured {meas:.4f} MHz (timekeeper; want "
+           f"{v.fabric_mhz:g}); F={f} on every enabled block; MTS locked")
 
     def _switch_channels(self, n: int) -> None:
         # that channel count's DEFAULT build: the sc16-max one (the highest
@@ -874,9 +1111,12 @@ class HwBackend(Backend):
         self.eth = self.my = self.rfdc_t = self.ol = self.bf = self.rbf = None
         rx_freqs = [self._rx_freq_mem.get(c, self._default_rx_freq) for c in range(v.nch)]
         tx_freqs = [self._tx_freq_mem.get(c, self._default_tx_freq) for c in range(v.nch)]
+        base = v if v.factor == v.built_factor else v.at_factor(v.built_factor)
         self._bring_up(v.bitstream, load=True, rx_freqs=rx_freqs,
                        tx_freqs=tx_freqs,
-                       refclk="auto" if self._refclk else False, variant=v)
+                       refclk="auto" if self._refclk else False, variant=base)
+        if v.factor != v.built_factor:
+            self._retune_hw(v)
         self._restore(state)
 
     def _restore(self, state: dict) -> None:
@@ -927,7 +1167,8 @@ class HwBackend(Backend):
         t, b = self.tx_chans[ch]
         return self.my.dac_tiles[t], b, self.my.dac_tiles[t].blocks[b]
 
-    def _mts_lock(self) -> Dict[str, object]:
+    def _mts_lock(self, attempts: int = 2, after_clkwiz_reset=None,
+                  after_dac_reset=None) -> Dict[str, object]:
         """Multi-tile sync of every DAC and ADC tile (rfsoc_lib MyMTS.init():
         tile-sync reset, MTS clocking-wizard MMCM lock, mts_dac, mts_adc).
         It must end LOCKED, or the daemon refuses to serve. The first attempt
@@ -937,9 +1178,10 @@ class HwBackend(Backend):
         RefTile 2)."""
         from rfsoc_lib.mts import MyMTS
         mts = MyMTS(self.ol.rfdc.usp_rf_data_converter, self.ol,
-                    board=self.board.name)
+                    board=self.board.name, after_clkwiz_reset=after_clkwiz_reset,
+                    after_dac_reset=after_dac_reset)
         last = None
-        for attempt in (1, 2):
+        for attempt in range(1, attempts + 1):
             try:
                 mts.init()
                 mts.verify_clock_tree()
@@ -957,7 +1199,7 @@ class HwBackend(Backend):
                      f"DAC tiles {st['dac']['tiles']:#06b} latency {st['dac']['latency']} offset {st['dac']['offset']}; "
                      f"ADC tiles {st['adc']['tiles']:#06b} latency {st['adc']['latency']} offset {st['adc']['offset']}")
             return st
-        raise RuntimeError(f"MTS NOT locked after 2 attempts ({last!r}); refusing "
+        raise RuntimeError(f"MTS NOT locked after {attempts} attempts ({last!r}); refusing "
                            "to serve -- hw_design/ZCU216/CLAUDE.md")
 
     def _tile_clock(self, tile) -> Dict[str, object]:
@@ -998,10 +1240,10 @@ class HwBackend(Backend):
         tiles, factor_errors = {}, {}
         lines = []
         for kind, chans, compiled, get_tiles, get_state, fac in (
-                ("DAC", self.tx_chans, self.geo.dac_interp, self.my.dac_tiles,
-                 st.get_dac_tile_state, "InterpolationFactor"),
-                ("ADC", self.rx_chans, self.geo.adc_decim, self.my.adc_tiles,
-                 st.get_adc_tile_state, "DecimationFactor")):
+                ("DAC", self.tx_chans, {s: self.tx_interp for s in self.geo.dac_interp},
+                 self.my.dac_tiles, st.get_dac_tile_state, "InterpolationFactor"),
+                ("ADC", self.rx_chans, {s: self.rx_decim for s in self.geo.adc_decim},
+                 self.my.adc_tiles, st.get_adc_tile_state, "DecimationFactor")):
             streamed = set(chans)
             for t in sorted({t for t, _ in chans}):
                 tile = get_tiles[t]
@@ -1044,10 +1286,10 @@ class HwBackend(Backend):
                     nz = blk.NyquistZone
                 except Exception as e:
                     mix, nz = f"? ({e})", "?"
-                lines.append(f"{kind} {t}{b}{ch}: {fac} {got} (compiled {want}) "
+                lines.append(f"{kind} {t}{b}{ch}: {fac} {got} (expected {want}) "
                              f"NyquistZone {nz} NCO {mix.get('Freq') if isinstance(mix, dict) else mix} MHz")
                 if int(got) != int(want):
-                    factor_errors[f"{kind}{t}{b}"] = f"{fac} {got} != compiled {want}"
+                    factor_errors[f"{kind}{t}{b}"] = f"{fac} {got} != expected {want}"
         out = {
             "tiles": tiles, "factor_errors": factor_errors,
             "adc_clock_ok": all(v["ok"] for k, v in tiles.items() if k.startswith("ADC")),

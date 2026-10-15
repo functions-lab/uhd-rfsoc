@@ -34,6 +34,7 @@ map rfsoc_lib/uhd/PROTOCOL.md                                 PROTOCOL.md
 # ---- rfsoc: the PYNQ side -- the board daemon and the rfsoc_lib modules it imports
 map rfsoc_lib/uhd/server                                      rfsoc/server
 map rfsoc_lib/__init__.py                                     rfsoc/rfsoc_lib/__init__.py
+map rfsoc_lib/clk_wiz.py                                      rfsoc/rfsoc_lib/clk_wiz.py
 map rfsoc_lib/clocks.py                                       rfsoc/rfsoc_lib/clocks.py
 map rfsoc_lib/gt_refclk.py                                    rfsoc/rfsoc_lib/gt_refclk.py
 map rfsoc_lib/mts.py                                          rfsoc/rfsoc_lib/mts.py
