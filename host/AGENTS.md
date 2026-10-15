@@ -7,7 +7,7 @@ is the detailed reference of the UHD module; `README.md` is the short version.
 - Builds only where UHD 4.6 dev headers and DPDK exist (the PC). The UHD
   version is pinned by the submodule `../uhd` (tag v4.6.0.0); CMake refuses
   another major/minor.
-- DPDK is the only sample transport. Apps run through `tools/zcu216-uhd`
+- DPDK is the only sample transport. Stock UHD apps run with `sudo` (or through `tools/zcu216-uhd`)
   (root, module path, CPU layout); the module derives its default CPU layout
   from the topology (`dpdk::default_layout` in `lib/zcu216_dpdk.cpp`).
 - Tests are on the real board (`../benchmark/`: robustness incl. the
@@ -113,40 +113,48 @@ module is installed: two copies in one process register `type=zcu216` twice.
 To run an uninstalled build, use `ZCU216_MODULE=$PWD/build/libuhd_zcu216.so
 zcu216-uhd ...` with nothing installed.
 
-## Running applications: `zcu216-uhd`
+## Running applications
+
+Any stock UHD application, run as root (DPDK needs CAP_NET_ADMIN,
+CAP_NET_RAW, CAP_IPC_LOCK and hugepages; the module checks at `make()`):
 
 ```sh
-zcu216-uhd <uhd app> [args...]
 A=type=zcu216,addr=<board-ip>         # uhd_find_devices --args type=zcu216 prints it
-zcu216-uhd uhd_usrp_probe --args $A
-zcu216-uhd rx_samples_to_file --args $A,nports=4 --rate 1.25e9 --freq 1e9 --nsamps 100000000 --file /dev/shm/x.dat
-zcu216-uhd benchmark_rate --args $A,nports=4 --rx_rate 1.25e9 --duration 10 --rx_cpu sc16
-zcu216-uhd tx_waveforms --args $A --rate 1.25e9 --freq 1e9 --wave-type SINE --wave-freq 10e6
-zcu216-uhd python3 -c "import uhd; u=uhd.usrp.MultiUSRP('$A'); print(u.recv_num_samps(10000, 1e9, 1.25e9))"
+E=/usr/libexec/uhd/examples           # UHD's examples (sudo's PATH does not have them)
+sudo uhd_usrp_probe --args $A,channels=4
+sudo $E/rx_samples_to_file --args $A,nports=4 --rate 1.25e9 --freq 1e9 --nsamps 100000000 --file /dev/shm/x.dat
+sudo $E/benchmark_rate --args $A,nports=4 --rx_rate 1.25e9 --duration 10 --rx_cpu sc16
+sudo $E/tx_waveforms --args $A,channels=2 --rate 1.25e9 --freq 1e9 --wave-type SINE --wave-freq 10e6
+sudo python3 -c "import uhd; u=uhd.usrp.MultiUSRP('$A'); print(u.recv_num_samps(10000, 1e9, 1.25e9))"
+sudo -E gnuradio-companion            # a GUI needs DISPLAY; -E keeps it (and PYTHONPATH: unset a stale one)
 ```
 
-`channels=N` and the rate pick the bitstream: one build per RFDC factor
-(`../benchmark/oracle_builds.txt`), and a requested rate is served by the
-highest build at or below it that carries the stream's wire format (below
-every build: the lowest). 1ch 1.25e9 is the 1-channel maximum; 1.2e9 would be
-served by the next build down, 833.3 MS/s.
+`channels=N` (device arg) picks the channel count, i.e. the bitstream
+(N = 1, 2, 4, 8, 16; a reload takes ~16 s). Within one N the rate is a
+`set_rx_rate`/`set_tx_rate`: a template build retunes in place (~1 s, MTS
+locked) to the highest of its rates at or below the request (below every
+rate: the lowest); a fixed build is one bitstream per RFDC factor
+(`../benchmark/oracle_builds.txt`).
 
-The wrapper
+**CPU placement.** At `make()` the module pins the thread that opened the
+device -- and so every thread it starts afterwards (GNU Radio's block
+threads, an app's RX/TX threads) -- to the CPUs that no DPDK lcore and no
+conversion worker uses, nor their hyperthread siblings (wei-duke-wsp5
+default layout: CPUs 0,6, beside the EAL main lcore): an application thread
+that shares a CPU with a polling lcore starves it. An affinity already
+narrower than the online CPUs (`taskset`) is kept; device arg
+`app_cpus=<list>` sets it, `app_cpus=all` leaves it alone. Threads the
+application started before `make()` keep their affinity.
 
-* runs the app with `sudo -E` (DPDK needs CAP_NET_ADMIN, CAP_NET_RAW,
-  CAP_IPC_LOCK and hugepages; the module checks and says so at `make()`),
-* sets `UHD_MODULE_PATH` to the installed module (`ZCU216_MODULE=` overrides),
-* starts the app under `taskset` on the threads of the first core, beside
-  the EAL main lcore (wei-duke-wsp5: CPUs 0,6), off the lcores and workers
-  (`ZCU216_APP_CPUS=<list>` or `=all` overrides; when the lcores or workers
-  are moved with device args, export `ZCU216_LCORE_CPUS` /
-  `ZCU216_WORKER_CPUS` / `ZCU216_RX_WORKERS` to match and the app gets every
-  CPU they leave free): an application thread that shares a CPU with a
-  polling lcore starves it,
-* looks up bare example names in `/usr/libexec/uhd/examples`.
+`tools/zcu216-uhd <app> [args]` does the same from outside (sudo -E, taskset,
+`UHD_MODULE_PATH` = the installed module or `$ZCU216_MODULE`, bare example
+names looked up in `/usr/libexec/uhd/examples`); the benchmarks use it to run
+an uninstalled build (`ZCU216_MODULE=$PWD/build/libuhd_zcu216.so`), and its
+`ZCU216_APP_CPUS` / `ZCU216_LCORE_CPUS` / `ZCU216_WORKER_CPUS` /
+`ZCU216_RX_WORKERS` place the app when the lcores or workers are moved.
 
-`uhd_find_devices` needs neither root nor the wrapper: discovery and control
-use kernel sockets, and `find()` does not open the data plane.
+`uhd_find_devices` needs no root: discovery and control use kernel sockets,
+and `find()` does not open the data plane.
 
 ## Data plane (DPDK)
 
@@ -218,7 +226,7 @@ use kernel sockets, and `find()` does not open the data plane.
 * **Core layout** (default, from the CPU topology, `dpdk::default_layout`;
   physical cores C0, C1, ... = hyperthread sibling groups; wei-duke-wsp5:
   Xeon w3-2423, 6 cores / 12 threads, CPU c and c+6 are siblings): C0 = the
-  EAL main lcore and the application (`zcu216-uhd`'s taskset, CPUs 0,6; the
+  EAL main lcore and the application (the module's placement, CPUs 0,6; the
   main lcore IS the application thread, idle as an lcore after
   `rte_eal_init`), C1 = the RX lcore (CPU 1) and the TX lcore + status queue
   (CPU 7), one conversion worker on each other core (CPUs 2,3,4,5). At
@@ -379,6 +387,7 @@ application with larger buffers (GNU Radio, `rx_samples_to_file --spb`,
 | `tx_workers`, `tx_worker_cpus` | as `rx_workers` / `worker_cpus` | send()'s own worker pool. `worker_pool::run()` executes a second concurrent caller inline, so simultaneous RX and TX need one pool each; split the cores for full-rate duplex (below). |
 | `worker_spin_us` | 200 | a worker busy-waits this long after its last task before it sleeps (futex) |
 | `par_min_slots` | 16384 | a `recv()` batch / `send()` batch worth at least this many wire slots (all channels) is split across the pool; below that the application thread converts alone (the dispatch costs ~0.1-0.2 us hot, a few us from sleep) |
+| `app_cpus` | free cores | CPUs for the application thread that opens the device and the threads it starts afterwards. Default: the CPUs no DPDK lcore and no worker uses, nor their hyperthread siblings (here 0,6); an affinity already narrower than the online CPUs (taskset) is kept; `all` = leave it alone ([Running applications](#running-applications)) |
 
 `spp`, `nports`, `recv_port`, `pattern`, `reorder_ms`, `tx_spp` also work as
 stream args (`stream_args.args`). The kernel-socket args of earlier versions
@@ -485,9 +494,10 @@ waiting.
   the RF part, `set_rx_lo_freq("NCO", f)` tunes it. The frontend also has the
   node `freq/ value` that UHD 4.6's `get_*_lo_freq()` reads on devices without
   LOs.
-* **Bandwidth.** 0.8 x the sample rate (the RFDC decimation / interpolation
-  filters' passband), range = that value; it follows the rate, setting it only
-  reads it back.
+* **Bandwidth.** The sample rate (fs / the decimation or interpolation
+  factor in force; the RFDC filters' -3 dB width is 0.96 x it,
+  `../benchmark/results/README.md`), range = that value; it follows the
+  rate, setting it only reads it back.
 * **Rate.** `set_rx_rate` goes to the daemon's `set_rx_rate <ch> <hz> [otw=<fmt>]`
   (the declared format: device arg `otw=` or the latest streamer's) and is
   served by the highest of this N's builds (`get_rx_rates`) at or below it

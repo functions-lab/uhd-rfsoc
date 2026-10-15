@@ -28,6 +28,8 @@
 #include <cmath>
 #include <complex>
 #include <fstream>
+#include <pthread.h>
+#include <sched.h>
 #include <set>
 #include <thread>
 
@@ -361,6 +363,10 @@ private:
     //! the conversion worker pool (rx_workers=, worker_cpus=, worker_spin_us=,
     //! par_min_slots=); none with rx_workers=0
     void _make_pool(const device_addr_t& args);
+    //! the application's threads off the lcores and the workers (app_cpus=)
+    void _place_app(const device_addr_t& args);
+    //! CPUs the conversion workers are pinned to (_make_pool)
+    std::set<unsigned> _worker_cpus;
     void _build_tree(const device_addr_t& info);
     void _build_chan(bool rx, size_t ch);
     //! §11: /mboards/0/{tx_beamformer,beamformer,rx_beamformer}/* and the
@@ -485,6 +491,7 @@ zcu216_device::zcu216_device(const device_addr_t& args)
                                      "NIC port (the board's 100G data IP).");
         _st->dpdk = dpdk::open_port(args, _st->host_data_iface(), _st->mtu);
         _make_pool(args);
+        _place_app(args);
         _rx_streamers.resize(_st->num_rx);
         _tx_streamers.resize(_st->num_tx);
         _build_tree(info);
@@ -1170,6 +1177,9 @@ void zcu216_device::_make_pool(const device_addr_t& args)
             cpus.push_back(-1); // not enough free CPUs: let the scheduler place it
     }
     const double spin = parse_double(args.get("worker_spin_us", "200"), "worker_spin_us");
+    for (int c : cpus)
+        if (c >= 0)
+            _worker_cpus.insert(unsigned(c));
     _st->pool = std::make_shared<worker_pool>(cpus, spin);
     // send()'s own pool: worker_pool::run() executes a second concurrent
     // caller inline, so with one shared pool simultaneous RX and TX left one
@@ -1183,12 +1193,96 @@ void zcu216_device::_make_pool(const device_addr_t& args)
             const auto l = parse_cpus(args["tx_worker_cpus"], "tx_worker_cpus");
             for (long long i = 0; i < ntw; i++)
                 tcpus.push_back(int(l[size_t(i) % l.size()]));
+            for (unsigned c : l)
+                _worker_cpus.insert(c);
         } else {
             for (long long i = 0; i < ntw; i++)
                 tcpus.push_back(cpus[size_t(i) % cpus.size()]);
         }
         _st->tx_pool = std::make_shared<worker_pool>(tcpus, spin);
     }
+}
+
+namespace {
+std::vector<unsigned> cpus_of_file(const std::string& path)
+{
+    std::string v;
+    std::ifstream f(path);
+    std::getline(f, v);
+    return v.empty() ? std::vector<unsigned>{} : parse_cpus(v, path);
+}
+std::string cpu_set_str(const std::set<unsigned>& s)
+{
+    std::string r;
+    for (unsigned c : s)
+        r += (r.empty() ? "" : ",") + std::to_string(c);
+    return r;
+}
+} // namespace
+
+void zcu216_device::_place_app(const device_addr_t& args)
+{
+    // What zcu216-uhd's taskset did, for any UHD application started plainly
+    // (sudo <app>): the thread that opens the device -- and so every thread it
+    // starts afterwards (GNU Radio's block threads, an app's RX/TX threads) --
+    // goes to CPUs that no polling lcore and no conversion worker uses, nor
+    // their hyperthread siblings. A thread sharing a CPU with a polling lcore
+    // starves it and loses packets. app_cpus=<list> picks the CPUs,
+    // app_cpus=all leaves the affinity alone, and an affinity already
+    // narrower than the online CPUs (taskset, the wrapper) is kept.
+    // wei-duke-wsp5 default layout: CPUs 0,6 (C0, beside the EAL main lcore).
+    const std::string arg = args.get("app_cpus", "");
+    if (arg == "all")
+        return;
+    const auto online = cpus_of_file("/sys/devices/system/cpu/online");
+    cpu_set_t cur;
+    CPU_ZERO(&cur);
+    if (online.empty() or pthread_getaffinity_np(pthread_self(), sizeof(cur), &cur) != 0)
+        return;
+    std::set<unsigned> want;
+    if (not arg.empty()) {
+        for (unsigned c : parse_cpus(arg, "app_cpus"))
+            want.insert(c);
+    } else {
+        size_t n = 0;
+        for (unsigned c : online)
+            n += CPU_ISSET(c, &cur) ? 1 : 0;
+        if (n < online.size()) {
+            ZLOG_INFO("application CPUs kept as started (" << n << " of " << online.size()
+                                                           << "; app_cpus= overrides)");
+            return;
+        }
+        const dpdk::cpu_layout& L = dpdk::default_layout();
+        std::set<unsigned> busy(_worker_cpus);
+        for (unsigned c : parse_cpus(args.get("dpdk_rx_cores", dpdk::cpu_list(L.rx)), "dpdk_rx_cores"))
+            busy.insert(c);
+        busy.insert(parse_cpus(args.get("dpdk_tx_core", std::to_string(L.tx)), "dpdk_tx_core").at(0));
+        std::set<unsigned> busy_cores(busy); // with their hyperthread siblings
+        for (unsigned c : busy)
+            for (unsigned s : cpus_of_file("/sys/devices/system/cpu/cpu" + std::to_string(c)
+                                           + "/topology/thread_siblings_list"))
+                busy_cores.insert(s);
+        for (unsigned c : online)
+            if (not busy_cores.count(c))
+                want.insert(c);
+        if (want.empty()) // every core busy: at least off the busy CPUs themselves
+            for (unsigned c : online)
+                if (not busy.count(c))
+                    want.insert(c);
+        if (want.empty()) {
+            ZLOG_WARN("no CPU free of DPDK lcores and conversion workers: the application "
+                      "shares theirs (app_cpus= sets its CPUs)");
+            return;
+        }
+    }
+    cpu_set_t set;
+    CPU_ZERO(&set);
+    for (unsigned c : want)
+        CPU_SET(c, &set);
+    if (pthread_setaffinity_np(pthread_self(), sizeof(set), &set) != 0)
+        throw uhd::value_error("ZCU216: app_cpus " + cpu_set_str(want) + ": cannot pin the application there");
+    ZLOG_INFO("application threads on CPUs " << cpu_set_str(want)
+                                             << " (off the DPDK lcores and workers; app_cpus= overrides)");
 }
 
 void zcu216_device::_build_bf()

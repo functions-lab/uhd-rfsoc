@@ -107,7 +107,8 @@ port_sptr open_port(const uhd::device_addr_t& args, const local_iface& ifc, size
 //!         polling lcores share ONE physical core -- with zero-copy RX they
 //!         are light, and a spinning lcore must never share a core with
 //!         conversion work
-//!   app   every thread of the last core (zcu216-uhd tasksets the app there)
+//!   app   the threads of C0, beside the main lcore (zcu216_device::_place_app
+//!         pins the application there)
 //!   workers  the first thread of every other core
 //! Measured on a 6-core/12-thread Xeon w3-2423, CX-5 at PCIe Gen3 x16, 8 x 300
 //! MS/s sc16, benchmark_rate with 32-packet buffers: lcores sharing one core

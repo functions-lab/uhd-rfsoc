@@ -414,7 +414,7 @@ void eal_init_once(const uhd::device_addr_t& args,
         throw uhd::runtime_error(
             "ZCU216: the DPDK data plane needs root (or CAP_NET_ADMIN, CAP_NET_RAW, "
             "CAP_IPC_LOCK): " + why
-            + ". Run the application through the wrapper: zcu216-uhd <app> [args]");
+            + ". Run the application with sudo (e.g. sudo uhd_usrp_probe --args type=zcu216)");
     if (not no_huge and free_hugepages() == 0)
         throw uhd::runtime_error("ZCU216: no free hugepages for DPDK "
                                  "(/sys/kernel/mm/hugepages/*/free_hugepages); run "

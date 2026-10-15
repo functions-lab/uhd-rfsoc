@@ -1,14 +1,16 @@
 # host — the PC side
 
 `libuhd_zcu216.so`, a UHD 4.6 device module (type `zcu216`) that streams over
-DPDK (mlx5, ConnectX-5), plus the `zcu216-uhd` wrapper every UHD app runs
-through (root for DPDK, the module path, CPU placement).
+DPDK (mlx5, ConnectX-5). Installed, it serves every stock UHD application
+run as root (DPDK): `sudo <app> --args type=zcu216,channels=N,...`. The
+module places the application's threads off its DPDK cores itself.
 
 ```
 sudo ./setup_cx5.sh <100g-iface> <host-data-ip>/24      # NIC: 100G, RS-FEC, MTU 9000
 sudo ./setup_dpdk.sh <100g-iface> --install             # DPDK packages, hugepages
 cmake -S . -B build && cmake --build build -j && sudo cmake --install build
-zcu216-uhd uhd_usrp_probe --args type=zcu216,addr=<board-ip>
+sudo uhd_usrp_probe --args type=zcu216,addr=<board-ip>,channels=4
+sudo /usr/libexec/uhd/examples/tx_waveforms --args type=zcu216,channels=2 --rate 625e6 --freq 950e6
 ```
 
 Full rate (up to 3.0 GS/s of sc16, 97 % of the link, both directions at
