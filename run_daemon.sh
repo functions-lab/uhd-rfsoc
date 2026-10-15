@@ -17,7 +17,7 @@
 set -euo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 SRV=$ROOT/rfsoc/server
-PY=${PYNQ_PYTHON:-/usr/local/share/pynq-venv/bin/python3}
+PY=${UHD_DAEMON_PYTHON:-/usr/local/share/pynq-venv/bin/python3}
 LOG=/tmp/uhd_daemon.log
 OUT=/tmp/uhd_daemon.out
 
@@ -26,7 +26,7 @@ pids() { pgrep -f '[z]cu216_uhd_daemon[.]py' || true; }
 addr() { ip -4 -br addr show eth0 2>/dev/null | awk '{print $3}' | cut -d/ -f1; }
 
 check() {
-    [ -x "$PY" ] || { echo "no PYNQ Python at $PY: run this on the board (or set PYNQ_PYTHON)" >&2; exit 1; }
+    [ -x "$PY" ] || { echo "no PYNQ Python at $PY: run this on the board (or set UHD_DAEMON_PYTHON)" >&2; exit 1; }
     [ -f "$SRV/zcu216_uhd.conf" ] || { echo "no $SRV/zcu216_uhd.conf: cp $SRV/zcu216_uhd.conf.example $SRV/zcu216_uhd.conf and set data_ip" >&2; exit 1; }
     compgen -G "$SRV/*_v49_*ch_qsfp*.bit" > /dev/null || { echo "no bitstreams in $SRV: copy them with rfsoc/push_bitstreams.sh (on the PC)" >&2; exit 1; }
 }
