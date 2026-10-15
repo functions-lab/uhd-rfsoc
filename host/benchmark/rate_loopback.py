@@ -10,7 +10,10 @@ cross-correlation peak gives its delay (whole TX->RX latency, in samples) and
 its height over the median.
 
     zcu216-uhd python3 benchmark/rate_loopback.py --args type=zcu216,addr=<ip>,channels=N --rate 375e6
-PASS: the rate is served as asked and every trial captures in full with the
+A request between two rates is met from below (PROTOCOL.md section 8):
+--expect names the rate that must be served (default: --rate).
+
+PASS: the expected rate is served and every trial captures in full with the
 pulse >= --min-db over the median. Prints 'LATREC {json}' per trial and one
 'PASS|FAIL rate ...' line; exit status 0 on PASS.
 """
@@ -21,7 +24,8 @@ import uhd
 T = uhd.types
 ap = argparse.ArgumentParser()
 ap.add_argument("--args", default="type=zcu216")
-ap.add_argument("--rate", type=float, required=True)
+ap.add_argument("--rate", type=float, required=True, help="rate requested")
+ap.add_argument("--expect", type=float, help="rate that must be served (default: --rate)")
 ap.add_argument("--chan", type=int, default=0, help="TX and RX channel")
 ap.add_argument("--freq", type=float, default=950e6)
 ap.add_argument("--trials", type=int, default=2)
@@ -106,10 +110,12 @@ for trial in range(a.trials):
         bad.append(f"trial {trial}: pulse {db:.1f} dB over the median < {a.min_db:g}")
     time.sleep(0.05)
 
-if abs(rate - a.rate) > 1e-6 * a.rate:
-    bad.append(f"rate {rate:.6g} served, {a.rate:.6g} asked")
+want = a.expect or a.rate
+if abs(rate - want) > 1e-6 * want:
+    bad.append(f"rate {rate:.9g} served for {a.rate:.9g} asked, want {want:.9g}")
 pk = f"pulse {min(r['peak_db'] for r in recs):.1f} dB" if recs else "no pulse"
 dl = f", delay {min(r['delay'] for r in recs):g}..{max(r['delay'] for r in recs):g} samples" if recs else ""
-print(f"{'FAIL' if bad else 'PASS'} rate {rate / 1e6:g} MS/s ch{c}: {len(recs)}/{a.trials} trials, "
+asked = f" (asked {a.rate / 1e6:g})" if a.expect else ""
+print(f"{'FAIL' if bad else 'PASS'} rate {rate / 1e6:g} MS/s{asked} ch{c}: {len(recs)}/{a.trials} trials, "
       f"{pk}{dl}, tick {tick / 1e6:g} MHz" + ("; " + "; ".join(bad) if bad else ""))
 sys.exit(1 if bad else 0)

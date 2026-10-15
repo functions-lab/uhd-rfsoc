@@ -4,6 +4,9 @@
 # MTS) and rate_loopback.py checks a TX->RX pulse at it.
 #
 #   ADDR=<board-ip> DEV_ARGS=channels=8 benchmark/rate_sweep.sh 375e6 281.25e6 ... 375e6
+#   benchmark/rate_sweep.sh 1000e6:833333333.3333334 100e6:62.5e6
+# A rate <asked>:<expected> checks a request between two rates is met from
+# below: the highest rate at or below it is served (PROTOCOL.md section 8).
 #
 # Environment: ADDR [discovery], DEV_ARGS (e.g. channels=N), CHAN (0), LOG
 # (/tmp/zcu216_rate_sweep). The daemon must run with the template loaded; its
@@ -22,7 +25,8 @@ A="type=zcu216,addr=$ADDR${DEV_ARGS:+,$DEV_ARGS}"
 pass=0; fail=0
 for r in "$@"; do
     F=$LOG/rate_${r}_ch$CHAN.log
-    if timeout 300 "$RUN" python3 "$HERE/rate_loopback.py" --args "$A" --rate "$r" --chan "$CHAN" >"$F" 2>&1; then
+    EXP=(); case $r in *:*) EXP=(--expect "${r#*:}") ;; esac
+    if timeout 300 "$RUN" python3 "$HERE/rate_loopback.py" --args "$A" --rate "${r%%:*}" "${EXP[@]}" --chan "$CHAN" >"$F" 2>&1; then
         pass=$((pass + 1))
     else
         fail=$((fail + 1))

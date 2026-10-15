@@ -203,6 +203,31 @@ and retune both allow 10 (`MTS_ATTEMPTS`), and the rerun above locked first
 time. Run with `rate_loopback.py`, 2 trials per rate, 2026-10-15 (2ch with
 the 2-attempt bring-up).
 
+### A requested rate is met from below, 2026-10-15
+
+UHD `set_rx_rate` / `set_tx_rate` with rates between (and outside) the ones a
+template serves: the daemon must serve the highest rate at or below the
+request (`coerce_rate`, PROTOCOL.md section 8), retuning in place (MMCM over
+DRP, factor, MTS). The expected rate per request was computed from the
+template's rate list beforehand; `rate_loopback.py --expect` checks the
+served rate and the TX->RX pulse at it.
+
+**33 of 33 requests PASS on the five templates; 27 retunes, MTS locked at
+every one (and at 5 bring-ups), first attempt.**
+
+| template | asked -> served (MS/s) |
+|---|---|
+| 1ch | 2000 -> 1250, 1000 -> 833.333, 700 -> 625, 450 -> 416.667, 400 -> 312.5, 300 -> 250, 200 -> 156.25, 110 -> 104.167, 100 -> 62.5, 50 -> 62.5 |
+| 2ch | 1300 -> 1250, 1000 -> 833.333, 600 -> 500, 240 -> 208.333, 70 -> 62.5 |
+| 4ch | 800 -> 750, 740 -> 562.5, 500 -> 450, 300 -> 281.25, 200 -> 187.5, 100 -> 93.75, 60 -> 56.25 |
+| 8ch | 400 -> 375, 300 -> 281.25, 200 -> 187.5, 150 -> 140.625, 100 -> 93.75, 80 -> 56.25 |
+| 16ch | 200 -> 187.5, 180 -> 140.625, 120 -> 112.5, 100 -> 93.75, 60 -> 56.25 |
+
+A request below every rate (1ch: 50) gets the lowest, so only there the
+served rate exceeds the request. Reproduce:
+`ADDR=<board-ip> DEV_ARGS=channels=4 benchmark/rate_sweep.sh 740e6:562.5e6 300e6:281.25e6 ...`
+with the template loaded.
+
 ### Bandwidth follows the rate (`rate_bandwidth.py`), 2026-10-15
 
 UHD tones over the air at every rate of the 1ch template and of the 16ch
