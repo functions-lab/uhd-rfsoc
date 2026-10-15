@@ -7,16 +7,17 @@ GS/s aggregate in sc16 (6.0 GS/s in sc8), TX and RX beamforming, full-rate TX
 and RX at once.
 
 Harvested from the SPEAR codebase (the v49 "QSFP" work) and kept in step with
-it by `sync/` (see below).
+it by `sync/` (`sync/README.md`).
 
 | directory | what | runs on |
 |---|---|---|
 | `fpga_ip/` | the custom FPGA IP: UHD data-plane cores (`ip_design/uhd_ip`, packaged in `ip/uhd_ip`), the 100G CMAC wrapper (`ip_design/cmac_100g`), the ZCU208 dual-ADC I/Q joiners (`ip/iprepo`) | Vivado |
 | `fpga_board/` | one directory per board: the block design (`block_designs/<board>_uhd_v49/`, one `.tcl` + `.xdc` for every channel count) and its build flow | Vivado |
-| `host/` | the UHD device module `libuhd_zcu216.so` (DPDK), the `zcu216-uhd` wrapper, benchmarks / test oracle, GNU Radio flowgraphs | PC |
+| `host/` | the UHD device module `libuhd_zcu216.so` (DPDK; stock UHD apps run it with `sudo`), benchmarks / test oracle, GNU Radio flowgraphs | PC |
 | `rfsoc/` | the board daemon (`server/`) and the `rfsoc_lib` modules it uses (RFDC, clocks, MTS) | board (PYNQ) |
+| `run_daemon.sh` | start / stop the daemon on the board | board |
 | `PROTOCOL.md` | the daemon <-> host <-> FPGA contract (wire format, registers, control) | -- |
-| `sync/` | the SPEAR sync tool and manifest | -- |
+| `sync/` | keeping the board's checkout (`board.sh`) and SPEAR (`spear_sync.py`) in step | PC |
 
 Pinned upstream sources (git submodules, shallow, at the exact releases this
 PC builds and runs against -- the Ubuntu 24.04 packages `libuhd 4.6.0.0` and
@@ -43,71 +44,64 @@ make -C fpga_board/zcu216 v49-package
 make -C fpga_board/zcu216 v49 N=4 F=3 FS=2250          # -> fpga_board/zcu216/build/v49_qsfp/bitstreams/
 make -C fpga_board/zcu216 v49-ladder                     # all 51 builds of host/benchmark/oracle_builds.txt
 
-# PC (once): NIC, DPDK, module
+# PC (once): NIC, DPDK, the UHD module
 sudo host/setup_cx5.sh <100g-iface> <host-data-ip>/24
 sudo host/setup_dpdk.sh <100g-iface> --install
 cmake -S host -B host/build && cmake --build host/build -j && sudo cmake --install host/build
 
-# board: the code by git (section "Board"), the bitstreams by rsync, then the daemon
-git push zcu216 master
+# board: the code by git, the bitstreams by rsync (section "Board")
+sync/board.sh push
 rfsoc/push_bitstreams.sh                                  # fpga_board/zcu216/build/v49_qsfp/bitstreams -> board
-ssh xilinx@zcu216-0 'cd jupyter_notebooks/rfsoc-uhd/rfsoc/server && sudo -E env BOARD=ZCU216 XILINX_XRT=/usr \
-    /usr/local/share/pynq-venv/bin/python3 zcu216_uhd_daemon.py --allow-unlocked'
-
-# PC: any UHD app through the wrapper
-zcu216-uhd uhd_usrp_probe --args type=zcu216,addr=<board-data-ip>
 ```
 
-The daemon picks the bitstream from the requested channel count and rate.
-Details: `host/README.md` (PC), `rfsoc/server/README.md` (board),
-`fpga_board/README.md` (FPGA), `host/benchmark/README.md` (tests and measured
-results).
+## Running
 
-## Paths in the harvested docs
+On the board (`ssh xilinx@zcu216-0`, in `~/jupyter_notebooks/rfsoc-uhd`):
 
-The READMEs and AGENTS.md files under `fpga_ip/`, `host/` and `rfsoc/server/`
-come from SPEAR unchanged (so they sync exactly) and use SPEAR's paths:
+```
+./run_daemon.sh             # start; returns once it serves (~20 s: bitstream, clocks, MTS)
+./run_daemon.sh status      # running? which build and rate
+./run_daemon.sh stop        # also: restart, log, fg (foreground)
+```
 
-| SPEAR path | here |
-|---|---|
-| `hw_design/ip_design/*`, `hw_design/ip/*` | `fpga_ip/ip_design/*`, `fpga_ip/ip/*` |
-| `hw_design/ZCU216/...`, `hw_design/ZCU208/...` | `fpga_board/zcu216/...`, `fpga_board/zcu208/...` |
-| `block_designs/zcu2xx_v49_qsfp/zcu2xx_v49_qsfp.{tcl,xdc}` | `block_designs/zcu2xx_uhd_v49/zcu2xx_uhd_v49.{tcl,xdc}` |
-| `hw_design/ZCU216/CLAUDE.md`, `hw_design/ZCU208/CLAUDE.md` | `fpga_board/zcu216/AGENTS.md`, `fpga_board/zcu208/AGENTS.md` |
-| `rfsoc_lib/uhd/host` (and `../host` from benchmark/) | `host` |
-| `rfsoc_lib/uhd/benchmark` (and `../benchmark` from host/ or server/) | `host/benchmark` |
-| `rfsoc_lib/uhd/gnuradio` | `host/gnuradio` |
-| `rfsoc_lib/uhd/server` | `rfsoc/server` |
-| `rfsoc_lib/uhd/PROTOCOL.md` | `PROTOCOL.md` |
-| `rfsoc_lib/<module>.py`, `rfsoc_lib/xrfclk` | `rfsoc/rfsoc_lib/<module>.py`, `rfsoc/rfsoc_lib/xrfclk` |
+On the PC, any stock UHD application, run as root (the data plane is DPDK);
+the channel count is the device arg `channels=` (1, 2, 4, 8, 16):
 
-On the board this repository is a git checkout (below), so the daemon is
-`rfsoc/server` there too; SPEAR docs that say `<remote_dir>/rfsoc_lib/uhd/server`
-mean `<checkout>/rfsoc/server`.
+```
+uhd_find_devices --args type=zcu216                      # no root needed
+sudo uhd_usrp_probe --args type=zcu216,addr=<board-ip>,channels=4
+sudo /usr/libexec/uhd/examples/tx_waveforms --args type=zcu216,channels=2 \
+    --rate 625e6 --freq 950e6 --wave-type SINE --wave-freq 10e6
+sudo python3 -c "import uhd; u = uhd.usrp.MultiUSRP('type=zcu216,channels=4'); print(u.get_rx_rate())"
+```
+
+A new `channels=` reloads the bitstream (~16 s). Within one channel count
+`set_rx_rate` / `set_tx_rate` retune in place (~1 s): the highest supported
+rate at or below the request, e.g. 750, 562.5, 450 ... 56.25 MS/s at 4
+channels; the reported bandwidth is the rate.
+
+If `uhd_usrp_probe` fails with a DPDK port error, the PC's 100G port lost its
+address (NetworkManager): `sudo nmcli device set <100g-iface> managed no` and
+run `host/setup_cx5.sh` again.
+
+More: `host/README.md` (PC, device arguments), `rfsoc/server/README.md`
+(daemon), `fpga_board/README.md` (FPGA), `host/benchmark/README.md` (tests,
+measured results), `host/gnuradio/README.md` (GNU Radio).
 
 ## Board
 
 The ZCU216 (`xilinx@zcu216-0`) holds a git checkout of this repository at
-`/home/xilinx/jupyter_notebooks/rfsoc-uhd`, configured to accept pushes into
-its checked-out branch (`receive.denyCurrentBranch=updateInstead`):
+`/home/xilinx/jupyter_notebooks/rfsoc-uhd`, kept on the PC's branch and commit:
 
 ```
 git remote add zcu216 xilinx@zcu216-0:/home/xilinx/jupyter_notebooks/rfsoc-uhd   # once
-git push zcu216 master          # PC -> board (refused if the board has uncommitted edits to those files)
-git fetch zcu216 && git merge zcu216/master      # board -> PC (after committing on the board)
+sync/board.sh hooks on      # once: every commit / checkout here updates the board
+sync/board.sh status        # both sides: branch, commit, uncommitted files
+sync/board.sh push          # PC -> board
+sync/board.sh pull          # board -> PC (after committing on the board)
 ```
 
-Not in git, so kept on the board only: the bitstreams
-(`rfsoc/push_bitstreams.sh` copies them into `rfsoc/server/`, the daemon's
-default bitstream directory) and the board's settings
+Kept on the board only (not in git): the bitstreams in `rfsoc/server/`
+(`rfsoc/push_bitstreams.sh` copies them) and the board's settings
 `rfsoc/server/zcu216_uhd.conf` (from `zcu216_uhd.conf.example`: `data_ip`,
-`name`). The daemon finds `rfsoc_lib` next to `rfsoc/server` by itself;
-`host/benchmark/oracle.sh` drives it there (`BOARD_DIR` defaults to that
-checkout).
-
-## Keeping in step with SPEAR
-
-`sync/manifest` lists every file taken from SPEAR, its path here, and the few
-rewrites this layout needs; nothing else differs. `sync/spear_sync.py pull`
-brings SPEAR changes in, `push --into <SPEAR checkout>` carries changes made
-here back. See `sync/README.md`.
+`name`).

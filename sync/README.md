@@ -1,4 +1,8 @@
-# sync — keeping rfsoc-uhd in step with SPEAR
+# sync — keeping rfsoc-uhd in step with SPEAR (and the board)
+
+`board.sh` keeps the ZCU216's git checkout on this checkout's branch and
+commit (`status`, `push`, `pull`, `hooks on|off`): README.md "Board". The rest
+of this file is about SPEAR.
 
 Everything this repository takes from SPEAR is listed in `manifest`:
 
