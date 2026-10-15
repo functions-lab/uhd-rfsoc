@@ -203,6 +203,48 @@ and retune both allow 10 (`MTS_ATTEMPTS`), and the rerun above locked first
 time. Run with `rate_loopback.py`, 2 trials per rate, 2026-10-15 (2ch with
 the 2-attempt bring-up).
 
+### Bandwidth follows the rate (`rate_bandwidth.py`), 2026-10-15
+
+UHD tones over the air at every rate of the 1ch template and of the 16ch
+template, each rate set by a UHD session on the running daemon (in-place
+retune; MTS locked at all 17 bring-ups and retunes, first attempt). The RF
+tone stays at 950 MHz; only the NCOs move, so the measured response is the
+RFDC decimation (RX) and interpolation (TX) filters' at the rate in force.
+Criteria (set before): flat within 1 dB to 0.35 x rate, -3 dB edge between
+0.38 and 0.5 x rate, RX >= 40 dB down from 0.6 x rate; across rates the
+bandwidth in MHz scales with the rate within 5 %.
+
+**17 of 17 rates PASS; the measured bandwidth scales with the rate to
+within 0.4 % (1201 MHz at 1250 MS/s down to 54 MHz at 56.25 MS/s).**
+
+| template | MS/s | RX -3 dB bw MHz | TX -3 dB bw MHz | UHD `get_rx_bandwidth` MHz | RX bw / rate | RX stopband dB |
+|---|---|---|---|---|---|---|
+| 1ch F2 fs2500 | 1250 | 1201.07 | 1204.90 | 1000 | 0.961 | -41.7 |
+| | 833.333 | 798.39 | 802.89 | 666.667 | 0.958 | -64.0 |
+| | 625 | 600.34 | 602.37 | 500 | 0.961 | -42.7 |
+| | 500 | 478.60 | 481.44 | 400 | 0.957 | -68.3 |
+| | 416.667 | 399.68 | 401.12 | 333.333 | 0.959 | -46.4 |
+| | 312.5 | 300.01 | 301.21 | 250 | 0.960 | -65.4 |
+| | 250 | 239.54 | 240.71 | 200 | 0.958 | -70.3 |
+| | 208.333 | 199.66 | 200.61 | 166.667 | 0.958 | -49.8 |
+| | 156.25 | 150.09 | 150.59 | 125 | 0.961 | -70.8 |
+| | 125 | 119.75 | 120.38 | 100 | 0.958 | -69.9 |
+| | 104.167 | 99.89 | 100.29 | 83.333 | 0.959 | -75.8 |
+| | 62.5 | 59.94 | 60.19 | 50 | 0.959 | -72.1 |
+| 16ch F12 fs2250 | 187.5 | 179.77 | 180.63 | 150 | 0.959 | -55.7 |
+| | 140.625 | 135.08 | 135.50 | 112.5 | 0.961 | -71.8 |
+| | 112.5 | 107.85 | 108.26 | 90 | 0.959 | -76.2 |
+| | 93.75 | 89.86 | 90.26 | 75 | 0.959 | -73.2 |
+| | 56.25 | 53.90 | 54.15 | 45 | 0.958 | -69.1 |
+
+The response is flat (within the ~0.5 dB point-to-point scatter of the
+over-the-air level) to 0.44 x rate, -3 dB at 0.48 x rate, -6 dB at rate/2,
+~-25 dB at 0.55 x rate, the same shape at every factor. UHD's bandwidth
+(0.8 x rate) is the filters' specified passband, not the -3 dB width. The
+stopband column is the level at the alias bin, worst of 0.6-0.7 x rate; there
+the spectrum's strongest bin is an unrelated spur, so it is an upper bound on
+what leaks through.
+
 ### 1ch F2 fs2500 (`zcu216_v49_1ch_qsfp_f2_fs2500`), 2026-10-14
 
 **12 of 12 rates PASS, 1250 to 62.5 MS/s, from one bitstream; MTS locked at
