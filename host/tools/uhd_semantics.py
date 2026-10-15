@@ -24,7 +24,7 @@ Checks (each prints PASS/FAIL; exit code = number of failures):
               the request; dsp range +-rate/2; clamped to 0..fs/2
   lo          get_*_lo_names / lo_freq / lo_source / lo_freq_range
   antenna     aliases (RX2, TX/RX) select the one port, which is reported
-  bandwidth   0.8 x rate, range
+  bandwidth   = rate (fs / factor), range
   sensors     lo_locked per channel, every mboard sensor readable
   fragments   a recv() buffer smaller than a packet: more_fragments
   timed       set_command_time + tune/gain on every channel: replied at once,
@@ -292,7 +292,7 @@ class Run:
         u = self.u
         bw = u.get_rx_bandwidth(0)
         r = u.get_rx_bandwidth_range(0)
-        ok = abs(bw - 0.8 * self.rate) < 1 and abs(r.stop() - bw) < 1 and abs(u.get_tx_bandwidth(0) - bw) < 1
+        ok = abs(bw - self.rate) < 1 and abs(r.stop() - bw) < 1 and abs(u.get_tx_bandwidth(0) - bw) < 1
         self.result('bandwidth', ok, '%.6g Hz at %.6g S/s' % (bw, self.rate))
 
     def t_sensors(self):

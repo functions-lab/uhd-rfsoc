@@ -239,8 +239,12 @@ within 0.4 % (1201 MHz at 1250 MS/s down to 54 MHz at 56.25 MS/s).**
 
 The response is flat (within the ~0.5 dB point-to-point scatter of the
 over-the-air level) to 0.44 x rate, -3 dB at 0.48 x rate, -6 dB at rate/2,
-~-25 dB at 0.55 x rate, the same shape at every factor. UHD's bandwidth
-(0.8 x rate) is the filters' specified passband, not the -3 dB width. The
+~-25 dB at 0.55 x rate, the same shape at every factor. The UHD column is
+what the module reported then (0.8 x rate, the filters' specified passband);
+since this measurement it reports the sample rate itself, fs / the factor
+(checked on the 1ch template at 1250, 250 and 62.5 MS/s: `get_rx_bandwidth` =
+`get_tx_bandwidth` = the rate, `uhd_semantics.py` bandwidth PASS; measured
+-3 dB width 1200.22, 239.59, 59.91 MHz). The
 stopband column is the level at the alias bin, worst of 0.6-0.7 x rate; there
 the spectrum's strongest bin is an unrelated spur, so it is an upper bound on
 what leaks through.

@@ -1055,14 +1055,15 @@ void zcu216_device::_build_chan(bool rx, size_t ch)
     _tree->create<double>(fe / "los/NCO/freq/value").set_coercer(set_rf).set_publisher(get_rf);
     _tree->create<meta_range_t>(fe / "los/NCO/freq/range").set(frange);
 
-    // Bandwidth: the RFDC Gen3 decimation / interpolation filters pass 80 %
-    // of the (complex) output rate; it follows the sample rate (a build
-    // parameter), so setting it only reads it back.
+    // Bandwidth: the (complex) sample rate, fs / the decimation or
+    // interpolation factor in force -- the RFDC Gen3 filters' -3 dB width is
+    // 0.96 x it at every factor (benchmark/results, rate_bandwidth.py). It
+    // follows the sample rate, so setting it only reads it back.
     _tree->create<double>(fe / "bandwidth/value")
-        .set_coercer([&rate_cache](double) { return 0.8 * rate_cache.load(); })
-        .set_publisher([&rate_cache] { return 0.8 * rate_cache.load(); });
+        .set_coercer([&rate_cache](double) { return rate_cache.load(); })
+        .set_publisher([&rate_cache] { return rate_cache.load(); });
     _tree->create<meta_range_t>(fe / "bandwidth/range").set_publisher([&rate_cache] {
-        return meta_range_t(0.8 * rate_cache.load(), 0.8 * rate_cache.load());
+        return meta_range_t(rate_cache.load(), rate_cache.load());
     });
 
     const std::string gname = rx ? "DSA" : "VOP";

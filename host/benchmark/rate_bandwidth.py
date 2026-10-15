@@ -18,7 +18,7 @@ a timed TX burst and an RX capture inside it.
 
 PASS per rate (set before the measurement): RX and TX flat within 1 dB up to
 0.35 x rate; the -3 dB edge between 0.38 and 0.5 x rate (UHD reports
-bandwidth 0.8 x rate); RX at >= 0.6 x rate >= 40 dB down or at the noise
+bandwidth = rate, fs / the factor); RX at >= 0.6 x rate >= 40 dB down or at the noise
 floor. --compare: the measured bandwidth in MHz scales with the rate within 5 %.
 """
 import argparse, json, sys, time
