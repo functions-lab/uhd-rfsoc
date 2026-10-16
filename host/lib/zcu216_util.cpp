@@ -371,6 +371,9 @@ uhd::device_addrs_t discover(const uhd::device_addr_t& hint, double timeout_s)
             continue;
         if (hint.has_key("name") and dev.get("name", "") != hint["name"])
             continue;
+        // product=zcu216 / rfsoc4x2: the board kind (discovery reply, boards.py)
+        if (hint.has_key("product") and dev.get("product", "") != hint["product"])
+            continue;
         // one board answers once per interface a broadcast reached it on
         if (not dedup.insert(dev.get("serial", dev["addr"])).second)
             continue;

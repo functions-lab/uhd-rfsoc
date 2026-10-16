@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""make_flowgraphs.py [--out DIR] -- write one GNU Radio flowgraph (.grc) per
-multi-channel family and channel count: zcu216_tones_<family>_<N>ch.grc.
+"""make_flowgraphs.py [--board zcu216|rfsoc4x2|all] [--out DIR] -- write one GNU
+Radio flowgraph (.grc) per board, family and channel count:
+<board>_tones_<family>_<N>ch.grc.
 
-The builds are benchmark/oracle_builds.txt (N >= 2), the max-rate build of
-each family and N. Every flowgraph is the same burst-mode tone test at that
+The builds are the board's oracle list, the max-rate build of each family
+and N: ZCU216 benchmark/oracle_builds.txt (N >= 2), RFSoC 4x2
+benchmark/oracle_builds_rfsoc4x2.txt (N = 1, 2; its device args add
+product=rfsoc4x2, so discovery picks it with a ZCU216 on the same network). Every flowgraph is the same burst-mode tone test at that
 build's rate and wire format:
 
   * TX: every PERIOD seconds one timed burst (device time now + LEAD), the
@@ -32,7 +35,12 @@ import sys
 import yaml
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-BUILDS = os.path.join(HERE, "..", "benchmark", "oracle_builds.txt")
+# board -> (title, oracle list, smallest N, extra device args, families)
+BOARDS = {
+    "zcu216":   ("ZCU216", "oracle_builds.txt", 2, "", ("normal", "sc8max")),
+    # the RFSoC 4x2's templates (fpga_board/rfsoc4x2 v49-templates): normal only
+    "rfsoc4x2": ("RFSoC 4x2", "oracle_builds_rfsoc4x2.txt", 1, ",product=rfsoc4x2", ("normal",)),
+}
 FREQ, AMP, TONE_STEP = 950e6, 0.25, 1.0 / 64
 CAP_LEN, LEAD, PERIOD = 16384, 0.3, 0.5     # CAP_LEN: at most half a burst
 # GRC's Run button: the ZCU216 module needs root (DPDK), so the flowgraph runs
@@ -41,15 +49,17 @@ RUN_CMD = ("/bin/bash -c 'exec pkexec env DISPLAY=\"$DISPLAY\" XAUTHORITY=\"$XAU
            "/usr/local/bin/zcu216-uhd \"$0\" -u \"$1\"' {python} {filename}")
 
 
-def builds():
-    """The max-rate build of each (family, N >= 2): the first such row of
-    oracle_builds.txt (the rest of the normal family's rate ladder is reached
-    by lowering samp_rate in the flowgraph -- the daemon serves the highest
-    build at or below it)."""
+def builds(board):
+    """The max-rate build of each (family, N >= the board's smallest): the
+    first such row of its oracle list (the rest of the normal family's rate
+    ladder is reached by lowering samp_rate in the flowgraph -- the daemon
+    serves the highest rate at or below it)."""
+    _, lst, nmin, _, fams = BOARDS[board]
     seen = set()
-    for line in open(BUILDS):
+    for line in open(os.path.join(HERE, "..", "benchmark", lst)):
         f = line.split()
-        if not f or f[0].startswith("#") or int(f[1]) < 2 or (f[0], f[1]) in seen:
+        if not f or f[0].startswith("#") or f[0] not in fams or int(f[1]) < nmin \
+                or (f[0], f[1]) in seen:
             continue
         seen.add((f[0], f[1]))
         fam, n, rate, bit, fmts = f[0], int(f[1]), float(f[2]), f[3], f[4].split(",")
@@ -66,8 +76,9 @@ def var(name, value, xy):
     return blk(name, "variable", {"comment": "", "value": value}, xy)
 
 
-def flowgraph(fam, n, rate, bit, otw):
-    fid = f"zcu216_tones_{fam}_{n}ch"
+def flowgraph(board, fam, n, rate, bit, otw):
+    title, _, _, extra, _ = BOARDS[board]
+    fid = f"{board}_tones_{fam}_{n}ch"
     # 131072 slots per burst: a quarter of the host's TX credit (the 2 MiB URAM,
     # 524032 slots; the FPGA's 2 MiB block-RAM chain sits behind it), so the
     # whole burst is in the FPGA before it plays -- GNU Radio cannot refill a
@@ -77,16 +88,16 @@ def flowgraph(fam, n, rate, bit, otw):
     groups = (n + 3) // 4
     B = [blk("options", "options", {
         "author": "", "catch_exceptions": "True", "category": "[GRC Hier Blocks]",
-        "description": f"ZCU216 {fam} {n}ch ({bit}): timed tone bursts, captured on every channel",
+        "description": f"{title} {fam} {n}ch ({bit}): timed tone bursts, captured on every channel",
         "generate_options": "qt_gui", "id": fid, "output_language": "python",
         "placement": "(0,0)", "run": "True", "run_command": RUN_CMD,
         "run_options": "prompt", "sizing_mode": "fixed",
-        "title": f"ZCU216 {fam} {n}ch tones ({rate / 1e6:g} MS/s, otw {otw})"}, (8, 8))]
+        "title": f"{title} {fam} {n}ch tones ({rate / 1e6:g} MS/s, otw {otw})"}, (8, 8))]
     B += [blk("addr", "parameter", {"label": "board address (empty: discover)", "short_id": "",
                                     "type": "str", "value": "", "hide": "none"}, (200, 8)),
           blk("freq", "parameter", {"label": "RF centre (Hz)", "short_id": "f",
                                     "type": "eng_float", "value": f"{FREQ:g}", "hide": "none"}, (360, 8))]
-    args = f'"type=zcu216,channels={n}"' + (f' + ",otw={otw}"' if otw != "sc16" else "") + \
+    args = f'"type=zcu216{extra},channels={n}"' + (f' + ",otw={otw}"' if otw != "sc16" else "") + \
            ' + (",addr=" + addr if addr else "")'
     for i, (k, v) in enumerate([("samp_rate", f"{rate:g}"), ("nchan", str(n)), ("dev_args", args),
                                 ("burst_len", str(burst_len)), ("cap_len", str(cap_len)),
@@ -199,6 +210,7 @@ def normalise(path):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--board", choices=list(BOARDS) + ["all"], default="all")
     ap.add_argument("--out", default=os.path.join(HERE, "grc"))
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
@@ -207,14 +219,15 @@ def main():
         grc = True
     except ImportError:
         grc = False
-    for b in builds():
-        fid, fg = flowgraph(*b)
-        path = os.path.join(a.out, fid + ".grc")
-        with open(path, "w") as fh:
-            yaml.safe_dump(fg, fh, sort_keys=False, width=1000)
-        if grc:
-            normalise(path)
-        print(f"{path}  ({b[3]}, {b[2] / 1e6:g} MS/s, otw {b[4]})")
+    for board in (BOARDS if a.board == "all" else [a.board]):
+        for b in builds(board):
+            fid, fg = flowgraph(board, *b)
+            path = os.path.join(a.out, fid + ".grc")
+            with open(path, "w") as fh:
+                yaml.safe_dump(fg, fh, sort_keys=False, width=1000)
+            if grc:
+                normalise(path)
+            print(f"{path}  ({b[3]}, {b[2] / 1e6:g} MS/s, otw {b[4]})")
 
 
 if __name__ == "__main__":

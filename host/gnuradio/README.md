@@ -1,6 +1,6 @@
-# GNU Radio flowgraphs for the ZCU216 (`type=zcu216`)
+# GNU Radio flowgraphs for the ZCU216 and the RFSoC 4x2 (`type=zcu216`)
 
-One flowgraph per multi-channel build, `grc/zcu216_tones_<family>_<N>ch.grc`:
+One flowgraph per board and multi-channel build, `grc/<board>_tones_<family>_<N>ch.grc`:
 a timed tone burst on every TX channel (the same tone, at 1/64 of the sample
 rate: 11.72 MHz above the RF centre at 750 MS/s) and a timed capture of every
 RX channel inside it, shown in a Qt time sink and a Qt frequency sink (a tab
@@ -31,6 +31,15 @@ timed RX command and fires each burst.
 | normal | 2 / 4 / 8 / 16 | `_f2_fs2500` / `_f3_fs2250` / `_f6_fs2250` / `_f12_fs2250` | 1250 / 750 / 375 / 187.5 MS/s | sc16 |
 | sc8max | 4 / 8 / 16 | `_f2_fs2500` / `_f3_fs2250` / `_f6_fs2250` | 1250 / 750 / 375 MS/s | sc8 |
 
+RFSoC 4x2 (`grc/rfsoc4x2_tones_normal_{1,2}ch.grc`, fs 5000: twice the
+ZCU216's per-channel rate at the same factor), run with
+`run_tones.sh rfsoc4x2 normal 1` / `... normal 2`. Their device args carry
+`product=rfsoc4x2`, so discovery picks the 4x2 with a ZCU216 on the network:
+
+| family | N | build | per-channel rate | wire |
+|---|---|---|---|---|
+| normal | 1 / 2 | `rfsoc4x2_v49_1ch_qsfp_f2_fs5000` / `rfsoc4x2_v49_2ch_qsfp_f4_fs5000` | 2500 / 1250 MS/s | sc16 |
+
 Each flowgraph opens at its family's maximum rate. The normal family has a
 bitstream per RFDC factor below that (`benchmark/oracle_builds.txt`): set
 `samp_rate` lower and the daemon loads the highest build at or below it.
@@ -51,4 +60,4 @@ time: no `L` or `U`. Measured on normal 4ch: 56 bursts in 30 s, 0 underflows,
 Regenerate after editing the generator or the embedded block (on the PC: GRC
 3.10 validates each file and fills in block defaults):
 
-    python3 make_flowgraphs.py
+    python3 make_flowgraphs.py [--board zcu216|rfsoc4x2]

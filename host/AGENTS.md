@@ -340,7 +340,7 @@ application with larger buffers (GNU Radio, `rx_samples_to_file --spb`,
 |---|---|---|
 | `type` | | `zcu216`. With any other `type` the module returns nothing without touching the network. |
 | `addr` | broadcast | board management IP (control). Without it, discovery broadcasts on every IPv4 interface for 150 ms (`find_timeout=`) and each board answers with the address it was reached on. If UDP discovery is filtered, `type=zcu216,addr=` falls back to `info` over TCP. |
-| `serial`, `name` | | filter discovery results |
+| `serial`, `name`, `product` | | filter discovery results (`product=zcu216` or `rfsoc4x2`: the board kind) |
 | `channels` | 1 | the build to use: N = 1, 2, 4, 8 or 16 channels in one stream (PROTOCOL §9). Sent as `set_channels N` right after `claim`; the daemon loads that N's default build -- the fastest whose sc16 stream fits the link: 1250 MS/s at 1-2 channels, 750 / 375 / 187.5 MS/s at 4 / 8 / 16 -- if another is loaded (seconds, `rate_timeout`). A daemon that answers `ERR unknown command` is a 1-channel daemon: the module warns and uses N = 1. |
 | `otw` | | the OTW format the application will stream in (§10), declared with every `set_rx_rate`/`set_tx_rate` (`otw=`, §3) so the daemon picks -- or refuses before reloading -- the build for it, and the default of a stream whose `otw_format` is empty. A rate is served by the highest build at or below it that carries the declared format. Needed for the sc8max builds: `channels=4,otw=sc8` and 1250 MS/s loads 4ch F2 fs2500 (sc8 only); without `otw=sc8` the same request gets the 750 MS/s sc16 build. Once a streamer exists, its format is declared instead. |
 | `ctrl_port`, `disc_port` | 49710, 49700 | |
