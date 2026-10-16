@@ -1,4 +1,4 @@
-"""Timed control commands of the ZCU216 daemon (PROTOCOL.md §3c).
+"""Timed control commands of the ZCU216 daemon (Protocol §3c).
 
 UHD's set_command_time() makes later tune and gain requests take effect at a
 device time. The RFDC has no timed-command queue in the fabric, so the daemon

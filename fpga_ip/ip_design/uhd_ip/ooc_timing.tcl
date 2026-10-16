@@ -1,7 +1,7 @@
 # ooc_timing.tcl -- out-of-context synthesis + place + route of udp_streamer
 # or udp_player, and a timing summary, on the ZCU216 part.
 #
-#   cd hw_design/ip_design/uhd_ip   (or: make ooc)
+#   cd fpga_ip/ip_design/uhd_ip   (or: make ooc)
 #   vivado -mode batch -nojournal -source ooc_timing.tcl \
 #          -tclargs <udp_streamer|udp_player> <width> <adc_mhz> [outdir] [NAME=value ...]
 #

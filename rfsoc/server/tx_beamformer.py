@@ -1,6 +1,6 @@
-"""eth100g/tx_beamformer of the N >= 2 v49 builds (PROTOCOL.md §11).
+"""eth100g/tx_beamformer of the N >= 2 v49 builds (Protocol §11).
 
-Register map: hw_design/ip_design/uhd_ip/src/tx_beamformer.v (header;
+Register map: fpga_ip/ip_design/uhd_ip/src/tx_beamformer.v (header;
 packaged as user.org:uhd:tx_beamformer:1.0). AXI-Lite at 0x8006_0000 in
 every N >= 2 build; the N = 1 builds have none. The driver is only ever created from an ip_dict entry
 named tx_beamformer (never from a fallback address: an AXI access to an

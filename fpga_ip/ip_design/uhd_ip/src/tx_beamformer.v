@@ -1,6 +1,6 @@
 // tx_beamformer -- TX beamformer between udp_player (after ch_interleave
 // DIR=1) and the DAC axis_broadcaster of an N-channel v49 build
-// (rfsoc_lib/uhd/PROTOCOL.md section 11 is the contract; section 9 the layout).
+// (Protocol §11 is the contract; §9 the layout).
 //
 //   s_axis / m_axis (aclk, the converter AXIS clock)
 //       CHANNEL-MAJOR beat: channel k in bits [k*W +: W], W = BEAT_W/N_CH,
@@ -14,9 +14,9 @@
 //   CTRL.enable = 1  channel 0's W-bit slice is fanned out to every channel of
 //                    the beamformer and output channel c is ch0 x w[c]
 //                    (channels 1..N-1 of the input beat are ignored).
-// The arithmetic is the v47 beamformer IP, instantiated unmodified (PIPE = 0)
-// (hw_design/ip/iprepo/beamformer_1.0/hdl/beamformer_v1_0.sv +
-// beamformer_channel.sv, NUM_CH = N_CH, AXIS_TDATA_WIDTH = W): per slot
+// The arithmetic is the beamformer_1.0 IP's datapath, instantiated unmodified
+// (PIPE = 0) (src/beamformer_v1_0.sv + src/beamformer_channel.sv, NUM_CH =
+// N_CH, AXIS_TDATA_WIDTH = W): per slot
 //   P_re = I*wI - Q*wQ, P_im = I*wQ + Q*wI   (32-bit),
 //   out  = P[30:15] + P[14]                 (round half up, WRAPS, no saturation)
 // so |x|*|w| must stay <= 1 (complex magnitudes) to avoid wrap-around.

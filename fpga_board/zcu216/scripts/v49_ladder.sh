@@ -2,7 +2,7 @@
 # v49_ladder.sh [STEP] -- build every v49 bitstream (`make v49-ladder`):
 # the normal family (the max-rate factor of each channel count and every RFDC
 # factor below it, down to 40) and the sc8max family. See v49_geometry in
-# block_designs/zcu216_uhd_v49/zcu216_uhd_v49.tcl for the table; rfsoc_lib/uhd/benchmark/oracle_builds.txt
+# block_designs/zcu216_uhd_v49/zcu216_uhd_v49.tcl for the table; host/benchmark/oracle_builds.txt
 # lists the same builds for the board tests.
 #
 #   STEP          bd | synth | bit (default bit; bd checks every block design fast)
@@ -34,7 +34,7 @@ name_of() { local n=$1 f=$2 fs=$3; echo "zcu216_v49_${n}ch_qsfp_f${f}$([ "$fs" =
 # implementation strategy per build (default: Vivado's): 4ch F2 fs2500 runs its
 # fabric at 312.5 MHz, and with the default strategy the CMAC-side (322 MHz)
 # tready -> axis_pkt_arb paths missed by 0.28 ns; Performance_ExtraTimingOpt
-# closes them (+0.006 ns, 2026-10-09)
+# closes them (+0.006 ns)
 strategy_of() { case $1 in zcu216_v49_4ch_qsfp_f2_fs2500) echo Performance_ExtraTimingOpt ;; esac; }
 free_gb() { df -BG --output=avail "$OUT" | tail -1 | tr -dc 0-9; }
 

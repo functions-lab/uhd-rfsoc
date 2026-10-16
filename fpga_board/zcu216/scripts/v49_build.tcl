@@ -1,8 +1,8 @@
 # v49_build.tcl -- build zcu216_v49_<N>ch_qsfp (ZCU216 as a UHD device over
-# 100 GbE), N = 1, 2, 4, 8, 16. `make v49 N=<N> F=<F>` / `make v49-all` in
-# hw_design/ZCU216 call this; directly:
+# 100 GbE), N = 1, 2, 4, 8, 16. `make v49 N=<N> F=<F>` / `make v49-ladder` /
+# `make v49-templates` in fpga_board/zcu216 call it; directly:
 #
-#   cd hw_design/ZCU216
+#   cd fpga_board/zcu216
 #   vivado -mode batch -nojournal -nolog -source scripts/v49_build.tcl \
 #          -tclargs <N> [bd|synth|bit|impl] [jobs] [factor] [fs]
 #
@@ -11,13 +11,12 @@
 #   bit    + implementation and bitstream (default)
 #   impl   continue an existing synthesized project to a bitstream
 #
-# Inputs (hw_design rule: a block-design directory holds only its .tcl and .xdc):
+# Inputs (a block-design directory holds only its .tcl and .xdc):
 #   block_designs/zcu216_uhd_v49/zcu216_uhd_v49.{tcl,xdc}   the design, every N
 #                                                   (self-contained: geometry, data plane, checks)
-#   ../ip/uhd_ip                                    packaged cores (`make package` in
-#                                                   ../ip_design/uhd_ip first); the only
-#                                                   non-Xilinx IP the design uses
-#   ../ip_design/cmac_100g                          CMAC + split-quad GT wrapper RTL
+#   ../../fpga_ip/ip/uhd_ip                         packaged cores (`make v49-package` first);
+#                                                   the only non-Xilinx IP the design uses
+#   ../../fpga_ip/ip_design/cmac_100g               CMAC + split-quad GT wrapper RTL
 # Output: build/v49_qsfp/bitstreams/zcu216_v49_<N>ch_qsfp_f<F>[_fs<fs>].{bit,hwh}
 #         (the deploy set; a build that misses timing goes to
 #         bitstreams_timing_fail/), with its timing and utilization reports.
@@ -30,9 +29,9 @@
 # 2400). The builds (normal family: fs 2500 at 1-2 channels, 2250 at 4-16,
 # every factor from the max-rate one down to 40; sc8max: 4ch F2 fs 2500, 8ch F3
 # and 16ch F6 fs 2250, sc8 only) are listed
-# in rfsoc_lib/uhd/benchmark/oracle_builds.txt; `make v49-ladder` builds them.
+# in host/benchmark/oracle_builds.txt; `make v49-ladder` builds them.
 # A build at fs != 2400 is named ..._fs<fs> and needs
-# rfsoc_lib/xrfclk/ZCU216/LMX2594_250.0_<fs>.0.txt on the board.
+# rfsoc/rfsoc_lib/xrfclk/ZCU216/LMX2594_250.0_<fs>.0.txt on the board.
 
 set scripts     [file dirname [file normalize [info script]]]
 set zcu216      [file normalize $scripts/..]
@@ -141,7 +140,7 @@ proc v49_write_outputs {proj_name design_name variant} {
   file copy -force ./$proj_name/$proj_name.gen/sources_1/bd/$design_name/hw_handoff/${design_name}.hwh \
       ./$proj_name/bitstream/${design_name}${variant}.hwh
   # a timing-clean build's pair also lands in build/v49_qsfp/bitstreams (what
-  # rfsoc_lib/uhd/server/deploy.sh BIT_DIR= points at); one that missed
+  # rfsoc/push_bitstreams.sh copies); one that missed
   # timing goes to bitstreams_timing_fail instead, so it can never replace a
   # good one in the deploy set
   set wns [get_property STATS.WNS [get_runs impl_1]]
@@ -197,7 +196,7 @@ foreach vlnv {user.org:uhd:udp_streamer:1.0 user.org:uhd:udp_player:1.0
               user.org:uhd:axis_pkt_arb:1.0 user.org:uhd:ch_interleave:1.0
               user.org:uhd:tx_beamformer:1.0 user.org:uhd:rx_beamformer:1.0} {
   if {[llength [get_ipdefs -all $vlnv]] == 0} {
-    error "v49: IP $vlnv not in ip/uhd_ip -- run 'make package' in hw_design/ip_design/uhd_ip"
+    error "v49: IP $vlnv not in ip/uhd_ip -- run 'make package' in fpga_ip/ip_design/uhd_ip"
   }
 }
 source $hwd/ip_design/cmac_100g/create_cmac_ip.tcl

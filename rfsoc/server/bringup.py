@@ -16,7 +16,7 @@ Run ON THE BOARD as root in the PYNQ venv. Modes:
                      counter pattern to a host for N seconds (host side:
                      `ethtool -S <iface>` rx_vport_unicast_packets counts it;
                      byte-level checks go through the daemon and
-                     rfsoc_lib/uhd/benchmark/dpdk_rx_test.sh).
+                     host/benchmark/dpdk_rx_test.sh).
 
     sudo bash -c 'source /etc/profile.d/pynq_venv.sh && python3 bringup.py --status'
     sudo bash -c 'source /etc/profile.d/pynq_venv.sh && python3 bringup.py \\

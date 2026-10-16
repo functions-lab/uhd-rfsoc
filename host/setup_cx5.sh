@@ -3,7 +3,7 @@
 # ZCU216 CMAC (uhd_zcu216). Idempotent; run as root.
 #
 #   sudo ./setup_cx5.sh <iface> <host-data-ip>/<prefix>
-#   e.g. sudo ./setup_cx5.sh ens8191f1np1 <host-data-ip>/24   (the name follows the PCIe slot)
+#   e.g. sudo ./setup_cx5.sh enp1s0f1np1 <host-data-ip>/24   (the name follows the PCIe slot)
 # Both arguments are required: the address is the PC's end of the 100G link
 # and must share a subnet with the FPGA's data_ip (the board's zcu216_uhd.conf).
 #
@@ -24,7 +24,7 @@
 #
 # Persistence: add to the iface stanza in /etc/network/interfaces
 #     mtu 9000
-#     post-up <repo>/rfsoc_lib/uhd/host/setup_cx5.sh $IFACE <host-data-ip>/<prefix>
+#     post-up <repo>/host/setup_cx5.sh $IFACE <host-data-ip>/<prefix>
 set -euo pipefail
 
 [[ $# -eq 2 ]] || { sed -n '5,9p' "$0" >&2; echo "usage: $0 <iface> <host-data-ip>/<prefix>" >&2; exit 2; }
@@ -39,7 +39,11 @@ ip link set dev "$IFACE" mtu 9000
 ip link set dev "$IFACE" up
 ip -4 addr show dev "$IFACE" | grep -q "inet ${ADDR%/*}/" || ip addr add "$ADDR" dev "$IFACE"
 
-ethtool -s "$IFACE" autoneg off speed 100000 duplex full
+# lanes 4: a 200G / 400G port (ConnectX-7) otherwise may pick 2 x 50G PAM4
+# lanes; the board is 100G CAUI-4 (4 x 25G NRZ). An ethtool without "lanes"
+# falls back to the plain request.
+ethtool -s "$IFACE" autoneg off speed 100000 duplex full lanes 4 2>/dev/null \
+    || ethtool -s "$IFACE" autoneg off speed 100000 duplex full
 ethtool --set-fec "$IFACE" encoding rs
 ethtool -A "$IFACE" autoneg off rx off tx off 2>/dev/null || true
 

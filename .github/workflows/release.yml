@@ -1,0 +1,35 @@
+# Release: on a v* tag, run CI, then publish a GitHub release with the host
+# module built for Ubuntu 24.04 (x86_64, aarch64). The bitstreams are built
+# with Vivado outside CI and attached to the release afterwards
+# (README.md, "Bitstreams").
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    needs: ci
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: host-*
+          merge-multiple: true
+      - name: Checksums
+        run: sha256sum *.tar.gz > SHA256SUMS
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: rfsoc-uhd ${{ github.ref_name }}
+          generate_release_notes: true
+          prerelease: ${{ startsWith(github.ref_name, 'v0.') }}
+          files: |
+            *.tar.gz
+            SHA256SUMS

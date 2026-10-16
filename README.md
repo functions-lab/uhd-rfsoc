@@ -6,111 +6,127 @@ Xilinx RFSoC boards as UHD devices over 100 GbE. Stock UHD 4.6 applications
 GS/s aggregate in sc16 (6.0 GS/s in sc8), TX and RX beamforming, full-rate TX
 and RX at once.
 
-Harvested from the SPEAR codebase (the v49 "QSFP" work) and kept in step with
-it by `sync/` (`sync/README.md`).
+[![CI](https://github.com/WeiCheng14159/rfsoc-uhd/actions/workflows/ci.yml/badge.svg)](https://github.com/WeiCheng14159/rfsoc-uhd/actions/workflows/ci.yml)
+
+## What you need
+
+| side | what |
+|---|---|
+| board | a **ZCU216** (1, 2, 4, 8 or 16 channels, fs 2500 / 2250 MS/s) or a **Real Digital RFSoC 4x2** (1 or 2 channels, fs 5000 MS/s), running PYNQ 3.x, with a QSFP28 100G cable to the host |
+| host | Linux, x86_64 (AVX-512 used when present) or aarch64 (NEON), a 100G NVIDIA/Mellanox ConnectX NIC (ConnectX-5/6/7, mlx5), Ubuntu 24.04 packages `libuhd-dev` 4.6, `uhd-host`, `python3-uhd`, `dpdk` / `libdpdk-dev` 23.11, `rdma-core`; optionally `gnuradio` 3.10 |
+| FPGA builds (optional) | Vivado 2021.1; prebuilt bitstreams are attached to each [release](https://github.com/WeiCheng14159/rfsoc-uhd/releases) |
+
+The only software dependencies are UHD and GNU Radio (and DPDK for the data
+plane); the exact upstream releases are pinned as git submodules for
+reference (`host/uhd` at v4.6.0.0, `host/gnuradio/gnuradio` at v3.10.9.2:
+`git submodule update --init --depth 1`). They are not needed to build.
+
+## Layout
 
 | directory | what | runs on |
 |---|---|---|
-| `fpga_ip/` | the custom FPGA IP: UHD data-plane cores (`ip_design/uhd_ip`, packaged in `ip/uhd_ip`), the 100G CMAC wrapper (`ip_design/cmac_100g`), the dual-ADC I/Q joiners of the RFSoC 4x2 (`ip/iprepo`) | Vivado |
-| `fpga_board/` | one directory per board: the block design (`block_designs/<board>_uhd_v49/`, one `.tcl` + `.xdc` for every channel count) and its build flow | Vivado |
-| `host/` | the UHD device module `libuhd_zcu216.so` (DPDK; stock UHD apps run it with `sudo`), benchmarks / test oracle, GNU Radio flowgraphs | PC |
+| `host/` | the UHD device module `libuhd_zcu216.so` (DPDK data plane), its wrapper and tools, hardware tests (`host/benchmark/`), GNU Radio flowgraphs (`host/gnuradio/`) | host PC |
 | `rfsoc/` | the board daemon (`server/`) and the `rfsoc_lib` modules it uses (RFDC, clocks, MTS) | board (PYNQ) |
 | `run_daemon.sh` | start / stop the daemon on the board | board |
-| `PROTOCOL.md` | the daemon <-> host <-> FPGA contract (wire format, registers, control) | -- |
-| `sync/` | keeping the board's checkout (`board.sh`) and SPEAR (`spear_sync.py`) in step | PC |
+| `fpga_board/` | per board: the block design (`block_designs/<board>_uhd_v49/`, one `.tcl` + `.xdc` for every channel count) and its build flow | Vivado |
+| `fpga_ip/` | the custom FPGA IP: UHD data-plane cores, the 100G CMAC wrapper, the RFSoC 4x2 dual-ADC I/Q joiners | Vivado |
 
-Pinned upstream sources (git submodules, shallow, at the exact releases this
-PC builds and runs against -- the Ubuntu 24.04 packages `libuhd 4.6.0.0` and
-`gnuradio 3.10.9.2`):
+## Bitstreams
 
-| path | source | pinned to |
-|---|---|---|
-| `host/uhd/` | EttusResearch/uhd | `v4.6.0.0` (50fa3baa) -- the UHD `host/` module is built against (`host/CMakeLists.txt` requires 4.6) |
-| `host/gnuradio/gnuradio/` | gnuradio/gnuradio | `v3.10.9.2` (c7c828a1) -- the GNU Radio the flowgraphs in `host/gnuradio/` target |
+Each channel count has one run-time-rate template: it serves its top rate
+and every lower RFDC decimation / interpolation factor, changed in place by
+the daemon (~1 s, MTS kept), e.g. 750, 562.5, 450 ... 56.25 MS/s at 4
+channels. The sc8max builds carry `otw=sc8` only and reach rates whose sc16
+stream would not fit the link.
 
-```
-git submodule update --init --depth 1     # after cloning; reference sources, not needed to build host/
-```
+| board | file | channels | top rate, MS/s per channel |
+|---|---|---|---|
+| ZCU216 | `zcu216_v49_1ch_qsfp_f2_fs2500.bit` | 1 | 1250 |
+| | `zcu216_v49_2ch_qsfp_f2_fs2500.bit` | 2 | 1250 |
+| | `zcu216_v49_4ch_qsfp_f3_fs2250.bit` | 4 | 750 |
+| | `zcu216_v49_8ch_qsfp_f6_fs2250.bit` | 8 | 375 |
+| | `zcu216_v49_16ch_qsfp_f12_fs2250.bit` | 16 | 187.5 |
+| | `zcu216_v49_4ch_qsfp_f2_fs2500.bit` | 4 | 1250 (sc8max) |
+| | `zcu216_v49_8ch_qsfp_f3_fs2250.bit` | 8 | 750 (sc8max) |
+| | `zcu216_v49_16ch_qsfp_f6_fs2250.bit` | 16 | 375 (sc8max) |
+| RFSoC 4x2 | `rfsoc4x2_v49_1ch_qsfp_f2_fs5000.bit` | 1 | 2500 |
+| | `rfsoc4x2_v49_2ch_qsfp_f4_fs5000.bit` | 2 | 1250 |
+| | `rfsoc4x2_v49_2ch_qsfp_f2_fs5000.bit` | 2 | 2500 (sc8max) |
 
-Boards: ZCU216 (1, 2, 4, 8, 16 channels at fs 2500 MS/s; tested on zcu216-0)
-and RFSoC 4x2 (1, 2 channels at fs 5000 MS/s, up to 2500 MS/s per channel;
-`fpga_board/rfsoc4x2/README.md`, rfsoc4x2-0). The ZCU208 is not supported.
+Download them (with their `.hwh`) from the release, or build them:
 
-## Quick start (ZCU216)
-
-```
-# FPGA (Vivado 2021.1 on PATH): package the cores once, then any build
-make -C fpga_board/zcu216 v49-package
-make -C fpga_board/zcu216 v49 N=4 F=3 FS=2250          # -> fpga_board/zcu216/build/v49_qsfp/bitstreams/
-make -C fpga_board/zcu216 v49-ladder                     # all 51 builds of host/benchmark/oracle_builds.txt
-
-# PC (once): NIC, DPDK, the UHD module
-sudo host/setup_cx5.sh <100g-iface> <host-data-ip>/24
-sudo host/setup_dpdk.sh <100g-iface> --install
-cmake -S host -B host/build && cmake --build host/build -j && sudo cmake --install host/build
-
-# board: the code by git, the bitstreams by rsync (section "Board")
-sync/board.sh push
-rfsoc/push_bitstreams.sh                                  # fpga_board/zcu216/build/v49_qsfp/bitstreams -> board
+```sh
+# Vivado 2021.1 on PATH
+make -C fpga_board/zcu216 v49-package          # package the custom cores (once)
+make -C fpga_board/zcu216 v49-templates        # the five ZCU216 templates
+make -C fpga_board/zcu216 v49 N=8 F=3 FS=2250  # one build, e.g. the 8ch sc8max
+make -C fpga_board/rfsoc4x2 v49-templates      # the two RFSoC 4x2 templates
+# -> fpga_board/<board>/build/v49_qsfp/bitstreams/
 ```
 
-## Running
+## Set up the board (once)
 
-On the board (`ssh xilinx@zcu216-0`, in `~/jupyter_notebooks/rfsoc-uhd`):
+On the PYNQ board (user `xilinx`):
 
+```sh
+git clone https://github.com/WeiCheng14159/rfsoc-uhd.git ~/jupyter_notebooks/rfsoc-uhd
+cd ~/jupyter_notebooks/rfsoc-uhd
+cp rfsoc/server/zcu216_uhd.conf.example rfsoc/server/zcu216_uhd.conf   # set data_ip (the FPGA's 100G address)
 ```
+
+Put the bitstreams and their `.hwh` files in `rfsoc/server/` (from the
+build machine: `rfsoc/push_bitstreams.sh <bitstream dir> xilinx@<board>`).
+Then, on the board:
+
+```sh
 ./run_daemon.sh             # start; returns once it serves (~20 s: bitstream, clocks, MTS)
 ./run_daemon.sh status      # running? which build and rate
-./run_daemon.sh stop        # also: restart, log, fg (foreground)
+./run_daemon.sh stop        # also: restart, log, fg (foreground); log /tmp/uhd_daemon.log
 ```
 
-On the PC, any stock UHD application, run as root (the data plane is DPDK);
-the channel count is the device arg `channels=` (1, 2, 4, 8, 16):
+## Set up the host (once)
 
+```sh
+sudo apt install libuhd-dev uhd-host python3-uhd dpdk libdpdk-dev rdma-core ibverbs-providers cmake g++ pkg-config
+sudo host/setup_cx5.sh <100g-iface> <host-data-ip>/24     # 100G without autoneg, RS-FEC, MTU 9000
+sudo host/setup_dpdk.sh <100g-iface> --install            # hugepages, mlx5 / RDMA checks
+cmake -S host -B host/build -DCMAKE_BUILD_TYPE=Release
+cmake --build host/build -j
+sudo cmake --install host/build                           # module into UHD's module dir, wrapper zcu216-uhd
 ```
-uhd_find_devices --args type=zcu216                      # no root needed
+
+`host/setup_cx5.sh` takes the port down to 100G CAUI-4, so a 200G / 400G
+port (e.g. a ConnectX-7) works as well. Keep NetworkManager off the port
+(`sudo nmcli device set <100g-iface> managed no`).
+
+## Run
+
+Any stock UHD application, run as root (the data plane is DPDK); the channel
+count is the device arg `channels=`:
+
+```sh
+uhd_find_devices --args type=zcu216                      # every board; type=rfsoc4x2: only 4x2s
 sudo uhd_usrp_probe --args type=zcu216,addr=<board-ip>,channels=4
 sudo /usr/libexec/uhd/examples/tx_waveforms --args type=zcu216,channels=2 \
     --rate 625e6 --freq 950e6 --wave-type SINE --wave-freq 10e6
 sudo python3 -c "import uhd; u = uhd.usrp.MultiUSRP('type=zcu216,channels=4'); print(u.get_rx_rate())"
+host/gnuradio/run_tones.sh normal 4                      # GNU Radio: 4 tones out, 4 spectra in
 ```
 
 A new `channels=` reloads the bitstream (~16 s). Within one channel count
-`set_rx_rate` / `set_tx_rate` retune in place (~1 s): the highest supported
-rate at or below the request, e.g. 750, 562.5, 450 ... 56.25 MS/s at 4
-channels; the reported bandwidth is the rate.
+`set_rx_rate` / `set_tx_rate` retune in place (~1 s) to the highest
+supported rate at or below the request. For the sc8max rates pass
+`otw=sc8`.
 
-If `uhd_usrp_probe` fails with a DPDK port error, the PC's 100G port lost its
-address (NetworkManager): `sudo nmcli device set <100g-iface> managed no` and
-run `host/setup_cx5.sh` again.
+More: `host/README.md` (host module, device arguments), `rfsoc/server/README.md`
+(daemon), `fpga_board/README.md` (FPGA), `host/benchmark/README.md`
+(hardware tests), `host/gnuradio/README.md` (GNU Radio). Internals and the
+wire protocol: `AGENTS.md`.
 
-More: `host/README.md` (PC, device arguments), `rfsoc/server/README.md`
-(daemon), `fpga_board/README.md` (FPGA), `host/benchmark/README.md` (tests,
-measured results), `host/gnuradio/README.md` (GNU Radio).
+## Continuous integration
 
-## Board
-
-Each board holds a git checkout of this repository at
-`/home/xilinx/jupyter_notebooks/rfsoc-uhd`, kept on the PC's branch and
-commit: the ZCU216 `xilinx@zcu216-0` (git remote `zcu216`) and the RFSoC 4x2
-`xilinx@rfsoc4x2-0` (remote `rfsoc4x2`):
-
-```
-git remote add zcu216   xilinx@zcu216-0:/home/xilinx/jupyter_notebooks/rfsoc-uhd     # once
-git remote add rfsoc4x2 xilinx@rfsoc4x2-0:/home/xilinx/jupyter_notebooks/rfsoc-uhd   # once
-git config board.remotes "zcu216 rfsoc4x2"   # once: the boards push / status / the hooks go to
-sync/board.sh hooks on      # once: every commit / checkout here updates every board
-sync/board.sh status        # every side: branch, commit, uncommitted files
-sync/board.sh push          # PC -> boards (-b <remote>: one board)
-sync/board.sh -b zcu216 pull   # board -> PC (after committing on the board)
-```
-
-A new board's checkout starts empty: on the board `git init
-~/jupyter_notebooks/rfsoc-uhd && git -C ~/jupyter_notebooks/rfsoc-uhd config
-receive.denyCurrentBranch updateInstead`, then `sync/board.sh -b <remote> push`.
-
-Kept on the board only (not in git): the bitstreams in `rfsoc/server/`
-(`rfsoc/push_bitstreams.sh` copies them: `rfsoc/push_bitstreams.sh
-fpga_board/rfsoc4x2/build/v49_qsfp/bitstreams xilinx@rfsoc4x2-0` for the 4x2)
-and the board's settings `rfsoc/server/zcu216_uhd.conf` (from
-`zcu216_uhd.conf.example`: `data_ip`, `name`).
+`.github/workflows/ci.yml` builds the host module on x86_64 and aarch64
+(Ubuntu 24.04, UHD 4.6, DPDK 23.11), checks the SIMD kernels bit for bit
+against the scalar ones (`zcu216_kernel_check`), and checks the Python and
+shell sources. A `v*` tag publishes a GitHub release
+(`.github/workflows/release.yml`).

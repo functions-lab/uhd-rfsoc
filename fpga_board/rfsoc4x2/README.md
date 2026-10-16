@@ -23,7 +23,8 @@ ZCU216's at the same factor: the dual RF-ADC tiles sample at 5 GS/s.
 `board_files/rfsoc4x2/1.0` are Real Digital's Vivado board files
 (github.com/RealDigitalOrg/RFSoC4x2-BSP, Apache-2.0): the build points
 Vivado at them, nothing is installed. Output: `build/v49_qsfp/bitstreams/`;
-copy to the board with `../../rfsoc/push_bitstreams.sh
-fpga_board/rfsoc4x2/build/v49_qsfp/bitstreams xilinx@rfsoc4x2-0`.
+copy to the board with (from the top of the repository)
+`rfsoc/push_bitstreams.sh fpga_board/rfsoc4x2/build/v49_qsfp/bitstreams
+xilinx@<board>`.
 
 `AGENTS.md` has the design rules and the board facts.

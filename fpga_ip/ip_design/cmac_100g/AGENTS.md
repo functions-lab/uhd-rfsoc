@@ -1,6 +1,7 @@
-# AGENTS.md — hw_design/ip_design/cmac_100g
+# AGENTS.md — fpga_ip/ip_design/cmac_100g
 
-100 GbE MAC wrapper for the ZCU216 v49 designs. Not a packaged IP on purpose.
+100 GbE MAC wrapper for the v49 designs (ZCU216 zSFP28, RFSoC 4x2 QSFP28 with
+`CMAC_LANES qsfp128`). Not a packaged IP on purpose.
 
 ## Why it is RTL in the top, not IP in the block design
 - `cmac_usplus` and `gtwizard_ultrascale` may not sit inside a block-design
@@ -13,10 +14,11 @@
   `cmac_init_clk`, `cmac_refclk_khz/usrclk_khz`); `v49_gen_top` maps them.
 
 ## Facts that cost board time
-- GT refclk = Renesas 8A34001 (U409) Q11 → MGTREFCLK1_128. It boots
+- ZCU216: GT refclk = Renesas 8A34001 (U409) Q11 → MGTREFCLK1_128. It boots
   UNCONFIGURED: software must program it after every power-up
-  (`rfsoc_lib/gt_refclk.py`, register file in `rfsoc_lib/xrfclk/ZCU216/`),
+  (`rfsoc/rfsoc_lib/gt_refclk.py`, register file in `rfsoc/rfsoc_lib/xrfclk/ZCU216/`),
   otherwise there is no refclk and the link never comes up. Measured 156.233 MHz.
+  (RFSoC 4x2: a Si570 on MGTREFCLK0_128, 156.25 MHz from power-up.)
 - `ctl` bit 0 only TRIGGERS a GT reset pulse; it does not hold the link down.
 - RS-FEC on, no autoneg/link training (licensed AN/LT block absent): the far
   end (ConnectX-5) must be forced to 100G, RS-FEC, autoneg off.
@@ -26,4 +28,5 @@
 ## Rules
 - Keep the GT site constraints in the design XDCs and the wrapper in sync.
 - Changing a port name here means changing `v49_gen_top` in
-  `hw_design/ZCU216/scripts/v49_build.tcl`.
+  `fpga_board/zcu216/scripts/v49_build.tcl` and
+  `fpga_board/rfsoc4x2/scripts/v49_build.tcl`.

@@ -7,15 +7,13 @@
 #   make v49 N=2 F=4 STRATEGY=Performance_ExtraTimingOpt              another impl strategy
 #   make v49-ladder [STEP=bd|bit] [MAXPAR=3] [JOBS=8]                 every build (scripts/v49_ladder.sh)
 #   make v49-templates [STEP=bd|bit] [MAXPAR=3] [JOBS=8]              the 5 run-time-rate templates
-# Local to this repository (not synced from SPEAR): the v49 part of SPEAR's
-# hw_design/ZCU216/Makefile.
 N    ?= 1
 F    ?=
 FS   ?=
 STEP ?= bit
 JOBS ?= 12
 MAXPAR ?= 3
-# The run-time-rate templates (PROTOCOL.md §8): each channel count's top
+# The run-time-rate templates (Protocol §8): each channel count's top
 # normal-family build. MTS_clk_wiz has dynamic reconfiguration, so the daemon
 # serves every lower factor of that N from it (1ch: 1250 .. 62.5 MS/s).
 TEMPLATES := ^zcu216_v49_(1ch_qsfp_f2_fs2500|2ch_qsfp_f2_fs2500|4ch_qsfp_f3_fs2250|8ch_qsfp_f6_fs2250|16ch_qsfp_f12_fs2250)$$

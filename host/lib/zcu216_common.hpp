@@ -3,7 +3,7 @@
 // Shared declarations: constants, control client, network helpers and the
 // device state that streamers share with the device.
 //
-// The wire contract is ../../PROTOCOL.md. Keep the constants below in sync.
+// The wire contract is the Protocol section of ../../AGENTS.md. Keep the constants below in sync.
 //
 #pragma once
 
@@ -26,7 +26,7 @@
 
 namespace zcu216 {
 
-// ---- PROTOCOL.md constants ------------------------------------------------
+// ---- Protocol constants -------------------------------------------------------------
 constexpr uint16_t kDiscPort       = 49700; // §2
 constexpr uint16_t kCtrlPort       = 49710; // §3
 constexpr uint16_t kRecvPortBase   = 49810; // §1, host data UDP port base
@@ -51,13 +51,13 @@ std::string trim(const std::string& s);
 double parse_double(const std::string& s, const std::string& what);
 long long parse_ll(const std::string& s, const std::string& what);
 std::string fmt_double(double v); // "%.17g"
-//! "k=v;k=v" -> device_addr_t (PROTOCOL §2/§3)
+//! "k=v;k=v" -> device_addr_t (Protocol §2/§3)
 uhd::device_addr_t parse_kv(const std::string& s);
 //! CPU list "2-5", "2:3:4:5", "2;3", "2 3" (or "2,3" where UHD's arg parser
 //! does not split on commas); uhd::value_error naming `what` otherwise
 std::vector<unsigned> parse_cpus(const std::string& s, const std::string& what);
 
-// ---- control client (PROTOCOL §3) -----------------------------------------
+// ---- control client (Protocol §3) -----------------------------------------
 class ctrl_client
 {
 public:
@@ -88,7 +88,7 @@ private:
 };
 
 // ---- network helpers ------------------------------------------------------
-//! PROTOCOL §2 discovery. Broadcast on all IPv4 interfaces, or unicast to
+//! Protocol §2 discovery. Broadcast on all IPv4 interfaces, or unicast to
 //! hint["addr"]. Waits at most timeout_s.
 uhd::device_addrs_t discover(const uhd::device_addr_t& hint, double timeout_s);
 
@@ -133,18 +133,18 @@ struct dev_state
     //! split across the pool (device arg par_min_slots)
     size_t par_min_slots = 16384;
     std::string serial;
-    //! ticks per second of the LOADED build (PROTOCOL §4/§8: info tick_rate=,
+    //! ticks per second of the LOADED build (Protocol §4/§8: info tick_rate=,
     //! also the 2nd token of the set_channels / set_rx_rate replies); a rate
     //! change within one N can change it
     std::atomic<double> tick_rate{0.0};
-    //! PROTOCOL §9: N, the channels interleaved in the ONE stream per
+    //! Protocol §9: N, the channels interleaved in the ONE stream per
     //! direction (slot i of a packet = channel i % N, sample i / N). One tick
     //! is one slot time for N > 1; num_rx == num_tx == nchan.
     size_t nchan  = 1;
     size_t num_rx = 1, num_tx = 1;
     size_t default_spp = kDefaultSpp; // info spp=: slots of sc16 (8192-byte payload)
     size_t mtu = 9000;
-    //! PROTOCOL §9: slots per fabric beat of the loaded build (info
+    //! Protocol §9: slots per fabric beat of the loaded build (info
     //! beat_slots=; a daemon without the key: max(4, N)); a timed start
     //! begins on the beat containing the requested tick
     std::atomic<size_t> beat_slots_info{0};
@@ -157,7 +157,7 @@ struct dev_state
     //! otw=, then the format of the latest streamer; empty = say nothing
     void set_cur_otw(const std::string& f);
     std::string cur_otw();
-    //! PROTOCOL §10: OTW formats the daemon offers for the loaded build per
+    //! Protocol §10: OTW formats the daemon offers for the loaded build per
     //! direction (info rx_otw_formats= / tx_otw_formats=, else otw_formats=);
     //! a daemon without the keys offers only sc16
     std::vector<std::string> otw_offered(bool rx);
@@ -166,7 +166,7 @@ struct dev_state
     //! re-read `info` (after the daemon reloaded the FPGA)
     void refresh_info();
     std::vector<std::unique_ptr<std::atomic<double>>> rx_rate, tx_rate;
-    //! PROTOCOL §8: a rate change retunes the loaded template (~1-1.5 s) or
+    //! Protocol §8: a rate change retunes the loaded template (~1-1.5 s) or
     //! reloads the FPGA (tens of seconds)
     double rate_timeout = 120.0;
     //! Incremented whenever a rate change retuned or reloaded the FPGA. Either

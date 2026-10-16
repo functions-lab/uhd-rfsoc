@@ -5,7 +5,7 @@
 #   ./run_sim_interleave.sh   (needs Vivado 2021.1 on PATH or at VIVADO_ROOT)
 set -euo pipefail
 cd "$(dirname "$0")"
-VIVADO_ROOT=${VIVADO_ROOT:-$HOME/Xilinx/Vivado/2021.1}
+VIVADO_ROOT=${VIVADO_ROOT:-$(v=$(command -v vivado) && dirname "$(dirname "$(readlink -f "$v")")" || echo /tools/Xilinx/Vivado/2021.1)}
 source "$VIVADO_ROOT/settings64.sh"
 HERE=$PWD
 mkdir -p build_interleave && cd build_interleave

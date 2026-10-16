@@ -1,4 +1,4 @@
-# zcu216_uhd.conf -- board-local settings of the ZCU216 UHD daemon.
+# zcu216_uhd.conf -- board-local settings of the UHD daemon (ZCU216 or RFSoC 4x2).
 #
 # Copy to zcu216_uhd.conf (next to zcu216_uhd_daemon.py, or /etc/zcu216_uhd.conf,
 # or point $ZCU216_UHD_CONF at it) and fill in. zcu216_uhd.conf is git-ignored:
@@ -14,10 +14,11 @@
 #             <host-data-ip>/<prefix> configures. REQUIRED in hardware mode.
 #   data_mac  the FPGA's MAC on the 100G link. Optional: by default a locally
 #             administered MAC derived from the board's eth0 MAC.
-#   name      discovery name (UHD device arg name=). Optional, default zcu216-0.
+#   name      discovery name (UHD device arg name=). Optional, default the
+#             board's: zcu216 or rfsoc4x2.
 #
 # Command-line --data-ip / --data-mac / --name override these.
 
 data_ip  = <fpga-data-ip>
 # data_mac = <fpga-data-mac>
-# name     = zcu216-0
+# name     = <device-name>

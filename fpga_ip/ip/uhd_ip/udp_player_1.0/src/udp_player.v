@@ -1,8 +1,8 @@
 // udp_player -- host UDP/VRT sample packets from a CMAC -> RFDC DAC, plus ARP
-// replies and async/flow-control status packets back to the host.
+// replies and async status / flow-control packets back to the host.
 //
-// The wire format is rfsoc_lib/uhd/PROTOCOL.md sections 6 (TX data plane) and 7
-// (async status); that file is the contract with the UHD host module.
+// The wire format is Protocol §6 (TX data plane) and §7 (async status), in
+// the top AGENTS.md: the contract with the UHD host module.
 //
 //   s_axis_rx  (tx_clk)  512-bit CMAC RX AXIS, byte 0 first on the wire, no
 //                        tready (cannot be backpressured), tvalid may gap
@@ -13,7 +13,7 @@
 //   m_axis_dac (adc_clk) M_WIDTH-bit (128, 256, 512 or 1024) converter stream, one
 //                        32-bit slot (complex int16, I low, Q high) per 32
 //                        bits, slot 0 from bit 0 (= sc16 LE wire order). With
-//                        N channels (PROTOCOL.md 9) slot i is channel i%N,
+//                        N channels (Protocol §9) slot i is channel i%N,
 //                        sample i/N; ch_interleave DIR=1 regroups it per
 //                        channel for the block design's broadcaster.
 //   adc_time   (adc_clk) udp_streamer's 64-bit timekeeper (+BEAT_TICKS per beat;
@@ -34,7 +34,7 @@
 //            adc_clk in an async BRAM FIFO that carries per-word sideband
 //            {first, last, sob, eob, timed, tsf}, so data and framing can
 //            never disagree.
-//            format conversion (FMT != sc16, PROTOCOL.md 10) is after the URAM
+//            format conversion (FMT != sc16, Protocol §10) is after the URAM
 //            buffer, so the buffer, the credit and consumed_words all stay in
 //            64-byte WIRE words: fc32 (2 words -> 1 group) in tx_clk before
 //            the crossing FIFO, sc8 / sc12 (1 -> 2, 3 -> 4) in adc_clk after
@@ -47,7 +47,7 @@
 //            zeros (UNDERFLOW once per episode) and resumes when data comes.
 //            The EOB packet's last beat ends the burst (BURST_ACK).
 //   tx_clk   status sender: adc events, sequence errors and flow-control
-//            updates become 66-byte Ethernet/IPv4/UDP frames (PROTOCOL.md 7).
+//            updates become 66-byte Ethernet/IPv4/UDP frames (Protocol §7).
 //            FC update (code 0) whenever consumed has advanced >= FC_INTERVAL
 //            since the last status packet, and once after the last word of an
 //            EOB packet is consumed.
@@ -65,7 +65,7 @@
 //   0x30 TX_BUF_WORDS RO  host credit in 64-byte words (buffer depth minus
 //                         TX_BUF_RESERVE)
 //   0x34 SID (0x5A170000)
-//   0x74 FMT          RW  [1:0] over-the-wire sample format (PROTOCOL.md 10):
+//   0x74 FMT          RW  [1:0] over-the-wire sample format (Protocol §10):
 //                         0 sc16, 1 sc8, 2 sc12, 3 fc32. Quasi-static: write
 //                         it only while idle (before stream_setup_tx's flush).
 //   0x78 USTART       RW  [23:0] untimed-start gate, in 64-byte words (0 = off,
@@ -111,7 +111,7 @@
 // timed burst starts on the beat with T <= TSF < T + BEAT_TICKS. A 512-bit
 // buffer word is always 16 slots and is played as 512/M_WIDTH beats.
 //
-// Over-the-wire formats (FMT; PROTOCOL.md 10). The play-out engine always
+// Over-the-wire formats (FMT; Protocol §10). The play-out engine always
 // plays 16-slot sc16 groups (512 bits); conversion happens after the URAM
 // buffer, on words the mover pops (packets dropped for bad FCS / truncation
 // never reach it):
@@ -127,7 +127,7 @@
 // adc_clk cycle (4.8 GS/s at 300 MHz) plays without a bubble while the
 // crossing carries only 1/2 (sc8) or 3/4 (sc12) of a word per cycle. fc32
 // halves the stream before the crossing instead.
-// M_WIDTH = 1024 (the sc8max builds, PROTOCOL.md 9) plays sc8 ONLY: one sc8
+// M_WIDTH = 1024 (the sc8max builds, Protocol §9) plays sc8 ONLY: one sc8
 // word (32 slots) expands into one whole 1024-bit DAC beat, so the crossing
 // FIFO delivers one word per adc_clk cycle (96 Gb/s at 187.5 MHz). sc16, sc12
 // and fc32 would need more than a word per cycle: with any of them the

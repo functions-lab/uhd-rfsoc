@@ -29,17 +29,17 @@ for f in 5 6 8 10 12 16 20 24 40; do BUILDS+=("2:$f:5000"); done
 
 name_of() { local n=$1 f=$2 fs=$3; echo "rfsoc4x2_v49_${n}ch_qsfp_f${f}$([ "$fs" = 2400 ] || echo _fs$fs)"; }
 # implementation strategy per build (default: Vivado's). These missed timing by
-# 0.02-0.24 ns with the default, each on a routing-dominated path in the CMAC
-# 322 MHz domain (udp_player / axis_pkt_arb), and closed with
-# Performance_ExtraTimingOpt -- except 2ch F16, still -0.164 with it, which
-# closed with Performance_Explore (+0.051, 3 runs; NetDelay_high +0.034,
-# SpreadLogic_high -0.278) (2026-10-11, the ZCU208 port). On the RFSoC 4x2
-# (QSFP28 on quad 128) the 1ch F2 template missed by 0.036 ns the same way
-# (udp_player, txoutclk) and closed with Performance_ExtraTimingOpt (+0.013;
-# Performance_Explore +0.014) (2026-10-16).
+# 0.02-0.24 ns with the default on this part (xczu48dr), each on a
+# routing-dominated path in the CMAC 322 MHz domain (udp_player /
+# axis_pkt_arb), and closed with Performance_ExtraTimingOpt -- except 2ch F16,
+# still -0.164 with it, which closed with Performance_Explore (+0.051, 3 runs;
+# NetDelay_high +0.034, SpreadLogic_high -0.278). The 1ch F2 template (QSFP28
+# on quad 128) missed by 0.036 ns the same way (udp_player, txoutclk) and
+# closed with Performance_ExtraTimingOpt (+0.013; Performance_Explore +0.014),
+# and so did the 2ch F2 sc8max (-0.046 -> +0.012).
 strategy_of() {
     case $1 in
-        rfsoc4x2_v49_1ch_qsfp_f2_fs5000|rfsoc4x2_v49_1ch_qsfp_f10_fs5000|rfsoc4x2_v49_1ch_qsfp_f20_fs5000|rfsoc4x2_v49_2ch_qsfp_f5_fs5000)
+        rfsoc4x2_v49_1ch_qsfp_f2_fs5000|rfsoc4x2_v49_2ch_qsfp_f2_fs5000|rfsoc4x2_v49_1ch_qsfp_f10_fs5000|rfsoc4x2_v49_1ch_qsfp_f20_fs5000|rfsoc4x2_v49_2ch_qsfp_f5_fs5000)
             echo Performance_ExtraTimingOpt ;;
         rfsoc4x2_v49_2ch_qsfp_f16_fs5000)
             echo Performance_Explore ;;

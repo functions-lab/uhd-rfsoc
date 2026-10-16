@@ -2,15 +2,15 @@
 """rate_loopback.py -- one rate of a template build: set it, then send a timed
 TX pulse and find it in a timed RX capture (TX ch -> RX ch over the air).
 
-Setting the rate makes the daemon retune its bitstream in place (PROTOCOL.md
-section 8: RFDC factor, MMCM, MTS); the pulse proves the retuned converters
+Setting the rate makes the daemon retune its bitstream in place (Protocol
+§8: RFDC factor, MMCM, MTS); the pulse proves the retuned converters
 and the time base carry data. Per trial: an RX capture from tick T0 and a
 pseudo-random QPSK pulse (sharp autocorrelation) at T0 + OFFSET; the
 cross-correlation peak gives its delay (whole TX->RX latency, in samples) and
 its height over the median.
 
     zcu216-uhd python3 benchmark/rate_loopback.py --args type=zcu216,addr=<ip>,channels=N --rate 375e6
-A request between two rates is met from below (PROTOCOL.md section 8):
+A request between two rates is met from below (Protocol §8):
 --expect names the rate that must be served (default: --rate).
 
 PASS: the expected rate is served and every trial captures in full with the

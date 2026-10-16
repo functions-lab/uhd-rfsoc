@@ -1,5 +1,5 @@
 //
-// uhd_zcu216 -- RX streamer implementation (PROTOCOL §4, §5).
+// uhd_zcu216 -- RX streamer implementation (Protocol §4, §5).
 //
 #include "zcu216_rx_streamer.hpp"
 #include "zcu216_pool.hpp"
@@ -113,7 +113,7 @@ rx_streamer_impl::rx_streamer_impl(
         return _st->args.get(k, def);
     };
 
-    // PROTOCOL §10: the wire format (the FPGA converts), then wire -> cpu here
+    // Protocol §10: the wire format (the FPGA converts), then wire -> cpu here
     // an empty otw_format: the device arg otw= if given, else sc16
     _otw = &otw_lookup(args.otw_format.empty() ? _st->args.get("otw", "") : args.otw_format);
     const auto offered = _st->otw_offered(true);
@@ -124,7 +124,7 @@ rx_streamer_impl::rx_streamer_impl(
         throw uhd::value_error(std::string("ZCU216: RX otw_format ") + _otw->name
                                + " is not offered by the daemon for this build (it offers "
                                + have + "; an older daemon/bitstream offers only sc16). "
-                                 "PROTOCOL §9/§10: the sc8-only builds are selected with "
+                                 "Protocol §9/§10: the sc8-only builds are selected with "
                                  "the device arg otw=sc8 before set_rx_rate");
     }
     // the daemon's current format (§3) is now this stream's; later rate
@@ -540,7 +540,7 @@ bool rx_streamer_impl::_fetch(wire& c, clk::time_point deadline, bool block)
                 const uint64_t beat =
                     _st->beat_slots() * _st->ticks_per_slot(_st->get_rx_rate(0));
                 if (b.timed and s.tsf > b.start - b.start % beat) {
-                    // PROTOCOL §4a: the FPGA starts a late timed command at
+                    // Protocol §4a: the FPGA starts a late timed command at
                     // once (and the daemon sends a short marker burst for
                     // one already late when issued). Like a USRP: no samples,
                     // ERROR_CODE_LATE_COMMAND; its chain links die with it.
@@ -770,7 +770,7 @@ size_t rx_streamer_impl::recv(const buffs_type& buffs,
     wire& c      = _w;
     size_t accum = 0;
     while (true) {
-        // inline messages (PROTOCOL §4a): reported with no samples, after
+        // inline messages (Protocol §4a): reported with no samples, after
         // the samples before them
         if (c.late_pending or c.broken_pending) {
             if (accum > 0)
@@ -887,7 +887,7 @@ void rx_streamer_impl::issue_stream_cmd(const uhd::stream_cmd_t& cmd)
     const uint64_t num   = uint64_t(cmd.num_samps); // per channel
     using sc             = uhd::stream_cmd_t;
 
-    // The daemon queues commands in order (PROTOCOL §4a); the reply says
+    // The daemon queues commands in order (Protocol §4a); the reply says
     // whether one joined the open num_more chain. Decided under the mutex
     // that recv() takes at the end of a chain link, so both sides agree.
     std::lock_guard<std::mutex> l(_burst_mutex);

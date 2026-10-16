@@ -1,4 +1,4 @@
-"""Reference over-the-wire (OTW) sample converters, rfsoc_lib/uhd/PROTOCOL.md 10.
+"""Reference over-the-wire (OTW) sample converters, Protocol §10.
 
 Used by check_frames.py (RX, udp_streamer) and check_player.py (TX,
 udp_player). Samples are (I, Q) pairs of Python ints (int16 range).
@@ -10,9 +10,10 @@ udp_player). Samples are (I, Q) pairs of Python ints (int16 range).
                      fc32: round-half-even(v * 32768) saturated, NaN -> 0
 
 The sc12 byte layout is UHD's sc12_item32_le: pack_sc12 / unpack_sc12 are
-line-for-line ports of pack() in host/lib/convert/convert_pack_sc12.hpp and of
-the integral convert_sc12_item32_3_to_star_4() in convert_unpack_sc12.hpp
-(UHD v4.6.0.0), with towire/tohost = little-endian 32-bit words.
+line-for-line ports of pack() in UHD's host/lib/convert/convert_pack_sc12.hpp
+and of the integral convert_sc12_item32_3_to_star_4() in convert_unpack_sc12.hpp
+(UHD v4.6.0.0, the host/uhd submodule), with towire/tohost = little-endian
+32-bit words.
 """
 import struct
 

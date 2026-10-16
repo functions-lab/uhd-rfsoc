@@ -1,15 +1,15 @@
 ################################################################
 # zcu216_uhd_v49.tcl -- the ZCU216 as a UHD device over 100 GbE
-# (rfsoc_lib/uhd): the v49 block design for every channel count
+# (rfsoc-uhd): the v49 block design for every channel count
 # N = 1, 2, 4, 8, 16, factor F and sample rate fs.
 #
 # Self-contained: this file and zcu216_uhd_v49.xdc in the same directory are
 # the whole design. Sourced into a Vivado 2021.1 project for the ZCU216
 # (xczu49dr-ffvf1760-2-e) whose IP repository path holds the packaged UHD
-# cores user.org:uhd:*:1.0 (hw_design/ip/uhd_ip, `make package` in
-# hw_design/ip_design/uhd_ip); everything else is Xilinx IP. The CMAC and its
+# cores user.org:uhd:*:1.0 (fpga_ip/ip/uhd_ip, `make package` in
+# fpga_ip/ip_design/uhd_ip); everything else is Xilinx IP. The CMAC and its
 # GT cannot sit in a block design: the RTL top that scripts/v49_build.tcl
-# generates instantiates hw_design/ip_design/cmac_100g next to it.
+# generates instantiates fpga_ip/ip_design/cmac_100g next to it.
 #
 # Parameters (Tcl globals, set before sourcing; scripts/v49_build.tcl sets them):
 #   V49_NCH          channel count N: 1, 2, 4, 8 or 16 (required)
@@ -31,12 +31,12 @@
 #   rfdc/M_ADC_AXIS -> rx_beamformer -> adc_c2s (DIR 0) -> udp_streamer
 #   udp_player      -> dac_s2c (DIR 1) -> tx_beamformer -> rfdc/S_DAC_AXIS
 #
-# Both beamformers (rfsoc_lib/uhd/PROTOCOL.md section 11; IP user.org:uhd:
+# Both beamformers (Protocol §11; IP user.org:uhd:
 # {tx,rx}_beamformer:1.0, sources ip_design/uhd_ip/src) work on the
 # channel-major beat, bypass by default:
 #   tx_beamformer  channel 0 x w[c] to every DAC c. AXI-Lite 0x8006_0000.
 #                  PIPE = 1 (pipelined math, 5-cycle latency) above a 150 MHz
-#                  converter clock, 0 (the v47 IP unchanged, 3 cycles)
+#                  converter clock, 0 (beamformer_v1_0 unchanged, 3 cycles)
 #                  otherwise: v49_geometry bf_pipe.
 #   rx_beamformer  channel 0 = sat16(round(sum_c x_c w[c] >> (15+SHIFT))),
 #                  channels 1..N-1 unchanged. AXI-Lite 0x8007_0000. Latency
@@ -51,19 +51,19 @@
 #   udp_streamer (ADC frames) + udp_player (ARP/status) -> axis_pkt_arb -> cmac_100g TX
 #   cmac_100g RX -> udp_player (ARP requests, TX sample packets)
 #
-# Wire format and control: rfsoc_lib/uhd/PROTOCOL.md. Addresses (AXI-Lite, pl_clk0):
+# Wire format and control: the Protocol (top AGENTS.md). Addresses (AXI-Lite, pl_clk0):
 #   0x8002_0000  eth100g/udp_streamer   ADC -> UDP (map in udp_streamer.v)
 #   0x8003_0000  eth100g/udp_player     UDP -> DAC, ARP, flow control (udp_player.v)
 # udp_streamer, udp_player, axis_pkt_arb and ch_interleave are packaged IP
-# (user.org:uhd:<core>:1.0) in hw_design/ip/uhd_ip; their sources, testbenches
-# and packaging script are in hw_design/ip_design/uhd_ip.
+# (user.org:uhd:<core>:1.0) in fpga_ip/ip/uhd_ip; their sources, testbenches
+# and packaging script are in fpga_ip/ip_design/uhd_ip.
 #   0x8004_0000  eth100g/cmac_gpio      ch1 = cmac ctl (out, default 0xF003: GT held
 #                                        in reset), ch2 = cmac status (in); bits in
 #                                        ip_design/cmac_100g/cmac_100g.v
 #   0x8005_0000  eth100g/cmac_freq      ch1 = GT refclk kHz, ch2 = CMAC user clock kHz
 #                                        (expect 156250 and 322266 once the 8A34001 runs)
-#   0x8006_0000  eth100g/tx_beamformer  N >= 2 only: TX beamformer (PROTOCOL.md 11)
-#   0x8007_0000  eth100g/rx_beamformer  N >= 2 only: RX beamformer (PROTOCOL.md 11)
+#   0x8006_0000  eth100g/tx_beamformer  N >= 2 only: TX beamformer (Protocol §11)
+#   0x8007_0000  eth100g/rx_beamformer  N >= 2 only: RX beamformer (Protocol §11)
 # The CMAC and its split-quad GT wizard cannot live in the block design:
 # neither cmac_usplus nor gtwizard_ultrascale may sit inside a module
 # reference (filemgmt 56-181), and the GT sites the board needs are outside
@@ -166,7 +166,7 @@ proc create_hier_cell_eth100g { parentCell nameHier {nch 1} {beat_w 128} {bf_pip
   set_property -dict [list CONFIG.CONST_WIDTH {4} CONFIG.CONST_VAL {15}] $sfp_en
 
   # ---- streams
-  # beat width of the combined converter stream (PROTOCOL.md section 9)
+  # beat width of the combined converter stream (Protocol §9)
   set_property CONFIG.S_WIDTH $beat_w [get_bd_cells udp_streamer]
   set_property CONFIG.M_WIDTH $beat_w [get_bd_cells udp_player]
   if {$nch == 1} {
@@ -260,7 +260,7 @@ proc v49_eth100g_slaves {nch} {
   return $s
 }
 
-# Converter geometry per channel count N (rfsoc_lib/uhd/PROTOCOL.md section 9).
+# Converter geometry per channel count N (Protocol §9).
 # The factor F is a BLOCK DESIGN parameter (never a run-time one), set on
 # EVERY ADC and DAC tile and slice, and
 #     Fabric_Freq = fs / F / (Data_Width / 2)  ==  MTS_clk_wiz clk_out1,
@@ -271,14 +271,14 @@ proc v49_eth100g_slaves {nch} {
 # udp_player. ADC and DAC sample at fs = 2400 MS/s unless noted (LMX/LMK clocking
 # unchanged: PL_CLK 300 MHz, SYSREF 10 MHz).
 #
-# Two families (rfsoc_lib/uhd/benchmark/oracle_builds.txt is the build list):
+# Two families (host/benchmark/oracle_builds.txt is the build list):
 #
 #   normal  the highest rate whose sc16 stream fits the 100G link, and below it
 #           every RFDC factor (Gen3: 2 3 4 5 6 8 10 12 16 20 24 40) down to 40,
 #           one bitstream each, so a requested rate can be met from below.
 #           fs 2500 MS/s at 1 and 2 channels, 2250 at 4, 8 and 16.
-#   sc8max  twice the normal family's per-channel rate, sc8 only (PROTOCOL.md
-#           section 10): 8ch F3 and 16ch F6 at fs 2250, 6.0 GS/s aggregate,
+#   sc8max  twice the normal family's per-channel rate, sc8 only (Protocol §10):
+#           8ch F3 and 16ch F6 at fs 2250, 6.0 GS/s aggregate,
 #           96 Gb/s of sc8 -- the same link load as the sc16 maximum. Their
 #           1024-bit beat (two samples per channel per clock at 187.5 MHz)
 #           is one sc8 wire word, which udp_streamer / udp_player move once
@@ -723,7 +723,7 @@ foreach ip_vlnv $list_check_ips {
    if { [get_ipdefs -all $ip_vlnv] eq "" } { lappend list_ips_missing $ip_vlnv }
 }
 if { $list_ips_missing ne "" } {
-   error "zcu216_uhd_v49: IPs not in the catalog: $list_ips_missing (user.org:uhd:*: run 'make package' in hw_design/ip_design/uhd_ip and add hw_design/ip/uhd_ip to ip_repo_paths)"
+   error "zcu216_uhd_v49: IPs not in the catalog: $list_ips_missing (user.org:uhd:*: run 'make package' in fpga_ip/ip_design/uhd_ip and add fpga_ip/ip/uhd_ip to ip_repo_paths)"
 }
 
 ##################################################################

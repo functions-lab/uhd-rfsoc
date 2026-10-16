@@ -354,7 +354,7 @@
         <spirit:parameters>
           <spirit:parameter>
             <spirit:name>viewChecksum</spirit:name>
-            <spirit:value>e0b2a78b</spirit:value>
+            <spirit:value>02ed66b0</spirit:value>
           </spirit:parameter>
         </spirit:parameters>
       </spirit:view>
@@ -370,7 +370,7 @@
         <spirit:parameters>
           <spirit:parameter>
             <spirit:name>viewChecksum</spirit:name>
-            <spirit:value>e0b2a78b</spirit:value>
+            <spirit:value>02ed66b0</spirit:value>
           </spirit:parameter>
         </spirit:parameters>
       </spirit:view>
@@ -892,7 +892,7 @@
       <spirit:file>
         <spirit:name>src/tx_beamformer.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
-        <spirit:userFileType>CHECKSUM_a096c8e7</spirit:userFileType>
+        <spirit:userFileType>CHECKSUM_f266b5dd</spirit:userFileType>
         <spirit:userFileType>IMPORTED_FILE</spirit:userFileType>
       </spirit:file>
     </spirit:fileSet>
@@ -924,7 +924,7 @@
       </spirit:file>
     </spirit:fileSet>
   </spirit:fileSets>
-  <spirit:description>TX beamformer on the channel-major DAC beat: TX channel 0 fanned out to N DACs, DAC c = ch0 x w_c (Q1.15), or bit-exact bypass; atomic weight LOAD. Register map in the HDL header; rfsoc_lib/uhd/PROTOCOL.md section 11.</spirit:description>
+  <spirit:description>TX beamformer on the channel-major DAC beat: TX channel 0 fanned out to N DACs, DAC c = ch0 x w_c (Q1.15), or bit-exact bypass; atomic weight LOAD. Register map in the HDL header; Protocol §11.</spirit:description>
   <spirit:parameters>
     <spirit:parameter>
       <spirit:name>N_CH</spirit:name>
@@ -959,15 +959,15 @@
       <xilinx:xpmLibraries>
         <xilinx:xpmLibrary>XPM_CDC</xilinx:xpmLibrary>
       </xilinx:xpmLibraries>
-      <xilinx:vendorDisplayName>SPEAR</xilinx:vendorDisplayName>
+      <xilinx:vendorDisplayName>rfsoc-uhd</xilinx:vendorDisplayName>
       <xilinx:coreRevision>1</xilinx:coreRevision>
-      <xilinx:coreCreationDateTime>2026-10-09T19:17:54Z</xilinx:coreCreationDateTime>
+      <xilinx:coreCreationDateTime>2026-10-16T21:23:47Z</xilinx:coreCreationDateTime>
     </xilinx:coreExtensions>
     <xilinx:packagingInfo>
       <xilinx:xilinxVersion>2021.1</xilinx:xilinxVersion>
       <xilinx:checksum xilinx:scope="busInterfaces" xilinx:value="928f3b77"/>
       <xilinx:checksum xilinx:scope="memoryMaps" xilinx:value="5c66d603"/>
-      <xilinx:checksum xilinx:scope="fileGroups" xilinx:value="39d4131c"/>
+      <xilinx:checksum xilinx:scope="fileGroups" xilinx:value="45515d19"/>
       <xilinx:checksum xilinx:scope="ports" xilinx:value="94fda19b"/>
       <xilinx:checksum xilinx:scope="hdlParameters" xilinx:value="ec329f49"/>
       <xilinx:checksum xilinx:scope="parameters" xilinx:value="cc56c8e4"/>

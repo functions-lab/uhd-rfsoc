@@ -1,6 +1,6 @@
-"""RX stream-command queue of the ZCU216 daemon (PROTOCOL.md §4a).
+"""RX stream-command queue of the ZCU216 daemon (Protocol §4a).
 
-The FPGA streamer (rtl/udp_streamer.v) holds ONE command: a start while it is
+The FPGA streamer (fpga_ip/ip_design/uhd_ip/src/udp_streamer.v) holds ONE command: a start while it is
 armed or running is rejected, and it goes idle after a finite burst. A USRP
 queues stream commands and runs them in order, and chains `num_more`
 commands into one contiguous stream. This module gives the daemon that
@@ -62,7 +62,7 @@ log = logging.getLogger("zcu216.rxq")
 
 START_MODES = ("start_cont", "num_done", "num_more")
 
-# reply tokens of `stream_cmd` (PROTOCOL.md §3/§4a)
+# reply tokens of `stream_cmd` (Protocol §3/§4a)
 NEW, CONT = "new", "cont"
 
 

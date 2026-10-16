@@ -4,7 +4,7 @@
 // The 100G port is driven by DPDK's mlx5 PMD in *bifurcated, isolated* mode:
 // rte_flow rules steer only IPv4/UDP to <host ip>:[recv_port, recv_port+nports)
 // into DPDK RX queues (queue k = port k), and UDP to <host ip>:<async port>
-// (the FPGA's TX status, PROTOCOL §7) into one more queue (queue nports, the
+// (the FPGA's TX status, Protocol §7) into one more queue (queue nports, the
 // "status queue"); everything else -- ARP, ICMP, discovery/control on the
 // LAN, anything unrelated -- still reaches the kernel netdev, which stays up.
 // TX frames are built in mbufs and sent by a TX lcore, which also polls the
@@ -110,7 +110,7 @@ port_sptr open_port(const uhd::device_addr_t& args, const local_iface& ifc, size
 //!   app   the threads of C0, beside the main lcore (zcu216_device::_place_app
 //!         pins the application there)
 //!   workers  the first thread of every other core
-//! Measured on a 6-core/12-thread Xeon w3-2423, CX-5 at PCIe Gen3 x16, 8 x 300
+//! Measured on a 6-core/12-thread Xeon test host, CX-5 at PCIe Gen3 x16, 8 x 300
 //! MS/s sc16, benchmark_rate with 32-packet buffers: lcores sharing one core
 //! gave TX 98.8-99.6 % against 71.6 % with each lcore on its own core (the
 //! conversion workers then had too few cores); RX ~100 % either way. Each
@@ -142,7 +142,7 @@ struct tx_endpoint
     std::string dst_mac; // FPGA data MAC
     std::string src_ip, dst_ip;
     uint16_t src_port = 0, dst_port = 0;
-    //! host UDP port the FPGA sends TX status to (PROTOCOL §7); 0 = none
+    //! host UDP port the FPGA sends TX status to (Protocol §7); 0 = none
     uint16_t status_port = 0;
     //! Untimed-burst prefill: the FPGA plays an untimed burst from its first
     //! packet, so the host starts with no lead and one late packet underflows.
@@ -152,7 +152,7 @@ struct tx_endpoint
     size_t prefill_pkts = 0;
     double prefill_us   = 0;
     //! Packets sent to the FPGA's discard port (9, ignored by the player,
-    //! PROTOCOL §6) when the session starts. The first packets a freshly
+    //! Protocol §6) when the session starts. The first packets a freshly
     //! started mlx5 TX queue sends can leave gaps of more than one packet's
     //! play time between them (measured: the first untimed burst of a
     //! process underflowed once after its first packet even with 255 packets

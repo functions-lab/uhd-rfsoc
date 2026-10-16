@@ -111,7 +111,7 @@ def main():
     ap.add_argument("--src-port", type=int, default=vrt.FPGA_SRC_PORT,
                     help="expected UDP source port of RX packets [%(default)s]")
     ap.add_argument("--otw", default="sc16", choices=vrt.OTW_FORMATS,
-                    help="over-the-wire format, PROTOCOL.md §10 [%(default)s]")
+                    help="over-the-wire format, Protocol §10 [%(default)s]")
     ap.add_argument("--bf", action="store_true",
                     help="exercise the TX beamformer commands (N >= 2)")
     a = ap.parse_args()

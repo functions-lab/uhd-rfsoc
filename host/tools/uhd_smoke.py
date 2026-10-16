@@ -2,7 +2,7 @@
 """uhd_smoke.py -- Python-API smoke test of the zcu216 UHD module.
 
 Needs the section-5 test pattern (device arg pattern=1) for the RX checks. Runs
-as root (DPDK) against the board (../../benchmark/uhd_examples_hw.sh does):
+as root (DPDK) against the board (../benchmark/uhd_examples_hw.sh does):
 
     tools/zcu216-uhd python3 tools/uhd_smoke.py --args type=zcu216,addr=<board-ip>,pattern=1
 
@@ -11,7 +11,7 @@ as root (DPDK) against the board (../../benchmark/uhd_examples_hw.sh does):
      is NOT a multiple of 16                  -> exactly N samples, time_spec ==
      requested time, first sample == pattern(t0), EOB on the last one
   3. MultiUSRP.send_waveform()                -> all samples accepted, burst ACK
-With a multi-channel build (device arg channels=N, PROTOCOL section 9) every step
+With a multi-channel build (device arg channels=N, Protocol §9) every step
 runs on all N channels at once, and channel c must read I = t + c for the sample
 at tick t: timing, channel order and alignment in one check.
 Exit code 0 = all pass.

@@ -1,5 +1,5 @@
 //
-// uhd_zcu216 -- over-the-wire (OTW) sample formats, PROTOCOL.md §10.
+// uhd_zcu216 -- over-the-wire (OTW) sample formats, Protocol §10.
 //
 // The FPGA converts between the converters' int16 samples and the wire
 // format; the host converts between the wire format and the application's
@@ -39,7 +39,7 @@
 
 namespace zcu216 {
 
-//! PROTOCOL §10 formats; the value is the FPGA FMT register code
+//! Protocol §10 formats; the value is the FPGA FMT register code
 enum class otw_t : int { sc16 = 0, sc8 = 1, sc12 = 2, fc32 = 3 };
 
 struct otw_info

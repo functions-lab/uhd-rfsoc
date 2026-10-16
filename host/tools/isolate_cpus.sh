@@ -9,7 +9,7 @@
 #
 # Why: the module's lcores busy-poll and its workers convert on fixed CPUs
 # (host/AGENTS.md, Full-rate duplex). Without isolation everything else may
-# run there too. Measured on wei-duke-wsp5 in a 22 s full-rate duplex run:
+# run there too. Measured on a 6-core Xeon test host in a 22 s full-rate duplex run:
 # containerd, tailscaled, gnome-shell, kworkers, rcu_sched and a weekly
 # fstrim were switched in on those CPUs thousands of times, and the two DPDK
 # lcores were preempted 36 and 28 times. Each preemption is a stall the
@@ -25,7 +25,7 @@
 #          not limited by this.
 # restore: all of the above back to every online CPU.
 #
-# Default housekeeping CPU 9: the full-rate layout uses 0,1,6,7 (app), 2,3
+# Default housekeeping CPU 9 (a 6-core / 12-thread host): the full-rate layout uses 0,1,6,7 (app), 2,3
 # (RX workers), 4,5,11 (TX workers), 8 (RX lcore), 10 (TX lcore); 9 is free.
 set -u
 cmd=${1:-status}

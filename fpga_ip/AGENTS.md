@@ -4,5 +4,5 @@
   `make package` there (writes `ip/uhd_ip`), commit `src/` and `ip/uhd_ip`
   together, rebuild the bitstreams. `ip_design/uhd_ip/AGENTS.md` has the rules.
 - `ip/uhd_ip` is generated: never hand-edit it.
-- These files come from SPEAR (`sync/manifest`): push changes back with
-  `sync/spear_sync.py push`.
+- `ip/iprepo/*` (the RFSoC 4x2 I/Q joiners) are packaged in place: edit
+  their `hdl/`, then re-run their `package_ip.tcl` in Vivado 2021.1.

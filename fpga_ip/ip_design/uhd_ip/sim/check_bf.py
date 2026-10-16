@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Weight generator and checker for tb_tx_beamformer.sv (rtl/tx_beamformer.v).
+"""Weight generator and checker for tb_tx_beamformer.sv (src/tx_beamformer.v).
 
   check_bf.py gen   --nch N --out weights.hex
       NSETS (8) weight sets of N words, one hex word per line ({imag, real}

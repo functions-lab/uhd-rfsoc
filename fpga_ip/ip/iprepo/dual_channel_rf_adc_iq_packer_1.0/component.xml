@@ -596,7 +596,7 @@
       </xilinx:taxonomies>
       <xilinx:displayName>Dual-Channel RF-ADC I/Q AXI Stream Packer</xilinx:displayName>
       <xilinx:definitionSource>package_project</xilinx:definitionSource>
-      <xilinx:vendorDisplayName>SPEAR</xilinx:vendorDisplayName>
+      <xilinx:vendorDisplayName>rfsoc-uhd</xilinx:vendorDisplayName>
       <xilinx:coreRevision>1</xilinx:coreRevision>
       <xilinx:coreCreationDateTime>2026-07-25T21:20:04Z</xilinx:coreCreationDateTime>
     </xilinx:coreExtensions>

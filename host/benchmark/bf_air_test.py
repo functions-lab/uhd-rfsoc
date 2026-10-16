@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""bf_air_test.py -- the TX beamformer (PROTOCOL.md section 11) verified over
+"""bf_air_test.py -- the TX beamformer (Protocol §11) verified over
 the air, through stock UHD calls, on an N-channel build whose DACs and ADCs
 have antennas (an over-the-air link: every RX antenna hears every TX antenna).
 
@@ -42,8 +42,8 @@ ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
 ap.add_argument("--args", required=True, help="device args incl. addr= and channels=N (N >= 2)")
 ap.add_argument("--freq", type=float, default=600e6, help="TX and RX centre (NCO), Hz (<= fs/2)")
 ap.add_argument("--tone", type=float, default=7.3e6, help="baseband tone, Hz")
-# -18 dBFS: at -6 dBFS the zcu216-0 TX analog chain compresses (measured
-# 2026-10-01: weight 0.5 came back as 0.66 / +3 deg, 0.125 as 0.18 / +6 deg on
+# -18 dBFS: at -6 dBFS a ZCU216's TX analog chain compresses (measured:
+# weight 0.5 came back as 0.66 / +3 deg, 0.125 as 0.18 / +6 deg on
 # every DAC -- AM/AM + AM/PM -- while at -18 and -30 dBFS every weight is
 # linear to ~3 % / 1 deg), which breaks the superposition the test relies on
 ap.add_argument("--amp", type=float, default=0.125, help="tone amplitude (fc32 full scale 1)")

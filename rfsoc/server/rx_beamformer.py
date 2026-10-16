@@ -1,6 +1,6 @@
-"""eth100g/rx_beamformer of the N >= 2 v49 builds (PROTOCOL.md §11).
+"""eth100g/rx_beamformer of the N >= 2 v49 builds (Protocol §11).
 
-Register map and datapath: hw_design/ip_design/uhd_ip/src/rx_beamformer.v
+Register map and datapath: fpga_ip/ip_design/uhd_ip/src/rx_beamformer.v
 (header; packaged as user.org:uhd:rx_beamformer:1.0). AXI-Lite at 0x8007_0000
 in the N >= 2 builds that carry it; the N = 1 builds and the bitstreams from
 before it have none. The driver is only ever created from an ip_dict entry

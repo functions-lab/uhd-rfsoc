@@ -31,7 +31,7 @@ addr() { ip -4 -br addr show eth0 2>/dev/null | awk '{print $3}' | cut -d/ -f1; 
 check() {
     [ -x "$PY" ] || { echo "no PYNQ Python at $PY: run this on the board (or set UHD_DAEMON_PYTHON)" >&2; exit 1; }
     [ -f "$SRV/zcu216_uhd.conf" ] || { echo "no $SRV/zcu216_uhd.conf: cp $SRV/zcu216_uhd.conf.example $SRV/zcu216_uhd.conf and set data_ip" >&2; exit 1; }
-    compgen -G "$SRV/*_v49_*ch_qsfp*.bit" > /dev/null || { echo "no bitstreams in $SRV: copy them with rfsoc/push_bitstreams.sh (on the PC)" >&2; exit 1; }
+    compgen -G "$SRV/*_v49_*ch_qsfp*.bit" > /dev/null || { echo "no bitstreams in $SRV: copy them from the build machine with rfsoc/push_bitstreams.sh <bit_dir> xilinx@<board> (or the .bit/.hwh files of a release)" >&2; exit 1; }
 }
 
 # the channel counts of the bitstreams here (<board>_v49_<N>ch_qsfp*.bit), e.g. 1/2/4/8/16

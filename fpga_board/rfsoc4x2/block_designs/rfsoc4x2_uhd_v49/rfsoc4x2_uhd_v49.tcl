@@ -42,12 +42,12 @@
 #   rfdc/M_ADC_AXIS -> rx_beamformer -> adc_c2s (DIR 0) -> udp_streamer
 #   udp_player      -> dac_s2c (DIR 1) -> tx_beamformer -> rfdc/S_DAC_AXIS
 #
-# Both beamformers (PROTOCOL.md section 11; IP user.org:uhd:
+# Both beamformers (Protocol §11; IP user.org:uhd:
 # {tx,rx}_beamformer:1.0, sources ip_design/uhd_ip/src) work on the
 # channel-major beat, bypass by default:
 #   tx_beamformer  channel 0 x w[c] to every DAC c. AXI-Lite 0x8006_0000.
 #                  PIPE = 1 (pipelined math, 5-cycle latency) above a 150 MHz
-#                  converter clock, 0 (the v47 IP unchanged, 3 cycles)
+#                  converter clock, 0 (beamformer_v1_0 unchanged, 3 cycles)
 #                  otherwise: v49_geometry bf_pipe.
 #   rx_beamformer  channel 0 = sat16(round(sum_c x_c w[c] >> (15+SHIFT))),
 #                  channels 1..N-1 unchanged. AXI-Lite 0x8007_0000. Latency
@@ -62,7 +62,7 @@
 #   udp_streamer (ADC frames) + udp_player (ARP/status) -> axis_pkt_arb -> cmac_100g TX
 #   cmac_100g RX -> udp_player (ARP requests, TX sample packets)
 #
-# Wire format and control: PROTOCOL.md. Addresses (AXI-Lite, pl_clk0):
+# Wire format and control: the Protocol (top AGENTS.md). Addresses (AXI-Lite, pl_clk0):
 #   0x8002_0000  eth100g/udp_streamer   ADC -> UDP (map in udp_streamer.v)
 #   0x8003_0000  eth100g/udp_player     UDP -> DAC, ARP, flow control (udp_player.v)
 # udp_streamer, udp_player, axis_pkt_arb and ch_interleave are packaged IP
@@ -73,8 +73,8 @@
 #                                        ip_design/cmac_100g/cmac_100g.v
 #   0x8005_0000  eth100g/cmac_freq      ch1 = GT refclk kHz, ch2 = CMAC user clock kHz
 #                                        (expect 156250 and 322266: the Si570 runs from power-up)
-#   0x8006_0000  eth100g/tx_beamformer  N >= 2 only: TX beamformer (PROTOCOL.md 11)
-#   0x8007_0000  eth100g/rx_beamformer  N >= 2 only: RX beamformer (PROTOCOL.md 11)
+#   0x8006_0000  eth100g/tx_beamformer  N >= 2 only: TX beamformer (Protocol §11)
+#   0x8007_0000  eth100g/rx_beamformer  N >= 2 only: RX beamformer (Protocol §11)
 # The CMAC and its GT wizard (quad 128, the QSFP28) cannot live in the block design:
 # neither cmac_usplus nor gtwizard_ultrascale may sit inside a module
 # reference (filemgmt 56-181), and the GT sites the board needs are outside
@@ -176,7 +176,7 @@ proc create_hier_cell_eth100g { parentCell nameHier {nch 1} {beat_w 128} {bf_pip
   # scripts/v49_build.tcl v49_gen_top, pins in rfsoc4x2_uhd_v49.xdc)
 
   # ---- streams
-  # beat width of the combined converter stream (PROTOCOL.md section 9)
+  # beat width of the combined converter stream (Protocol §9)
   set_property CONFIG.S_WIDTH $beat_w [get_bd_cells udp_streamer]
   set_property CONFIG.M_WIDTH $beat_w [get_bd_cells udp_player]
   if {$nch == 1} {
@@ -268,7 +268,7 @@ proc v49_eth100g_slaves {nch} {
   return $s
 }
 
-# Converter geometry per channel count N (PROTOCOL.md section 9).
+# Converter geometry per channel count N (Protocol §9).
 # The factor F is a BLOCK DESIGN parameter (never a run-time one), set on
 # EVERY ADC and DAC slice. S = complex samples per
 # channel per converter clock:

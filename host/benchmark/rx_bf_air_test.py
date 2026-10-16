@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""rx_bf_air_test.py -- the RX beamformer (PROTOCOL.md section 11) over the
+"""rx_bf_air_test.py -- the RX beamformer (Protocol §11) over the
 air, through stock UHD calls, on an N-channel build whose ADCs have antennas.
 
 A tone from one TX channel (--tx, TX beamformer in bypass) reaches every RX

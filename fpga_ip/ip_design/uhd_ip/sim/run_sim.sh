@@ -4,7 +4,7 @@
 # Runs once per S_WIDTH in $WIDTHS (default "128 256 512"; converter-side beat
 # width), TICK_STEP in $TICK_STEPS (default "1 2"; ticks per slot) and
 # over-the-wire format in $FMTS (default "0"; 0 sc16, 1 sc8, 2 sc12, 3 fc32 --
-# PROTOCOL.md 10). Width 128 step 1 builds in build/, width 128 step N in
+# Protocol §10). Width 128 step 1 builds in build/, width 128 step N in
 # build_tsN/, width W in build_wW/ and build_wW_tsN/; FMT F != 0 appends _fmtF.
 # FAST=1 runs adc_clk at 300 MHz at every width (512 b: one group per cycle,
 # the max-rate geometry) and appends _fast.
@@ -12,7 +12,7 @@
 #   FAST=1 WIDTHS=512 TICK_STEPS=1 FMTS="1 2" ./run_sim.sh   # sc8/sc12 at 4.8 GS/s
 set -euo pipefail
 cd "$(dirname "$0")"
-VIVADO_ROOT=${VIVADO_ROOT:-$HOME/Xilinx/Vivado/2021.1}
+VIVADO_ROOT=${VIVADO_ROOT:-$(v=$(command -v vivado) && dirname "$(dirname "$(readlink -f "$v")")" || echo /tools/Xilinx/Vivado/2021.1)}
 source "$VIVADO_ROOT/settings64.sh"
 XPM=$VIVADO_ROOT/data/ip/xpm
 HERE=$PWD

@@ -2,8 +2,8 @@
 
 EVERY FPGA ADDRESS THE DAEMON USES FOR THE 100G PATH LIVES IN THIS FILE.
 
-Sources of truth (under hw_design/):
-  ZCU216/block_designs/zcu216_v49_qsfp/zcu216_v49_qsfp.tcl          IP names and addresses (AXI-Lite on pl_clk0)
+Sources of truth (under fpga_ip/ and fpga_board/):
+  ZCU216/block_designs/zcu216_uhd_v49/zcu216_uhd_v49.tcl          IP names and addresses (AXI-Lite on pl_clk0)
   ip_design/uhd_ip/src/udp_streamer.v     streamer map (header table)   -- FINAL
   ip_design/uhd_ip/src/udp_player.v       player map (header table)     -- FINAL
   ip_design/uhd_ip/src/tx_beamformer.v    TX beamformer map (header)
@@ -11,7 +11,7 @@ Sources of truth (under hw_design/):
   ip_design/cmac_100g/cmac_100g.v         CMAC ctl/status bit layout (header)
 
   0x8002_0000  eth100g/udp_streamer  ADC -> UDP/VRT
-  0x8003_0000  eth100g/udp_player    UDP/VRT -> DAC, ARP, async/flow control
+  0x8003_0000  eth100g/udp_player    UDP/VRT -> DAC, ARP, async status, flow control
   0x8004_0000  eth100g/cmac_gpio     AXI GPIO dual: ch1 = CMAC ctl (out, default
                                      0x0000F003), ch2 = CMAC status (in)
   0x8005_0000  eth100g/cmac_freq     AXI GPIO dual, inputs: ch1 = GT refclk kHz,
@@ -19,8 +19,8 @@ Sources of truth (under hw_design/):
   0x8006_0000  eth100g/tx_beamformer N >= 2 builds only: tx_beamformer.py
   0x8007_0000  eth100g/rx_beamformer N >= 2 builds that have it: rx_beamformer.py
 
-No DRAM path: every v49 build (2026-10-01) has lost the donor's ADC -> PL-DDR4
-capture and PS-DDR -> DAC DMA playback. udp_streamer's m_axis_adc copy is
+No DRAM path: no v49 build has an ADC -> PL-DDR4 capture or a PS-DDR -> DAC
+DMA playback. udp_streamer's m_axis_adc copy is
 unused and udp_player's s_axis_dma input is tied idle, so the DAC source is
 ALWAYS the player (CTRL dac_src = 1): set at bring-up (`player_enable`) and
 kept by every later write; an idle or flushed player outputs zeros.
@@ -96,7 +96,7 @@ STR_STATUS_TX_READY = 1 << 2
 STR_STATUS_CMD_REJECTED = 1 << 3
 STR_FIFO_HWM = 0x70
 STR_CMDS = 0x74               # RO, commands accepted (gray-coded CDC from adc_clk)
-STR_FMT = 0x78                # RW, PROTOCOL.md §10 OTW format (FMT_CODES); written idle
+STR_FMT = 0x78                # RW, Protocol §10 OTW format (FMT_CODES); written idle
 
 STREAM_MODE_CODES = {
     "stop_cont": STR_CMD_STOP,
@@ -147,7 +147,7 @@ PLY_CONSUMED = 0x64
 PLY_STATUS = 0x68             # [0] playing [1] buffer_empty
 PLY_STATUS_PLAYING = 1 << 0
 PLY_STATUS_BUF_EMPTY = 1 << 1
-PLY_FMT = 0x74                # RW, PROTOCOL.md §10 OTW format (FMT_CODES); written idle
+PLY_FMT = 0x74                # RW, Protocol §10 OTW format (FMT_CODES); written idle
 # §10 format codes of STR_FMT / PLY_FMT. A bitstream built before §10 has no
 # FMT register: the write is ignored and it reads back 0 (sc16).
 FMT_CODES = OrderedDict([("sc16", 0), ("sc8", 1), ("sc12", 2), ("fc32", 3)])

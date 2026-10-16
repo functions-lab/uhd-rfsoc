@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 # Prepare the PC for the DPDK data plane of libuhd_zcu216.so (its only sample
-# transport). Idempotent; run as root. wei-duke-wsp5 is already set up this
-# way -- the script is for reproducing it on another machine.
+# transport). Idempotent; run as root.
 #
 #   sudo ./setup_dpdk.sh <iface> [nr_2M_hugepages]
 #   <iface>: the ConnectX-5 100G netdev (its name follows the PCIe slot, e.g.
-#   ens8191f1np1, enp78s0f1np1); nr_2M_hugepages default 4096 (8 GB)
+#   enp1s0f1np1); nr_2M_hugepages default 4096 (8 GB)
 #   --install   also apt-get install the missing packages
 #   --clean     also delete stale hugepage files in /dev/hugepages that no
 #               process has open (left by a DPDK app run without --in-memory)
@@ -33,7 +32,7 @@ for a in "$@"; do
     case "$a" in
         --install) INSTALL=1 ;;
         --clean) CLEAN=1 ;;
-        -h|--help) sed -n '2,28p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,26p' "$0"; exit 0 ;;
         *) ARGS+=("$a") ;;
     esac
 done

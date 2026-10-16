@@ -649,9 +649,9 @@
       </xilinx:taxonomies>
       <xilinx:displayName>axis_pkt_arb</xilinx:displayName>
       <xilinx:definitionSource>package_project</xilinx:definitionSource>
-      <xilinx:vendorDisplayName>SPEAR</xilinx:vendorDisplayName>
+      <xilinx:vendorDisplayName>rfsoc-uhd</xilinx:vendorDisplayName>
       <xilinx:coreRevision>1</xilinx:coreRevision>
-      <xilinx:coreCreationDateTime>2026-10-12T19:22:29Z</xilinx:coreCreationDateTime>
+      <xilinx:coreCreationDateTime>2026-10-16T21:23:45Z</xilinx:coreCreationDateTime>
     </xilinx:coreExtensions>
     <xilinx:packagingInfo>
       <xilinx:xilinxVersion>2021.1</xilinx:xilinxVersion>

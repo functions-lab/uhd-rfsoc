@@ -57,8 +57,8 @@ class RFSoCOverlay(Overlay):
         # Get all files in the directory and sort them in increasing order
         all_files = sorted(os.listdir(directory))
 
-        # Regex pattern to match the .bit file (supports ZCU216, ZCU208, and RFSoC4x2 builds)
-        bit_pattern = r"(zcu216|zcu208|rfsoc4x2)_v.*\.bit$"
+        # Regex pattern to match the .bit file (ZCU216 and RFSoC4x2 builds)
+        bit_pattern = r"(zcu216|rfsoc4x2)_v.*\.bit$"
 
         # Find all .bit files that match the pattern
         bit_files = [f for f in all_files if re.match(bit_pattern, f)]

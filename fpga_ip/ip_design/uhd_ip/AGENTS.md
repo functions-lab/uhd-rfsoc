@@ -1,12 +1,15 @@
-# AGENTS.md — hw_design/ip_design/uhd_ip
+# AGENTS.md — fpga_ip/ip_design/uhd_ip
 
-Working directory of the ZCU216 UHD data-plane IP. Read before touching `src/`.
+Working directory of the UHD data-plane IP (ZCU216 and RFSoC 4x2). Read before
+touching `src/`.
 
 ## Layout and flow
 - `src/<core>.v` — the RTL (Verilog-2001 + XPM). One module per file, no
-  sub-modules, EXCEPT `tx_beamformer.v`, which instantiates the v47 beamformer
-  datapath `hw_design/ip/iprepo/beamformer_1.0/hdl/{beamformer_v1_0,beamformer_channel}.sv`
-  (packaged together with it). The register map is in each file's header.
+  sub-modules, EXCEPT `tx_beamformer.v`, which instantiates the beamformer_1.0
+  datapath `src/{beamformer_v1_0,beamformer_channel}.sv` (packaged together
+  with it; keep those two unmodified: PIPE=1 is tx_beamformer.v's own
+  re-pipelined, bit-identical copy of their arithmetic). The register map is
+  in each file's header.
 - `sim/` — xsim testbenches + Python checkers. Every regression replays a log
   against an exact Python model; "PASS" means bit-exact, not "looks right".
   - `run_sim.sh` / `run_sim_player.sh` (FMTS, WIDTHS 128..1024, TICK_STEPS, FAST, TXBW env knobs),
@@ -19,21 +22,21 @@ Working directory of the ZCU216 UHD data-plane IP. Read before touching `src/`.
 - `package_ip.tcl` (`make package`) → `../../ip/uhd_ip/<core>_1.0`
   (`user.org:uhd:<core>:1.0`). It refuses to save a core whose bus interfaces,
   user parameters or AXI-Lite block (`reg0`) differ from what
-  `hw_design/ZCU216/block_designs/zcu216_v49_qsfp/zcu216_v49_qsfp.tcl` connects. HDL with `[` `]` inside a
+  `fpga_board/zcu216/block_designs/zcu216_uhd_v49/zcu216_uhd_v49.tcl` connects. HDL with `[` `]` inside a
   Tcl description string breaks it (command substitution) — avoid brackets there.
 - `ooc_timing.tcl` (`make ooc`) — out-of-context timing for streamer/player.
 
 ## Rules
 - After ANY change in `src/`: run the matching sims, then `make package`, and
-  commit `src/` together with `hw_design/ip/uhd_ip`. A bitstream built from a
+  commit `src/` together with `fpga_ip/ip/uhd_ip`. A bitstream built from a
   stale package silently carries the old RTL.
-- Never edit `hw_design/ip/uhd_ip` by hand — it is generated.
+- Never edit `fpga_ip/ip/uhd_ip` by hand — it is generated.
 - Block designs must not reference RTL here as module references; they
   instantiate the packaged IP (rule: a block-design dir holds only .tcl + .xdc).
 - Geometries that matter (N_CH:BEAT_W:clock) are the `v49_geometry` rows in
-  `zcu216_v49_qsfp.tcl`; the bf sims' COMBOS list mirrors them — keep in sync.
-- Contract changes (registers, wire format) go into `rfsoc_lib/uhd/PROTOCOL.md`
-  and the board driver (`rfsoc_lib/uhd/server/`) in the same change.
+  `fpga_board/zcu216/block_designs/zcu216_uhd_v49/zcu216_uhd_v49.tcl`; the bf sims' COMBOS list mirrors them — keep in sync.
+- Contract changes (registers, wire format) go into the Protocol (top
+  `AGENTS.md`) and the board driver (`rfsoc/server/`) in the same change.
 
 ## Key facts
 - axis_pkt_arb feeds the CMAC TX, whose tready is the hard block's tx_rdy:
@@ -44,7 +47,7 @@ Working directory of the ZCU216 UHD data-plane IP. Read before touching `src/`.
 - RX beamformer: ch0 = sat16((Σ x_c·w_c + 2^(14+SHIFT)) >> (15+SHIFT)); SHIFT
   reset log2(N); LOAD applies W[] and SHIFT atomically; latency 7+log2(N).
   The §5 test pattern is inserted AFTER it (a pattern capture is never beamformed).
-- TX beamformer: PIPE=1 (5-cycle) on 300 MHz builds, PIPE=0 (the v47 IP, 3-cycle)
+- TX beamformer: PIPE=1 (5-cycle) on 300 MHz builds, PIPE=0 (beamformer_v1_0 as is, 3-cycle)
   otherwise; the IP's math WRAPS (no saturation) — keep |x|·|w| ≤ 1.
 - Format converters (FMT register) sit after the TX buffer / before the RX FIFO;
   sc16 is the unconverted path (bypass).

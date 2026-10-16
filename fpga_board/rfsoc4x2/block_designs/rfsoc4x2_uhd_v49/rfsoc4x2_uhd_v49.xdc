@@ -16,8 +16,8 @@ set_property IOSTANDARD LVCMOS18 [ get_ports "led_r[1]" ]
 set_property IOSTANDARD LVCMOS18 [ get_ports "led_g[0]" ]
 set_property IOSTANDARD LVCMOS18 [ get_ports "led_g[1]" ]
 
-# MTS differential inputs from LMK04828 outputs 8 and 9 (MTS locks with these on rfsoc4x2-0,
-# 2026-10-16)
+# MTS differential inputs from LMK04828 outputs 8 and 9 (MTS locks with these
+# on an RFSoC 4x2)
 set_property PACKAGE_PIN AN11 [get_ports PL_CLK_clk_p]
 set_property PACKAGE_PIN AP11 [get_ports PL_CLK_clk_n]
 set_property PACKAGE_PIN AP18 [get_ports PL_SYSREF_clk_p]

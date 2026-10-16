@@ -1,4 +1,4 @@
-"""Control protocol of the ZCU216 UHD daemon (PROTOCOL.md §2-3, §6-7 commands).
+"""Control protocol of the ZCU216 UHD daemon (Protocol §2-3, §6-7 commands).
 
 Transport-free: `ControlCore.handle_line(session, line)` takes one request line
 and returns one reply line (without the newline). The TCP/UDP servers in
@@ -95,7 +95,7 @@ def _port(s: str, name: str) -> int:
 
 # Antenna names UHD applications commonly pass (USRP port names). Each
 # converter channel has ONE port, so any of these selects it; the reply names
-# the real port (PROTOCOL.md §3).
+# the real port (Protocol §3).
 ANTENNA_ALIASES = {
     "rx": ("RX", "RX1", "RX2", "TX/RX", "RX/TX", "TRX", "IN", "RF", "A"),
     "tx": ("TX", "TX1", "TX2", "TX/RX", "RX/TX", "TRX", "OUT", "RF", "A"),
@@ -696,7 +696,7 @@ class ControlCore:
         self._tx_otw = self._otw_pref = otw
         self._tx_setup = True
         # 3rd token: the free-running consumed-word count the host must use as
-        # its flow-control baseline (rtl/udp_player.v never resets it)
+        # its flow-control baseline (udp_player.v never resets it)
         return "OK %d %d %d" % (buf, fc, base & 0xFFFFFFFF)
 
     def _stream_stop_tx(self, s, a):

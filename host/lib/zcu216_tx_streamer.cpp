@@ -1,5 +1,5 @@
 //
-// uhd_zcu216 -- TX streamer implementation (PROTOCOL §6, §7).
+// uhd_zcu216 -- TX streamer implementation (Protocol §6, §7).
 //
 #include "zcu216_tx_streamer.hpp"
 #include "zcu216_pool.hpp"
@@ -59,7 +59,7 @@ tx_streamer_impl::tx_streamer_impl(
         return _st->args.get(k, def);
     };
 
-    // PROTOCOL §10: cpu -> wire format here, wire -> int16 in the FPGA
+    // Protocol §10: cpu -> wire format here, wire -> int16 in the FPGA
     // an empty otw_format: the device arg otw= if given, else sc16
     _otw = &otw_lookup(args.otw_format.empty() ? _st->args.get("otw", "") : args.otw_format);
     const auto offered = _st->otw_offered(false);
@@ -70,7 +70,7 @@ tx_streamer_impl::tx_streamer_impl(
         throw uhd::value_error(std::string("ZCU216: TX otw_format ") + _otw->name
                                + " is not offered by the daemon for this build (it offers "
                                + have + "; an older daemon/bitstream offers only sc16). "
-                                 "PROTOCOL §9/§10: the sc8-only builds are selected with "
+                                 "Protocol §9/§10: the sc8-only builds are selected with "
                                  "the device arg otw=sc8 before set_rx_rate");
     }
     // the daemon's current format (§3) is now this stream's; later rate
@@ -374,7 +374,7 @@ void tx_streamer_impl::_print_stats()
 }
 
 // ---------------------------------------------------------------------------
-// async status (PROTOCOL §7), on the TX lcore
+// async status (Protocol §7), on the TX lcore
 // ---------------------------------------------------------------------------
 void tx_streamer_impl::_fc_lock()
 {
@@ -513,7 +513,7 @@ void tx_streamer_impl::_setup_tx()
 
 void tx_streamer_impl::_size_prefill()
 {
-    // An untimed burst plays from its first packet (PROTOCOL §6), so the TX
+    // An untimed burst plays from its first packet (Protocol §6), so the TX
     // lcore holds its first packets and releases them back to back
     // (dpdk::tx_endpoint::prefill_pkts); the lead they give has to cover the
     // host's start-up. A fixed 32 packets were 27 us of 1.2 GS/s fc32, and
@@ -832,7 +832,7 @@ size_t tx_streamer_impl::send(const buffs_type& buffs,
     }
     if (_pending_sob and md.has_time_spec and not _pending_timed) {
         // The FPGA starts a timed burst on the fabric beat containing its TSF
-        // (PROTOCOL §6, §9). Start at that beat and prepend the lead as
+        // (Protocol §6, §9). Start at that beat and prepend the lead as
         // zeros, so the first user sample plays exactly at the requested time.
         const double rate   = _st->get_tx_rate(0);
         const uint64_t tps  = _st->ticks_per_sample(rate);

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Simulate tx_beamformer (with the unmodified beamformer_1.0 IP RTL) with xsim
+# Simulate tx_beamformer (with the unmodified beamformer_1.0 datapath,
+# src/beamformer_v1_0.sv + src/beamformer_channel.sv) with xsim
 # for every (N_CH, BEAT_W) a v49 build uses, then check every beat with
 # check_bf.py (bit-exact bypass, the IP's exact arithmetic, atomic weight /
 # enable switching, no lost / duplicated / reordered beats).
@@ -10,13 +11,13 @@
 # Builds in build_bf_<N>_<W>_<ps>_p<PIPE>/.
 set -euo pipefail
 cd "$(dirname "$0")"
-VIVADO_ROOT=${VIVADO_ROOT:-$HOME/Xilinx/Vivado/2021.1}
+VIVADO_ROOT=${VIVADO_ROOT:-$(v=$(command -v vivado) && dirname "$(dirname "$(readlink -f "$v")")" || echo /tools/Xilinx/Vivado/2021.1)}
 source "$VIVADO_ROOT/settings64.sh"
 XPM=$VIVADO_ROOT/data/ip/xpm
-IP=${BF_IP_HDL:-$PWD/../../../ip/iprepo/beamformer_1.0/hdl}
+IP=${BF_IP_HDL:-$PWD/../src}
 HERE=$PWD
 
-# N:BEAT_W:aclk period (ps) -- zcu216_v49_qsfp.tcl v49_geometry rows with N >= 2
+# N:BEAT_W:aclk period (ps) -- zcu216_uhd_v49.tcl v49_geometry rows with N >= 2
 # (1024: the sc8max 8ch F3 / 16ch F6 builds at 187.5 MHz)
 COMBOS=${COMBOS:-"2:128:3333 2:256:3333 4:128:3333 4:256:3333 4:512:3333 \
 8:256:6667 8:256:3333 8:512:3333 16:512:16667 16:512:6667 16:512:3333 \

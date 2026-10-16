@@ -1,4 +1,4 @@
-"""Board-local configuration of the ZCU216 UHD daemon (PROTOCOL.md §1).
+"""Board-local configuration of the ZCU216 UHD daemon (Protocol §1).
 
 No IP address is written into the code. What the daemon needs to know:
 
@@ -13,7 +13,8 @@ No IP address is written into the code. What the daemon needs to know:
 
       data_ip  = <fpga data ip>     required in hardware mode
       data_mac = <fpga data mac>    optional: derived from the board's eth0 MAC
-      name     = <device name>      optional: discovery name (default zcu216-0)
+      name     = <device name>      optional: discovery name (default: the board,
+                                    e.g. zcu216 or rfsoc4x2)
 
   `key = value` lines, `#` comments. Searched in this order:
   $ZCU216_UHD_CONF, <this directory>/zcu216_uhd.conf, /etc/zcu216_uhd.conf.
@@ -112,9 +113,11 @@ def derived_mac(ifaces=("eth0", "end0", "enp0s0")) -> Optional[str]:
 
 def resolve(data_ip: Optional[str], data_mac: Optional[str], name: Optional[str],
             config: Optional[str] = None, need_data_ip: bool = True
-            ) -> Tuple[Optional[str], Optional[str], str, str]:
+            ) -> Tuple[Optional[str], Optional[str], Optional[str], str]:
     """Command line over config file over derivation.
-    -> (data_ip, data_mac, name, how: a one-line description for the log).
+    -> (data_ip, data_mac, name, how: a one-line description for the log);
+    name is None when neither gives one (the daemon then names the device
+    after the board).
     ConfigError when hardware needs a data IP and none is configured."""
     cfg, where = load(config)
     src = []
@@ -144,5 +147,5 @@ def resolve(data_ip: Optional[str], data_mac: Optional[str], name: Optional[str]
         elif need_data_ip:
             raise ConfigError("no FPGA data MAC: set 'data_mac' in the config file or "
                               "pass --data-mac (no eth0 MAC to derive one from)")
-    nm = name or cfg.get("name") or "zcu216-0"
+    nm = name or cfg.get("name") or None
     return ip, mac, nm, "; ".join(src) or "no data-plane address (sim)"

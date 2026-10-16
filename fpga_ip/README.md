@@ -7,6 +7,6 @@
 | `ip_design/cmac_100g/` | the 100G CMAC + split-quad GT wrapper RTL; instantiated in each build's generated RTL top, not in the block design |
 | `ip/iprepo/dual_rf_adc_iq_merger_1.0`, `ip/iprepo/dual_channel_rf_adc_iq_packer_1.0` | the dual RF-ADC I/Q joiners of the RFSoC 4x2 design (packaged in place, with their HDL and testbench) |
 
-The same relative layout as SPEAR's `hw_design/`, so packaging and the board
-flows find each other unchanged. Each subdirectory's README/AGENTS (from SPEAR)
-has the details.
+`ip_design/` (sources) and `ip/` (packaged) sit side by side so the packaging
+scripts and the board build flows (`../fpga_board`) find each other by
+relative path. Each subdirectory's README/AGENTS has the details.

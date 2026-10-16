@@ -101,11 +101,11 @@ BOARDS = {
     "ZCU216": Board("ZCU216", dual_adc=False, max_channels=16, masked_tiles=(),
                     default_bitstream="zcu216_v49_1ch_qsfp_f2_fs2500.bit",   # 1 ch, 1250 MS/s
                     lib_config="ZCU216_MIN_MAX_CONFIG",
-                    mts_note="the first attempt after a reboot fails on zcu216-0"),
+                    mts_note="the first attempt after a reboot can fail"),
     "RFSOC4X2": Board("RFSoC4x2", dual_adc=True, max_channels=2, masked_tiles=(1, 3),
                       default_bitstream="rfsoc4x2_v49_1ch_qsfp_f2_fs5000.bit",   # 1 ch, 2500 MS/s
                       lib_config="RFSOC4X2_MIN_MAX_CONFIG",
-                      mts_note="locks at the first attempt on rfsoc4x2-0",
+                      mts_note="locks at the first attempt",
                       gt_refclk="si570"),
 }
 DEFAULT_BOARD = "ZCU216"

@@ -140,11 +140,11 @@ public:
             return;
         if (_rx)
             throw uhd::not_implemented_error("ZCU216: this " + std::to_string(_st->nchan)
-                                             + "-channel build has no RX beamformer (PROTOCOL §11: "
+                                             + "-channel build has no RX beamformer (Protocol §11: "
                                                "eth100g/rx_beamformer, in the N >= 2 builds that carry "
                                                "it; info rbf=0)");
         throw uhd::not_implemented_error("ZCU216: this " + std::to_string(_st->nchan)
-                                         + "-channel build has no TX beamformer (PROTOCOL "
+                                         + "-channel build has no TX beamformer (Protocol "
                                            "§11: N >= 2 builds; info bf=0)");
     }
 
@@ -321,7 +321,7 @@ private:
         if (addr >= bf_ctl::kRxBase and addr < bf_ctl::kRxBase + bf_ctl::kMapSize)
             return *_rx;
         throw uhd::value_error("ZCU216: no user register " + std::to_string(addr)
-                               + " (PROTOCOL §11: 0..31 TX beamformer, 64..95 RX beamformer)");
+                               + " (Protocol §11: 0..31 TX beamformer, 64..95 RX beamformer)");
     }
     std::shared_ptr<bf_ctl> _tx, _rx;
 };
@@ -356,7 +356,7 @@ public:
     bool recv_async_msg(async_metadata_t& md, double timeout) override;
 
 private:
-    //! PROTOCOL §9: `set_channels <N>` (device arg channels=N, default 1)
+    //! Protocol §9: `set_channels <N>` (device arg channels=N, default 1)
     //! before `info` is trusted. A daemon without the command is a 1-channel
     //! daemon: fall back to N = 1.
     void _select_channels(const device_addr_t& args);
@@ -383,7 +383,7 @@ private:
     std::weak_ptr<tx_streamer_impl> _last_tx;
 
     //! per converter channel (physical): the tune request's RF and DSP parts
-    //! (PROTOCOL §3b: the daemon folds them into the one NCO), gain, antenna
+    //! (Protocol §3b: the daemon folds them into the one NCO), gain, antenna
     struct fe_cache
     {
         double freq = 0.0, dsp = 0.0, gain = 0.0;
@@ -438,7 +438,7 @@ zcu216_device::zcu216_device(const device_addr_t& args)
             ZLOG_WARN("Daemon speaks protocol version " << info["version"]
                                                         << "; this module implements 1");
         _st->serial    = info.get("serial", args.get("serial", "unknown"));
-        // The FPGA data IP is the board's configuration (PROTOCOL §1), learned
+        // The FPGA data IP is the board's configuration (Protocol §1), learned
         // here; data_ip= overrides it (it must then be what the FPGA answers ARP for).
         _st->data_ip   = args.get("data_ip", info.get("data_ip", ""));
         if (_st->data_ip.empty())
@@ -457,7 +457,7 @@ zcu216_device::zcu216_device(const device_addr_t& args)
                                                          << " MHz but info says "
                                                          << _st->tick_rate / 1e6
                                                          << " MHz; using info");
-        // PROTOCOL §9: the build carries N channels in each direction, all in
+        // Protocol §9: the build carries N channels in each direction, all in
         // one stream. num_rx/num_tx from info must agree with N.
         const size_t n_rx = size_t(parse_ll(info.get("num_rx", "1"), "num_rx"));
         const size_t n_tx = size_t(parse_ll(info.get("num_tx", "1"), "num_tx"));
@@ -477,7 +477,7 @@ zcu216_device::zcu216_device(const device_addr_t& args)
         if (_st->nchan > 1 and tpsamp % _st->nchan)
             ZLOG_WARN("tick rate " << _st->tick_rate.load() << " / per-channel rate "
                                    << _st->get_rx_rate(0) << " is not a multiple of N="
-                                   << _st->nchan << " (PROTOCOL §9: one tick per slot)");
+                                   << _st->nchan << " (Protocol §9: one tick per slot)");
         // The DPDK data plane (zcu216_dpdk.hpp) carries every sample packet.
         // Opened here so that a missing privilege/hugepage/port shows up at
         // make(), not when streaming starts.
@@ -606,7 +606,7 @@ rx_streamer::sptr zcu216_device::get_rx_stream(const stream_args_t& args_in)
 {
     const stream_args_t args = _map_args(true, args_in);
     std::lock_guard<std::mutex> l(_streamers_mutex);
-    // One stream per direction carries every channel (PROTOCOL §9), and the
+    // One stream per direction carries every channel (Protocol §9), and the
     // zero-copy rings deliver each packet to ONE streamer: a second streamer
     // on other channels cannot run beside the first. A new streamer that
     // shares a channel with the old one replaces it (an application
@@ -632,7 +632,7 @@ rx_streamer::sptr zcu216_device::get_rx_stream(const stream_args_t& args_in)
                 "ZCU216: an RX streamer for converter channel(s) " + have
                 + " still exists; a second RX streamer (channel(s) " + want
                 + ") cannot run beside it: the ZCU216 has ONE RX stream for all channels "
-                  "(PROTOCOL §9). Create one streamer with all the channels you need "
+                  "(Protocol §9). Create one streamer with all the channels you need "
                   "(stream_args.channels), or destroy the first one before creating another.");
         }
     }
@@ -653,7 +653,7 @@ tx_streamer::sptr zcu216_device::get_tx_stream(const stream_args_t& args_in)
 {
     const stream_args_t args = _map_args(false, args_in);
     std::lock_guard<std::mutex> l(_streamers_mutex);
-    // One stream per direction carries every channel (PROTOCOL §9), so a new
+    // One stream per direction carries every channel (Protocol §9), so a new
     // streamer replaces any existing one, whatever its channels.
     std::vector<std::shared_ptr<tx_streamer_impl>> olds;
     for (auto& w : _tx_streamers) {
@@ -779,7 +779,7 @@ void zcu216_device::_build_tree(const device_addr_t& info)
             }
         });
     // set_command_time(): the daemon runs later tune / gain requests when its
-    // timekeeper reaches the time (PROTOCOL §3c; ~1 ms accurate, all requests
+    // timekeeper reaches the time (Protocol §3c; ~1 ms accurate, all requests
     // with one command time applied together). Stream commands carry their
     // own time.
     _tree->create<time_spec_t>(mb / "time/cmd")
@@ -910,7 +910,7 @@ std::string zcu216_device::_at()
 }
 
 //! USRP antenna names an application may pass: each converter channel has ONE
-//! port, so these select it (the daemon accepts the same, PROTOCOL §3)
+//! port, so these select it (the daemon accepts the same, Protocol §3)
 static bool antenna_alias(bool rx, const std::string& a)
 {
     std::string u = a;
@@ -938,7 +938,7 @@ void zcu216_device::_build_chan(bool rx, size_t ch)
     fe_cache& cache        = rx ? _rx_fe[ch] : _tx_fe[ch];
     auto& rate_cache       = rx ? *_st->rx_rate[ch] : *_st->tx_rate[ch];
 
-    // ---- tune requests (PROTOCOL §3b): the frontend holds the RF part, the
+    // ---- tune requests (Protocol §3b): the frontend holds the RF part, the
     // DSP the CORDIC part; the daemon programs the one NCO to rf - dsp (RX) /
     // rf + dsp (TX) and replies with both parts in effect. With
     // set_command_time() the request carries at=<ticks> (§3c).
@@ -1064,7 +1064,7 @@ void zcu216_device::_build_chan(bool rx, size_t ch)
 
     // Bandwidth: the (complex) sample rate, fs / the decimation or
     // interpolation factor in force -- the RFDC Gen3 filters' -3 dB width is
-    // 0.96 x it at every factor (benchmark/results, rate_bandwidth.py). It
+    // 0.96 x it at every factor (measured with benchmark/rate_bandwidth.py). It
     // follows the sample rate, so setting it only reads it back.
     _tree->create<double>(fe / "bandwidth/value")
         .set_coercer([&rate_cache](double) { return rate_cache.load(); })
@@ -1230,7 +1230,8 @@ void zcu216_device::_place_app(const device_addr_t& args)
     // starves it and loses packets. app_cpus=<list> picks the CPUs,
     // app_cpus=all leaves the affinity alone, and an affinity already
     // narrower than the online CPUs (taskset, the wrapper) is kept.
-    // wei-duke-wsp5 default layout: CPUs 0,6 (C0, beside the EAL main lcore).
+    // Default layout on a 6-core / 12-thread x86 host: CPUs 0,6 (C0, beside
+    // the EAL main lcore).
     const std::string arg = args.get("app_cpus", "");
     if (arg == "all")
         return;
@@ -1265,7 +1266,7 @@ void zcu216_device::_place_app(const device_addr_t& args)
         for (unsigned c : online)
             if (not busy_cores.count(c))
                 want.insert(c);
-        // big.LITTLE (DGX Spark): only the fast cores (within 90 % of the
+        // big.LITTLE (e.g. Cortex-X925 + A725): only the fast cores (within 90 % of the
         // highest cpu_capacity) if any is left; recv()'s planning and the
         // inline conversion run on these threads
         {

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""zcu216_bf.py -- steer the ZCU216 TX or RX beamformer (PROTOCOL.md section 11)
+"""zcu216_bf.py -- steer the ZCU216 TX or RX beamformer (Protocol §11)
 from Python with the stock UHD API: multi_usrp.set_user_register() writes, the
 property tree (/mboards/0/tx_beamformer/*, /mboards/0/rx_beamformer/*) reads
 back.

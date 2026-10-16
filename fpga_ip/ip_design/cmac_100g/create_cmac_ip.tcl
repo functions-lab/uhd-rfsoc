@@ -18,7 +18,7 @@
 #
 # CMAC_REFCLK selects the refclk the 8A34001 is programmed to. 156.25 needs a
 # fractional QPLL0 (SDM 2^23); 161.1328125 is integer. The QPLL common
-# settings live in cmac/refclk_<f>/cmac_caui4_common_wrapper.v and must match.
+# settings live in refclk_<f>/cmac_caui4_common_wrapper.v and must match.
 
 set cmac_dir [file dirname [file normalize [info script]]]
 if {![info exists CMAC_REFCLK]} { set CMAC_REFCLK 156.25 }

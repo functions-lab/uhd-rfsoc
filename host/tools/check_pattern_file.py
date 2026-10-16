@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""check_pattern_file.py -- verify a capture of the PROTOCOL.md section-5/9 test pattern.
+"""check_pattern_file.py -- verify a capture of the Protocol §5/§9 test pattern.
 
 The pattern is keyed to the timestamp: the sample at tick t is I = int16(t & 0xFFFF),
 Q = ~I. A contiguous capture therefore has I[k] = (I[0] + k*tps) & 0xFFFF and Q = ~I,
@@ -24,7 +24,7 @@ channels captured together differ by exactly their channel numbers:
 
 --t0 then means the tick of sample 0, which channel c must show as I = t0 + c.
 
-OTW formats (PROTOCOL.md section 10): --otw sc8|sc12|fc32 compares against the
+OTW formats (Protocol §10): --otw sc8|sc12|fc32 compares against the
 pattern passed through the FPGA's conversion (server/vrt.py: sc8 = round-half-up
 (x/256) saturated, sc12 = round-half-up(x/16) saturated, fc32 = x/32768) and the
 host's scaling to the CPU format: --type short holds v*256 (sc8), v*16 (sc12) or

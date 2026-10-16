@@ -1,4 +1,4 @@
-"""VITA-49-style packets of the uhd_zcu216 data plane (PROTOCOL.md §4-7).
+"""VITA-49-style packets of the uhd_zcu216 data plane (Protocol §4-7).
 
 Pure Python (numpy optional). Used by the daemon and by the host-side
 checkers (host/tools/check_pattern_file.py, tests/client_check.py), so they
@@ -37,7 +37,7 @@ SID_BASE = 0x5A160000          # RX (FPGA -> host) stream IDs
 TX_SID_BASE = 0x5A170000       # TX (host -> FPGA) stream IDs
 ASYNC_MAGIC = 0x5A17A5C0
 TX_PORT = 49900                # FPGA UDP port receiving TX samples
-TX_SRC_PORT = 49801            # FPGA source port of async/FC packets
+TX_SRC_PORT = 49801            # FPGA source port of async status / FC packets
 WORD_SAMPS = 16                # one 64-byte TX buffer word = 16 sc16 samples
 
 # async event codes = uhd::async_metadata_t::event_code_t

@@ -15,7 +15,7 @@ Register map (byte offsets):
 The output must be exact (the converter AXIS clock equals Fabric_Freq), so
 the setting is solved exactly, as v49_clk_exact does at build time: VCO =
 fin x M / D with M and CLKOUT0's O in 1/8 steps, VCO 800..1600 MHz, PFD >= 10
-MHz. Measured on zcu216-0 (2026-10-14): relock in ~5 ms, every factor of the
+MHz. Measured on a ZCU216: relock in ~5 ms, every factor of the
 1ch template 312.5 .. 15.625 MHz.
 """
 import time

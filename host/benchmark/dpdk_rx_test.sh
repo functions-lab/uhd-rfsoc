@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # dpdk_rx_test.sh -- the real-link test of the ZCU216 UHD module: stock UHD 4.6
-# apps over the DPDK data plane at 1250 MS/s (1 channel, the max-rate build). Run on wei-duke-wsp5 once the
-# board daemon is up and the 100G link is aligned. Uses sudo (asks once).
+# apps over the DPDK data plane at 1250 MS/s (1 channel, the max-rate build). Run on
+# the host PC once the board daemon is up and the 100G link is aligned. Uses sudo
+# (asks once).
 #
 #   benchmark/dpdk_rx_test.sh
 #   ZCU216_MODULE=$PWD/build/libuhd_zcu216.so benchmark/dpdk_rx_test.sh   # a build-tree copy

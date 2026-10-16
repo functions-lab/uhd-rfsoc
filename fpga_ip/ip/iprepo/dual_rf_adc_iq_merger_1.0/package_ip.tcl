@@ -12,7 +12,7 @@ set core [ipx::current_core]
 set_property name dual_rf_adc_iq_merger $core
 set_property display_name {Dual RF-ADC I/Q AXI Stream Merger} $core
 set_property description {Interleaves 16-bit samples from simultaneous dual RF-ADC I/Q AXI streams; selectable 32-1024 bit inputs produce a double-width output} $core
-set_property vendor_display_name {SPEAR} $core
+set_property vendor_display_name {rfsoc-uhd} $core
 set_property version 1.0 $core
 
 set clk_if [ipx::get_bus_interfaces axis_aclk -of_objects $core]

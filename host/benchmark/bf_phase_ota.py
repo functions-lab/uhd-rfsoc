@@ -21,7 +21,7 @@ measurement. The RF centre (TX and RX NCO) is --freq (default 950 MHz).
     relative to RX 0.
   --reps K repeats everything K times; --retune re-tunes every channel between
   repeats (tests whether the offsets are deterministic across NCO updates,
-  PROTOCOL.md section 3d), otherwise the spread is the measurement noise.
+  Protocol §3d), otherwise the spread is the measurement noise.
 
     zcu216-uhd python3 benchmark/bf_phase_ota.py --args type=zcu216,addr=<board-ip>,channels=16 --mode tx
     zcu216-uhd python3 benchmark/bf_phase_ota.py --args type=zcu216,addr=<board-ip>,channels=16 --mode rx

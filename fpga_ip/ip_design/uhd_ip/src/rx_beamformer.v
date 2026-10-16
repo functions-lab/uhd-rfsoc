@@ -1,7 +1,7 @@
 // rx_beamformer -- RX beamformer between the RF-ADC (rfdc/M_ADC_AXIS, the
 // channel-major beat of all N channels) and the ch_interleave DIR=0 in front
-// of udp_streamer, in an N-channel v49 build (rfsoc_lib/uhd/PROTOCOL.md section
-// 11 is the contract; section 9 the layout).
+// of udp_streamer, in an N-channel v49 build (Protocol §11 is the contract;
+// §9 the layout).
 //
 //   s_axis / m_axis (aclk, the converter AXIS clock)
 //       CHANNEL-MAJOR beat: channel k in bits [k*W +: W], W = BEAT_W/N_CH,

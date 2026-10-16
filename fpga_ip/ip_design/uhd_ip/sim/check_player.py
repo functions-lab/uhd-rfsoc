@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check player.log from tb_udp_player against rfsoc_lib/uhd/PROTOCOL.md 6/7.
+"""Check player.log from tb_udp_player against Protocol §6/7.
 
   D <tick> <hex>     non-zero DAC beats: every burst must come out bit-exact,
                      back-to-back, a timed one on the beat containing its TSF.
@@ -17,7 +17,7 @@ before each quiesce point reports every word the host sent.
 
   check_player.py [--integ] [--tick-step N] [--width W] [--fmt F] player.log
 
---fmt F (0 sc16, 1 sc8, 2 sc12, 3 fc32; PROTOCOL.md 10): the testbench sent
+--fmt F (0 sc16, 1 sc8, 2 sc12, 3 fc32; Protocol §10): the testbench sent
 wire-format packets. Every "W <burst> <slot> <hex>" payload it logged must
 equal the reference packer's bytes for the wire model (otw_ref: UHD's sc12
 pack, numpy float32), and the DAC must play otw_ref's conversion of them

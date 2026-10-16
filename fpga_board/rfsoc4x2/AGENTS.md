@@ -4,9 +4,7 @@
   for N = 1, 2; block design name `rfsoc4x2_v49_<N>ch_qsfp`. Non-Xilinx IP:
   `../../fpga_ip/ip/uhd_ip` and the two I/Q joiners in
   `../../fpga_ip/ip/iprepo` (dual_rf_adc_iq_merger N = 1,
-  dual_channel_rf_adc_iq_packer N = 2). Local to this repository: SPEAR has
-  no RFSoC 4x2 UHD design (it started from SPEAR's ZCU208 v49 port, whose
-  board pins were the 4x2's except the 100G).
+  dual_channel_rf_adc_iq_packer N = 2).
 - Part `xczu48dr-ffvg1517-2-e`, board part `realdigital.org:rfsoc4x2:part0:1.0`
   from `board_files/` (`v49_build.tcl` sets `board.repoPaths`). The PS is the
   board preset (`apply_board_preset`) plus the PL side the design uses:

@@ -1,5 +1,5 @@
 //
-// uhd_zcu216 -- RX streamer (PROTOCOL §4, §5).
+// uhd_zcu216 -- RX streamer (Protocol §4, §5).
 //
 // The DPDK RX lcores (zcu216_dpdk.cpp) fill one single-producer/single-
 // consumer ring of packet slots per UDP port (= NIC queue). recv() works in
@@ -12,9 +12,9 @@
 //     consumer (a private read cursor runs ahead of the published one) until
 //     step 2 is done with them.
 //  2. convert: one fused kernel per stretch (zcu216_kernels.hpp) de-interleaves
-//     the N channels of the wire stream (PROTOCOL §9: slot i = channel i % N,
+//     the N channels of the wire stream (Protocol §9: slot i = channel i % N,
 //     sample i / N) into the requested channels' buffers and converts the OTW
-//     format (PROTOCOL §10) to the CPU format. A large request is cut into
+//     format (Protocol §10) to the CPU format. A large request is cut into
 //     disjoint output ranges that the worker pool (zcu216_pool.hpp) and the
 //     application thread convert in parallel. Then the slots are released.
 //
@@ -147,7 +147,7 @@ private:
             release();
         }
     };
-    //! One stream command the daemon accepted (PROTOCOL §4a), in its
+    //! One stream command the daemon accepted (Protocol §4a), in its
     //! order. A command is its own FPGA burst (one SOB) unless the daemon
     //! joined it to the open num_more chain before it ("link": no SOB, its
     //! samples follow the previous command's seamlessly).
@@ -183,7 +183,7 @@ private:
         uint64_t expected_tsf = 0;
         bool gap_pending      = false;
         uint64_t gap_tsf      = 0;
-        // burst trimming (PROTOCOL §4 granularity) and the command queue (§4a)
+        // burst trimming (Protocol §4 granularity) and the command queue (§4a)
         std::deque<burst> pending; // guarded by _burst_mutex
         chain_t chain        = CH_NONE; // guarded by _burst_mutex
         bool chain_end_valid = false;   // guarded by _burst_mutex
@@ -253,7 +253,7 @@ private:
     std::atomic<bool> _discard{false}; // the stream is discarding (DPDK lcores)
     size_t _nports = 1;
     size_t _bytes_per_cpu_item = 0;
-    const otw_info* _otw = nullptr; // PROTOCOL §10 wire format
+    const otw_info* _otw = nullptr; // Protocol §10 wire format
     std::unique_ptr<rx_kernel> _kern; // wire -> cpu, de-interleave
     std::vector<segment> _segs;       // planned, not yet converted
     size_t _seg_samps = 0;

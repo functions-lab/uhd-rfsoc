@@ -441,7 +441,7 @@
       </xilinx:taxonomies>
       <xilinx:displayName>Dual RF-ADC I/Q AXI Stream Merger</xilinx:displayName>
       <xilinx:definitionSource>package_project</xilinx:definitionSource>
-      <xilinx:vendorDisplayName>SPEAR</xilinx:vendorDisplayName>
+      <xilinx:vendorDisplayName>rfsoc-uhd</xilinx:vendorDisplayName>
       <xilinx:coreRevision>1</xilinx:coreRevision>
       <xilinx:coreCreationDateTime>2026-07-25T13:00:35Z</xilinx:coreCreationDateTime>
     </xilinx:coreExtensions>

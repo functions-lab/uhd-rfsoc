@@ -6,7 +6,7 @@
 #   ADDR=<board-ip> DEV_ARGS=channels=8 benchmark/rate_sweep.sh 375e6 281.25e6 ... 375e6
 #   benchmark/rate_sweep.sh 1000e6:833333333.3333334 100e6:62.5e6
 # A rate <asked>:<expected> checks a request between two rates is met from
-# below: the highest rate at or below it is served (PROTOCOL.md section 8).
+# below: the highest rate at or below it is served (Protocol §8).
 #
 # Environment: ADDR [discovery], DEV_ARGS (e.g. channels=N), CHAN (0), LOG
 # (/tmp/zcu216_rate_sweep). The daemon must run with the template loaded; its

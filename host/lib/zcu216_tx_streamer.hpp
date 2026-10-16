@@ -1,14 +1,14 @@
 //
-// uhd_zcu216 -- TX streamer (PROTOCOL §6, §7).
+// uhd_zcu216 -- TX streamer (Protocol §6, §7).
 //
 // send() cuts the application's samples into packets of up to spp slots
 // (whole 64-byte words of the OTW format and a multiple of N; a tail too short
 // for that is carried to the next call, the last packet of a burst is
 // zero-padded) and builds each one directly in a DPDK mbuf that the TX lcore
 // sends (zcu216_dpdk.cpp). The header is written while planning; the payload
-// -- the N channels interleaved slot by slot (PROTOCOL §9; channels the
+// -- the N channels interleaved slot by slot (Protocol §9; channels the
 // application did not ask for carry zeros) and converted to the OTW format
-// (PROTOCOL §10) by one fused kernel (zcu216_kernels.hpp) -- is filled for a
+// (Protocol §10) by one fused kernel (zcu216_kernels.hpp) -- is filled for a
 // batch of up to 32 packets at once, by the worker pool (zcu216_pool.hpp) and
 // the application thread when the batch is large, just before the batch goes
 // to the TX lcore.
@@ -146,7 +146,7 @@ private:
     //! the TX lcore hands every packet of the async port here (zcu216_dpdk)
     struct status_sink;
     std::unique_ptr<status_sink> _status_sink;
-    //! TX lcore: one async status packet (PROTOCOL §7)
+    //! TX lcore: one async status packet (Protocol §7)
     void _on_status(const uint8_t* pay, uint32_t len);
     void _fc_lock();
     void _fc_unlock();
@@ -185,14 +185,14 @@ private:
     std::vector<std::vector<uint8_t>> _residual;
     size_t _spp = kTxMaxSpp; // slots per packet
     size_t _buf_pkts = 1;    // packets per get_max_num_samps()
-    size_t _max_pkts = 2040; // PROTOCOL §6: FPGA packet slots
+    size_t _max_pkts = 2040; // Protocol §6: FPGA packet slots
     //! untimed-burst prefill (_size_prefill): device args, and the packets held
     std::string _prefill_arg = "auto";
     double _prefill_lead_us = 200, _prefill_us = 1000;
     size_t _prefill_pkts = 32;
     void _size_prefill();
     size_t _bytes_per_cpu_item = 0;
-    const otw_info* _otw = nullptr; // PROTOCOL §10 wire format
+    const otw_info* _otw = nullptr; // Protocol §10 wire format
     std::unique_ptr<tx_kernel> _kern; // cpu -> wire, interleave
     //! 64-byte credit words of a packet of n samples per channel
     size_t _words(size_t n) const

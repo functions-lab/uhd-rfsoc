@@ -8,7 +8,7 @@
 # formats: those backend.link_problem accepts in both directions at full rate.
 # Every build is a run-time-rate template: the two of `make v49-templates`
 # (1ch F2, 2ch F4) serve every normal-family rate. Run with
-# BUILDS=oracle_builds_rfsoc4x2.txt BOARD=xilinx@rfsoc4x2-0 (oracle.sh).
+# BUILDS=oracle_builds_rfsoc4x2.txt BOARD=xilinx@<board> (oracle.sh).
 normal    1  2500000000     rfsoc4x2_v49_1ch_qsfp_f2_fs5000   sc16,sc12,sc8      no
 normal    1  1666666666.7   rfsoc4x2_v49_1ch_qsfp_f3_fs5000   sc16,sc12,sc8      no
 normal    1  1250000000     rfsoc4x2_v49_1ch_qsfp_f4_fs5000   sc16,sc12,sc8,fc32 no

@@ -9,7 +9,7 @@
 # those the daemon accepts for the build at full rate (12.38 GB/s link payload;
 # no RX fc32 on 512-bit-beat builds, sc8 only on 1024-bit ones). The beamforming suite runs on the
 # max-rate 4-channel normal build: channels 0-3 are the over-the-air 4T4R link.
-# hw_design/ZCU216/scripts/v49_ladder.sh builds the same list.
+# fpga_board/zcu216/scripts/v49_ladder.sh builds the same list.
 normal    1  1250000000    zcu216_v49_1ch_qsfp_f2_fs2500    sc16,sc12,sc8,fc32  no
 normal    1  833333333.3   zcu216_v49_1ch_qsfp_f3_fs2500    sc16,sc12,sc8,fc32  no
 normal    1  625000000     zcu216_v49_1ch_qsfp_f4_fs2500    sc16,sc12,sc8,fc32  no

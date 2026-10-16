@@ -14,14 +14,14 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
-# The UHD this module targets is pinned as the git submodule ../uhd (tag
+# The UHD this module targets is pinned as the git submodule host/uhd (tag
 # v4.6.0.0, the EttusResearch/uhd source; build and install it to a prefix and
 # pass -DUHD_ROOT=<prefix> if the distribution has no UHD 4.6). The module must
 # be built against the same 4.6 headers and library the UHD apps load.
 #
 # Pin the UHD the installed tools actually run with. UHDConfig.cmake searches
 # CMAKE_INSTALL_PREFIX (/usr/local) and pkg-config first, so a stray source
-# build there (wei-duke-wsp5 has libuhd 4.7 + headers in /usr/local) would win
+# build there (e.g. a libuhd 4.7 + headers in /usr/local) would win
 # and the module would drag a second libuhd into a 4.6 process: its device
 # registration would land in the wrong library and type=zcu216 would never be
 # found. Pre-seeding the cache variables makes the config keep these.
@@ -35,7 +35,7 @@ file(STRINGS "${UHD_INCLUDE_DIRS}/uhd/version.hpp" _uhd_ver REGEX "#define UHD_V
 string(REGEX REPLACE ".*UHD_VERSION ([0-9]+).*" "\\1" _uhd_ver "${_uhd_ver}")
 get_filename_component(_uhd_real "${UHD_LIBRARIES}" REALPATH)
 message(STATUS "uhd_zcu216: UHD headers ${UHD_INCLUDE_DIRS} (UHD_VERSION ${_uhd_ver}), library ${_uhd_real}; "
-               "pinned source: rfsoc_lib/uhd/uhd (v4.6.0.0)")
+               "pinned source: host/uhd (v4.6.0.0)")
 if(_uhd_ver LESS 4060000 OR _uhd_ver GREATER_EQUAL 4070000 OR NOT _uhd_real MATCHES "libuhd\\.so\\.4\\.6")
     message(FATAL_ERROR "uhd_zcu216 must be built against UHD 4.6 (got ${_uhd_ver}, ${_uhd_real}); set -DUHD_ROOT=")
 endif()
@@ -98,11 +98,12 @@ set_target_properties(uhd_zcu216 PROPERTIES PREFIX "lib" OUTPUT_NAME "uhd_zcu216
 target_link_options(uhd_zcu216 PRIVATE -Wl,--no-undefined)
 
 # The host-side benchmarks (no device, no root):
-# zcu216_kernel_bench: the sample kernels alone, AVX2 vs scalar vs UHD's
-# converter, and the worker pool, on a cache-resident payload;
+# zcu216_kernel_bench: the sample kernels alone, SIMD (AVX-512 / NEON) vs
+# scalar vs UHD's converter, and the worker pool, on a cache-resident payload;
+# zcu216_kernel_check: the SIMD kernels against the scalar ones, bit for bit;
 # zcu216_dram_bench: the same kernels and pool against DRAM at 100GbE rates,
 # with a thread standing in for the NIC's DMA.
-option(ZCU216_BUILD_BENCH "Build zcu216_kernel_bench and zcu216_dram_bench" ON)
+option(ZCU216_BUILD_BENCH "Build zcu216_kernel_bench, zcu216_kernel_check and (x86) zcu216_dram_bench" ON)
 if(ZCU216_BUILD_BENCH)
     add_executable(zcu216_kernel_bench tools/zcu216_kernel_bench.cpp
         lib/zcu216_kernels.cpp lib/zcu216_pool.cpp lib/zcu216_otw.cpp)
@@ -117,8 +118,9 @@ if(ZCU216_BUILD_BENCH)
     target_include_directories(zcu216_kernel_check PRIVATE ${Boost_INCLUDE_DIRS})
     target_link_libraries(zcu216_kernel_check PRIVATE ${UHD_LIBRARIES})
     target_compile_options(zcu216_kernel_check PRIVATE -Wall -Wextra -Wno-unused-parameter -ffp-contract=off)
-    # its NIC thread streams with AVX2 intrinsics directly (the module picks
-    # AVX2 at run time): x86 only
+    # its stand-in NIC thread streams DRAM with 256-bit x86 non-temporal
+    # intrinsics (built with -mavx2; the module's own kernels still pick
+    # AVX-512 or scalar at run time): x86 only
     if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|i.86")
         add_executable(zcu216_dram_bench tools/zcu216_dram_bench.cpp
             lib/zcu216_kernels.cpp lib/zcu216_pool.cpp lib/zcu216_otw.cpp)

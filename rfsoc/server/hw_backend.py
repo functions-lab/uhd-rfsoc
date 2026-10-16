@@ -1,6 +1,6 @@
 """Hardware backend: the real ZCU216 running a zcu216_v49_{N}ch_qsfp build.
 
-RFDC bring-up is the proven pattern of hw_design/ZCU216/CLAUDE.md, nothing else:
+RFDC bring-up is the proven pattern of fpga_board/zcu216/AGENTS.md, nothing else:
 
   1. RFSoCOverlay(bitstream)
   2. NEW_CONFIG carrying the COMPILED geometry, read from the .hwh (sampling
@@ -17,7 +17,7 @@ only touches: the fine-mixer NCO and Nyquist zone (set_*_freq), the ADC DSA
 (set_rx_gain), the DAC VOP (set_tx_gain, only if the IP was built with VOP),
 and the eth100g registers (eth100g.py, tx_beamformer.py, rx_beamformer.py).
 
-Sample rates (PROTOCOL.md §8): a TEMPLATE build (MTS clocking wizard with
+Sample rates (Protocol §8): a TEMPLATE build (MTS clocking wizard with
 dynamic reconfiguration in the .hwh) serves every Gen3 factor >= its built
 one at run time -- `_retune_hw`: MMCM retuned (rfsoc_lib.clk_wiz), factor on
 every enabled block, MTS with the build's MMCM setting and DAC factor put
@@ -26,7 +26,7 @@ build serves its compiled factor only, and another rate is another
 bitstream (zcu216_v49_<N>ch_qsfp[_f<F>]). The channel count N is always a
 build parameter: every zcu216_v49_{N}ch_qsfp*.bit (N = 1, 2, 4, 8, 16)
 streams the first N channels, channel c = RFDC tile c // 4, block c % 4
-(PROTOCOL.md §9). `scan_bitstreams()` reads N from the name and from each
+(Protocol §9). `scan_bitstreams()` reads N from the name and from each
 .hwh the compiled factor, the fabric beat, udp_streamer/udp_player TICK_STEP
 (so the build's own tick rate), the TX buffer, the tx_beamformer and the
 rx_beamformer;
@@ -149,7 +149,7 @@ class Geometry:
             bad.append(f"RfdcTask programs ONE LMX frequency, but the tiles "
                        f"want {sorted(refs)} MHz")
         # Fabric_Freq = SampleRate / factor / (complex samples per clock):
-        # Data_Width / 2 on an interleaved I/Q slice (CLAUDE.md), Data_Width
+        # Data_Width / 2 on an interleaved I/Q slice, Data_Width
         # on a dual-tile ADC slice that carries I or Q alone
         for (t, b), d in self.adc_decim.items():
             w = self.adc_width[(t, b)]
@@ -218,7 +218,7 @@ FABRIC_MIN_MHZ = 10.0
 # MTS attempts before refusing to serve. An attempt can fail its DAC alignment
 # ("Alignment correction delay 31 required exceeds maximum (31) for DAC Tile
 # n", any Target_Latency): F4 on the 1ch and 2ch templates ~35 % of attempts,
-# the 4ch F3 template's bring-up twice in a row (zcu216-0, 2026-10-14/15).
+# the 4ch F3 template's bring-up up to twice in a row (on a ZCU216).
 # The next attempt locks; each is ~0.3 s.
 MTS_ATTEMPTS = 10
 
@@ -699,7 +699,7 @@ class HwBackend(Backend):
         self.rx_decim, self.tx_interp = self.geo.decim, self.geo.interp
         # The 100G data plane streams the FIRST N channels of the board's map
         # (boards.py; ZCU216: ADC / DAC tile c // 4, block c % 4, §9). The
-        # donor enables more slices; only these N are streamed, so UHD sees N
+        # design may enable more slices; only these N are streamed, so UHD sees N
         # RX and N TX channels. (ALL enabled slices get the compiled factor
         # and an NCO from the RfdcTask bring-up, and the readback below checks
         # every one of them.) rx_chans / tx_chans are xrfdc (tile, block).
@@ -753,7 +753,7 @@ class HwBackend(Backend):
             raise RuntimeError(f"RfdcTask.run() raised: {errors[0]!r}")
         # the compiled fabric word counts, held across run-time factor changes
         self._fab_words = self._read_fab_words()
-        # MTS before any sample is trusted (hw_design/ZCU216/CLAUDE.md): the
+        # MTS before any sample is trusted (fpga_board/zcu216/AGENTS.md): the
         # NCOs are programmed after it, as RfdcTask orders them
         self.mts = self._mts_lock()
 
@@ -776,8 +776,7 @@ class HwBackend(Backend):
                                + "; ".join(bad))
         if not (self.readback["adc_clock_ok"] and self.readback["dac_clock_ok"]):
             msg = ("tile clock NOT good: " + str(self.readback["tiles"]) +
-                   " -- see hw_design/ZCU216/CLAUDE.md (zcu216-0's ADC "
-                   "reference clock was dead as of 2026-09-01)")
+                   " -- check the converter reference clocks (LMK04828 / LMX2594)")
             if not self._allow_unlocked:
                 raise RuntimeError(msg + "; refusing (use --allow-unlocked to "
                                    "serve the test pattern anyway)")
@@ -1029,7 +1028,7 @@ class HwBackend(Backend):
     def _switch_channels(self, n: int) -> None:
         # that channel count's DEFAULT build: the sc16-max one (the highest
         # rate whose sc16 stream fits 100GbE), not the fastest -- the sc8-max
-        # builds stream only with otw=sc8 (PROTOCOL.md §9)
+        # builds stream only with otw=sc8 (Protocol §9)
         v = self.variants[(n, default_rate(n, self.rates_for(n)))]
         old = self.variant
         self._switch_to(v, f"CHANNEL CHANGE {old.nch} -> {v.nch} channel(s) "
@@ -1081,7 +1080,7 @@ class HwBackend(Backend):
             # takes ~2-3 s to bring its link back up after the GT restarts.
             # Anything the host sends in that window is dropped by the NIC
             # while the host has already counted it as in flight (lost TX
-            # credit; measured on wei-duke-wsp5, 2026-09-28). So reply only
+            # credit, as measured with a ConnectX-5). So reply only
             # once the far end has had time to come back.
             time.sleep(getattr(self, "reload_settle_s", 0.0))
             pr(f"==== now {v.name}: {v.nch} channel(s) at {v.rate / 1e6:g} MS/s, "
@@ -1176,7 +1175,7 @@ class HwBackend(Backend):
         """Multi-tile sync of every DAC and ADC tile (rfsoc_lib MyMTS.init():
         tile-sync reset, MTS clocking-wizard MMCM lock, mts_dac, mts_adc).
         It must end LOCKED, or the daemon refuses to serve. An attempt can
-        fail (the first after a board reboot on zcu216-0; DAC alignment, see
+        fail (the first after a board reboot on a ZCU216; DAC alignment, see
         MTS_ATTEMPTS), so it runs up to MTS_ATTEMPTS times; the attempt that
         locked is logged. MyMTS takes
         the board's tile mask and reference tile (RFSoC 4x2: tiles 0 and 2,
@@ -1205,10 +1204,10 @@ class HwBackend(Backend):
                      f"ADC tiles {st['adc']['tiles']:#06b} latency {st['adc']['latency']} offset {st['adc']['offset']}")
             return st
         raise RuntimeError(f"MTS NOT locked after {attempts} attempts ({last!r}); refusing "
-                           "to serve -- hw_design/ZCU216/CLAUDE.md")
+                           "to serve -- fpga_board/zcu216/AGENTS.md")
 
     def _tile_clock(self, tile) -> Dict[str, object]:
-        """PLL-enabled tile: PLLLockStatus must be 2. Bypassed tile (the donor
+        """PLL-enabled tile: PLLLockStatus must be 2. Bypassed tile (it
         takes the fs MHz LMX clock straight in): no PLL to lock, so the
         power-up state machine reaching 15 (clock detected, released) is the
         only on-chip evidence."""
@@ -1233,7 +1232,7 @@ class HwBackend(Backend):
         """Tile clock of every tile holding a streamed channel, and the
         interpolation / decimation factor of EVERY enabled block (not only the
         streamed ones: one AXIS clock drives them all, and a block at the
-        wrong factor resamples silently -- hw_design/ZCU216/CLAUDE.md).
+        wrong factor resamples silently -- fpga_board/zcu216/AGENTS.md).
 
         The compiled factors are per IP slice; they are read back per xrfdc
         block (a dual ADC tile's I and Q slices 2k, 2k+1 are block k). A tile
@@ -1309,7 +1308,7 @@ class HwBackend(Backend):
         return out
 
     # -- tuning ------------------------------------------------------------------
-    # One NCO per channel (the fine mixer); PROTOCOL.md §3b folds a tune
+    # One NCO per channel (the fine mixer); Protocol §3b folds a tune
     # request's RF and DSP parts into it. After NCOs change, the phase
     # accumulators of the direction's channels are reset TOGETHER (§3d):
     # XRFdc_ResetNCOPhase on every block, then ONE mixer update event per
@@ -1540,7 +1539,7 @@ class HwBackend(Backend):
                 raise BackendError("stream_setup first")
             # <ch> is ignored: one stream carries every channel (§9), and
             # num_samps is already in slots (the host multiplied by N). The
-            # RTL holds one command: rx_cmdq queues them (PROTOCOL.md §4a).
+            # RTL holds one command: rx_cmdq queues them (Protocol §4a).
             return self.rx_queue().post(mode, int(num_samps), bool(now),
                                         int(time_ticks), bool(cont))
 

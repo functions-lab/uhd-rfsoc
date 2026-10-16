@@ -2,7 +2,7 @@
 
 `Backend` is the interface the control protocol (protocol.py) drives; its
 implementation is `HwBackend` (hw_backend.py), the real board: pynq overlay,
-RfdcTask bring-up, eth100g streamer + CMAC. It follows the FPGA semantics (PROTOCOL.md §4 "Granularity", §9, §10):
+RfdcTask bring-up, eth100g streamer + CMAC. It follows the FPGA semantics (Protocol §4 "Granularity", §9, §10):
 spp is a whole number of 64-byte words of the OTW format (16 sc16, 32 sc8, 64
 sc12, 8 fc32 slots) and of N, num_done bursts are rounded UP to that granule,
 a timed start begins at the fabric beat containing the requested time.
@@ -41,7 +41,7 @@ STREAM_MODES = ("start_cont", "stop_cont", "num_done", "num_more")
 DSA_MAX_DB, DSA_STEP_DB = 27.0, 1.0          # Gen3 production silicon DSA
 VOP_MIN_UA, VOP_MAX_UA = 2250, 40500         # Gen3 DAC VOP current range
 NCO_BITS = 48
-# The v49 build matrix: hw_design/ZCU216/block_designs/zcu216_v49_qsfp/zcu216_v49_qsfp.tcl
+# The v49 build matrix: fpga_board/zcu216/block_designs/zcu216_uhd_v49/zcu216_uhd_v49.tcl
 # `v49_geometry`, N -> ((converter factor F, RFDC Data_Width), ...),
 # the unsuffixed bitstream (zcu216_v49_<N>ch_qsfp.bit) first, the others
 # zcu216_v49_<N>ch_qsfp_f<F>.bit. Every build samples at 2400 MS/s, so the
@@ -96,13 +96,13 @@ def v49_data_width(nch: int, factor: int) -> int:
 def link_problem(fmt: str, nch: int, rate: float, beat_bits: int = 0,
                  direction: str = "rx") -> Optional[str]:
     """Why OTW format `fmt` cannot carry an N-channel stream at `rate` per
-    channel (PROTOCOL.md §10), or None if it can:
+    channel (Protocol §10), or None if it can:
     * the aggregate wire rate N x rate x bytes/slot exceeds the 100GbE
       payload capacity (vrt.LINK_PAYLOAD_BYTES_PER_S);
     * RX fc32 on a 512-bit-beat build (udp_streamer would need two FIFO words
       per clock: it drops every packet);
     * anything but sc8 on a 1024-bit-beat build (the sc8max 8ch F3 / 16ch F6
-      builds: one beat is exactly one sc8 wire word per clock, PROTOCOL.md §10)."""
+      builds: one beat is exactly one sc8 wire word per clock, Protocol §10)."""
     need = vrt.otw_wire_rate(fmt, int(nch) * float(rate))
     if need > vrt.LINK_PAYLOAD_BYTES_PER_S:
         return (f"otw={fmt}: {int(nch)} ch x {float(rate) / 1e6:g} MS/s x "
@@ -165,7 +165,7 @@ def _rfsoc_beamformer_class():
 
 def steering_weights(nch: int, angle_deg: float, carrier_freq: float,
                      element_spacing: float) -> List[Tuple[int, int]]:
-    """PROTOCOL.md §11: Q1.15 weights (re, im) of a ULA steered to
+    """Protocol §11: Q1.15 weights (re, im) of a ULA steered to
     `angle_deg`, exactly rfsoc_lib's Beamformer.compute_weights_fixed_point."""
     bf = _rfsoc_beamformer_class()(num_channels=int(nch),
                                    element_spacing=float(element_spacing),
@@ -378,7 +378,7 @@ class Backend(ABC):
 
     # -- rates ---------------------------------------------------------------
     # A rate is a converter factor: of a template build at run time, or of a
-    # separate fixed bitstream (PROTOCOL.md §8). RX and TX share the factor,
+    # separate fixed bitstream (Protocol §8). RX and TX share the factor,
     # so the two directions always run at the same rate.
     @property
     def samp_rate(self) -> float:
@@ -430,7 +430,7 @@ class Backend(ABC):
 
     # -- tuning / gain -----------------------------------------------------
     # Tuning is limited to the first Nyquist zone, 0 .. fs/2 of the raw
-    # converter rate (user requirement 2026-10-01): the fine-mixer NCO runs
+    # converter rate (a design choice): the fine-mixer NCO runs
     # within +-fs/2, and zones 2+ (undersampling, mirrored spectrum, the DAC's
     # sinc roll-off) are not offered. A request outside is clamped.
     def rx_freq_range(self, ch: int) -> Tuple[float, float]:
@@ -463,7 +463,7 @@ class Backend(ABC):
     def get_tx_gain(self, ch: int) -> float: ...
 
     # -- tune requests: RF "LO" + DSP offset folded into the one NCO ------------
-    # PROTOCOL.md §3b. A UHD tune request has an RF part (the frontend's LO)
+    # Protocol §3b. A UHD tune request has an RF part (the frontend's LO)
     # and a DSP part (the DDC/DUC CORDIC offset). The RFDC has ONE mixer per
     # channel, the fine NCO, so the daemon keeps the two parts and programs
     # the NCO to the frequency they make together, with UHD's signs:
@@ -551,7 +551,7 @@ class Backend(ABC):
     @abstractmethod
     def stream_cmd(self, ch: int, mode: str, num_samps: int, now: bool,
                    time_ticks: int, cont: bool = False) -> str:
-        """Queue one RX stream command (PROTOCOL.md §4a). -> rx_cmdq.NEW
+        """Queue one RX stream command (Protocol §4a). -> rx_cmdq.NEW
         (its own burst) or rx_cmdq.CONT (it continued an open num_more
         chain: no new SOB)."""
 
@@ -570,7 +570,7 @@ class Backend(ABC):
     @abstractmethod
     def stop_streaming(self) -> None: ...
 
-    # -- TX (host -> DAC), PROTOCOL.md §6-7 -----------------------------------
+    # -- TX (host -> DAC), Protocol §6-7 -----------------------------------
     tx_buf_words: int = 0
     fc_interval: int = 0
 
@@ -588,7 +588,7 @@ class Backend(ABC):
     @abstractmethod
     def is_streaming(self) -> bool: ...
 
-    # -- TX and RX beamformers (PROTOCOL.md §11, N >= 2 builds) ----------------
+    # -- TX and RX beamformers (Protocol §11, N >= 2 builds) ----------------
     # The daemon keeps each beamformer's state: enable, the ULA geometry for
     # angle steering, the last angle (None after raw weights), the weights and
     # (RX) the SHIFT. It is re-applied after every reload to a build that has

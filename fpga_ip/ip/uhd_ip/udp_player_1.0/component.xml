@@ -510,7 +510,7 @@
         <spirit:parameters>
           <spirit:parameter>
             <spirit:name>viewChecksum</spirit:name>
-            <spirit:value>2ef32c92</spirit:value>
+            <spirit:value>5129b478</spirit:value>
           </spirit:parameter>
         </spirit:parameters>
       </spirit:view>
@@ -526,7 +526,7 @@
         <spirit:parameters>
           <spirit:parameter>
             <spirit:name>viewChecksum</spirit:name>
-            <spirit:value>2ef32c92</spirit:value>
+            <spirit:value>5129b478</spirit:value>
           </spirit:parameter>
         </spirit:parameters>
       </spirit:view>
@@ -1285,7 +1285,7 @@
       <spirit:file>
         <spirit:name>src/udp_player.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
-        <spirit:userFileType>CHECKSUM_2ef32c92</spirit:userFileType>
+        <spirit:userFileType>CHECKSUM_5129b478</spirit:userFileType>
         <spirit:userFileType>IMPORTED_FILE</spirit:userFileType>
       </spirit:file>
     </spirit:fileSet>
@@ -1307,7 +1307,7 @@
       </spirit:file>
     </spirit:fileSet>
   </spirit:fileSets>
-  <spirit:description>Host UDP/VRT sample packets from a 100G CMAC -> RFDC DAC: URAM buffer (+ optional block-RAM play-out chain), timed playout, flow control, ARP and async status, over-the-wire format conversion (sc16/sc8/sc12/fc32). Register map in the HDL header; wire format rfsoc_lib/uhd/PROTOCOL.md.</spirit:description>
+  <spirit:description>Host UDP/VRT sample packets from a 100G CMAC -> RFDC DAC: URAM buffer (+ optional block-RAM play-out chain), timed playout, flow control, ARP and async status, over-the-wire format conversion (sc16/sc8/sc12/fc32). Register map in the HDL header; wire format: the Protocol (top AGENTS.md).</spirit:description>
   <spirit:parameters>
     <spirit:parameter>
       <spirit:name>TX_BUF_WORDS</spirit:name>
@@ -1373,15 +1373,15 @@
         <xilinx:xpmLibrary>XPM_CDC</xilinx:xpmLibrary>
         <xilinx:xpmLibrary>XPM_FIFO</xilinx:xpmLibrary>
       </xilinx:xpmLibraries>
-      <xilinx:vendorDisplayName>SPEAR</xilinx:vendorDisplayName>
+      <xilinx:vendorDisplayName>rfsoc-uhd</xilinx:vendorDisplayName>
       <xilinx:coreRevision>1</xilinx:coreRevision>
-      <xilinx:coreCreationDateTime>2026-10-09T19:17:48Z</xilinx:coreCreationDateTime>
+      <xilinx:coreCreationDateTime>2026-10-16T21:23:44Z</xilinx:coreCreationDateTime>
     </xilinx:coreExtensions>
     <xilinx:packagingInfo>
       <xilinx:xilinxVersion>2021.1</xilinx:xilinxVersion>
       <xilinx:checksum xilinx:scope="busInterfaces" xilinx:value="398eed6c"/>
       <xilinx:checksum xilinx:scope="memoryMaps" xilinx:value="5c66d603"/>
-      <xilinx:checksum xilinx:scope="fileGroups" xilinx:value="85de2d84"/>
+      <xilinx:checksum xilinx:scope="fileGroups" xilinx:value="a5ab2d11"/>
       <xilinx:checksum xilinx:scope="ports" xilinx:value="b9c804a0"/>
       <xilinx:checksum xilinx:scope="hdlParameters" xilinx:value="6bc98fc3"/>
       <xilinx:checksum xilinx:scope="parameters" xilinx:value="74f946b9"/>

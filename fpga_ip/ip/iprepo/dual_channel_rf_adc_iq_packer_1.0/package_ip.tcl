@@ -12,7 +12,7 @@ set core [ipx::current_core]
 set_property name dual_channel_rf_adc_iq_packer $core
 set_property display_name {Dual-Channel RF-ADC I/Q AXI Stream Packer} $core
 set_property description {Interleaves two simultaneous dual RF-ADC I/Q channel pairs into a single four-times-width lossy capture stream} $core
-set_property vendor_display_name {SPEAR} $core
+set_property vendor_display_name {rfsoc-uhd} $core
 set_property version 1.0 $core
 
 set clk_if [ipx::get_bus_interfaces axis_aclk -of_objects $core]

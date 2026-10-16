@@ -24,8 +24,8 @@ class RfdcTask(OverlayTask):
         self.set_board_rules()
 
     def set_board_rules(self):
-        if self.board in ("RFSoC4x2", "ZCU208"):
-            # Both boards wire only 2 DAC tiles (228, 230) and 2 ADC tiles
+        if self.board == "RFSoC4x2":
+            # The board wires only 2 DAC tiles (228, 230) and 2 ADC tiles
             # (224, 226) to SMA; mask out the unused middle tiles (#1, #3)
             # so init() skips powering them and avoids PLL timeout.
             self.my_rfdc.rfdc_status.dac_tile_mask_out[1] = True
@@ -34,9 +34,9 @@ class RfdcTask(OverlayTask):
             self.my_rfdc.rfdc_status.adc_tile_mask_out[3] = True
 
     def set_external_clocks(self):
-        # ZCU216, ZCU208, and RFSoC4x2 share the LMK04828 + LMX2594 chain; only
-        # the xrfclk TICS data subdirectory differs per board.
-        if self.board not in ("ZCU216", "ZCU208", "RFSoC4x2"):
+        # ZCU216 and RFSoC4x2 share the LMK04828 + LMX2594 chain; only the
+        # xrfclk TICS data subdirectory differs per board.
+        if self.board not in ("ZCU216", "RFSoC4x2"):
             raise RuntimeError(f"RFSoC board {self.board} unsupported.")
 
         lmk_config = LMK04828ClkConfig(

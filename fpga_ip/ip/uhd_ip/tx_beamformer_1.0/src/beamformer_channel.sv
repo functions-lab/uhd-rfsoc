@@ -1,6 +1,6 @@
 //==============================================================================
 // Module      : beamformer_channel
-// Project     : SPEAR-hw / beamformer_v1_0
+// Project     : rfsoc-uhd / fpga_ip/ip_design/uhd_ip (part of beamformer_v1_0)
 //------------------------------------------------------------------------------
 // Description :
 //   Single-channel complex weight multiplier ("phase shifter") used as the

@@ -429,7 +429,7 @@ void eal_init_once(const uhd::device_addr_t& args,
     if (not no_huge and free_hugepages() == 0)
         throw uhd::runtime_error("ZCU216: no free hugepages for DPDK "
                                  "(/sys/kernel/mm/hugepages/*/free_hugepages); run "
-                                 "rfsoc_lib/uhd/host/setup_dpdk.sh");
+                                 "host/setup_dpdk.sh");
 
     g.argv_store.clear();
     g.argv_store.push_back("uhd_zcu216");
@@ -529,7 +529,7 @@ public:
         int rc = rte_eth_dev_info_get(id, &info);
         if (rc != 0)
             throw uhd::runtime_error("ZCU216: rte_eth_dev_info_get(" + name + "): " + rte_err(rc));
-        // nq data queues + the TX status queue (PROTOCOL §7, polled by the TX lcore)
+        // nq data queues + the TX status queue (Protocol §7, polled by the TX lcore)
         const uint16_t nrxq = uint16_t(nq + 1);
         if (std::string(info.driver_name ? info.driver_name : "") == "net_tap" and nrxq > 4)
             // DPDK 23.11's tap PMD puts one fd per RX and TX queue into an
@@ -572,7 +572,8 @@ public:
         // fills them again, so recv() reads them from cache and their dead
         // dirty lines are overwritten instead of written back to DRAM: with
         // the LIFO pool, 2 x 512 (8 MB) passes 16ch sc16 RX at 12 GB/s
-        // strict on wei-duke-wsp5 (15 MB L3, one DIMM), 2 x 1024 does not.
+        // strict on a 6-core Xeon test host (15 MB L3, one DIMM), 2 x 1024
+        // does not.
         const uint16_t nrx_def = uint16_t(std::max(128, 1024 / std::max(1, int(nq))));
         uint16_t nrx = rxd ? rxd : nrx_def, ntx = txd;
         rte_eth_dev_adjust_nb_rx_tx_desc(id, &nrx, &ntx);
@@ -693,8 +694,8 @@ const cpu_layout& default_layout()
             cores.push_back(g);
         }
         std::sort(cores.begin(), cores.end());
-        // heterogeneous CPUs (arm big.LITTLE, e.g. the DGX Spark's Cortex-X925
-        // + A725: /sys/.../cpu_capacity ~1000 vs ~720): the fast cores first
+        // heterogeneous CPUs (arm big.LITTLE, e.g. Cortex-X925 + Cortex-A725:
+        // /sys/.../cpu_capacity ~1000 vs ~720): the fast cores first
         // (CPU order kept), so the application, the lcores and the workers get them;
         // workers only on cores within 90 % of the fastest (the little ones
         // stay with the system). Uniform capacity (x86): unchanged.
@@ -734,7 +735,7 @@ const cpu_layout& default_layout()
         // application thread, idle as an lcore after rte_eal_init), and a
         // conversion worker on every remaining core: recv()/send() at 100GbE
         // rates are bound by the workers' memory traffic, and the measured
-        // best on wei-duke-wsp5 (6 cores, one DIMM) gives them 4 cores
+        // best on a 6-core Xeon test host (one DIMM) gives them 4 cores
         // (main/app 0+6, lcores 1+7, workers 2,3,4,5; the old layout, app on
         // the last core and 3 workers, lost ~1 GB/s of RX at sc12)
         if (k < cores.size()) {
@@ -1252,7 +1253,7 @@ public:
     std::atomic<bool> stop{false}, abort{false};
     std::atomic<uint64_t> pkts{0}, stalls{0};
     rte_eth_stats st0{};
-    // TX status (PROTOCOL §7): flow -> status queue, polled by the TX lcore
+    // TX status (Protocol §7): flow -> status queue, polled by the TX lcore
     tx_status_sink* sink = nullptr;
     rte_flow* sflow      = nullptr;
     uint16_t squeue = 0, sport = 0;
@@ -1560,7 +1561,7 @@ std::unique_ptr<tx_session> start_tx(const port_sptr& p,
     auto* udp           = reinterpret_cast<rte_udp_hdr*>(s->hdr + 34);
     udp->src_port       = rte_cpu_to_be_16(ep.src_port);
     udp->dst_port       = rte_cpu_to_be_16(ep.dst_port);
-    udp->dgram_cksum    = 0; // PROTOCOL §4/§6: UDP checksum 0
+    udp->dgram_cksum    = 0; // Protocol §4/§6: UDP checksum 0
 
     {
         std::lock_guard<std::mutex> l(G().m);

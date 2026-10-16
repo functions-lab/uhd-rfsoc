@@ -11,8 +11,8 @@ Output frequency = FOD frequency (DPLL_CTRL_n.DPLL_FOD_FREQ, M/N Hz) divided by
 OUTPUT_n.OUT_DIV. The FODs run off the system APLL, so nothing comes out while
 STATUS.SYS_APLL_STATUS says unlocked.
 
-Bus facts (measured on zcu216-0, 2026-09-26)
---------------------------------------------
+Bus facts (measured on a ZCU216)
+--------------------------------
 * /dev/i2c-10 = channel 4 of the TCA9548A at 1-0074 (PS I2C1). The bus number
   is resolved from sysfs at run time; do not hard-code it.
 * 7-bit address **0x5B**. UG1390 says 0x58, but 0x58/0x59/0x5A NACK and
@@ -23,7 +23,7 @@ Bus facts (measured on zcu216-0, 2026-09-26)
   page can read that register. So the only reads that need no bus write at
   all are:
       page register (offset 0xFC..0xFF)
-      whatever page is currently selected (0xC0 on zcu216-0: GENERAL_STATUS
+      whatever page is currently selected (0xC0 on a ZCU216 after boot: GENERAL_STATUS
       and STATUS)
   A read is "offset byte, repeated start, read" (programming guide fig. 2).
   The offset byte loads the port's address pointer and writes no register.
@@ -61,8 +61,7 @@ Q7/Q11 frequencies the file would produce. If those are not `freq_mhz`, it
 refuses, so a wrong file fails without touching the bus. `dry_run=True` stops
 after printing every I2C transaction.
 
-The 156.25 MHz register file is `gt_refclk_8a34001_156M25.txt` in this
-directory. It is Xilinx's VCK190/VPK120 default 8A34001 design
+The 156.25 MHz register file is `xrfclk/ZCU216/gt_refclk_8a34001_156M25.txt`. It is Xilinx's VCK190/VPK120 default 8A34001 design
 (system-controller-app, BIT/clock_files/8A34001/8A34001_2020-0318_156MHz.txt:
 54 MHz crystal, XO_DPLL 38.4 MHz, FOD0-3/5/6 at 625 MHz, Q0-Q10 at 156.25 MHz)
 with 14 bytes changed, all listed in the file header:
@@ -79,9 +78,9 @@ was found in public: the ASIAA "8A34001_20220215_all_156M25.txt" and the
 BoardUI clockFiles are not downloadable. If you get one, pass
 `regfile=`.
 
-Shared-board rules: use only the kernel's muxed adapter (never write the TCA9548
-control register), never touch the TCA6416 0x20 P1.5 reset line, and never
-run the write path while other agents need the board unless they agree.
+Rules: use only the kernel's muxed adapter (never write the TCA9548 control
+register), never touch the TCA6416 0x20 P1.5 reset line, and never run the
+write path while the 100G link is in use (it restarts the GT refclk).
 """
 from __future__ import annotations
 
@@ -603,7 +602,7 @@ def program_gt_refclk(freq_mhz: float = 156.25, dry_run: bool = False,
     """Program 8A34001 Q7 and Q11 to `freq_mhz` from a register file.
 
     It checks the file before touching the bus: the file must drive Q7 and
-    Q11 at `freq_mhz` from a chip at defaults, which is the state zcu216-0
+    Q11 at `freq_mhz` from a chip at defaults, which is the state a ZCU216
     boots in. `dry_run=True` prints every I2C transaction and returns without
     opening the bus. Otherwise it programs, waits for the system APLL to lock,
     and reads Q7/Q11 back. If the result is wrong it raises RuntimeError.
@@ -615,7 +614,7 @@ def program_gt_refclk(freq_mhz: float = 156.25, dry_run: bool = False,
         raise FileNotFoundError(f"no 8A34001 register file for {freq_mhz} MHz ({regfile})")
 
     writes = parse_register_file(regfile)
-    v520 = False                     # zcu216-0 runs firmware 4.8.0; re-checked below
+    v520 = False                     # the ZCU216's U409 runs firmware 4.8.0; re-checked below
     pred = predicted_outputs(writes, v520)
     bad = {q: p["freq_mhz"] for q, p in pred.items()
            if p["freq_mhz"] is None or abs(p["freq_mhz"] - freq_mhz) > 1e-6}

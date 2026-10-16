@@ -9,12 +9,12 @@
 # the build's fabric clock, s_axi is 100 MHz. Builds in build_rbf_<N>_<W>_<ps>/.
 set -euo pipefail
 cd "$(dirname "$0")"
-VIVADO_ROOT=${VIVADO_ROOT:-$HOME/Xilinx/Vivado/2021.1}
+VIVADO_ROOT=${VIVADO_ROOT:-$(v=$(command -v vivado) && dirname "$(dirname "$(readlink -f "$v")")" || echo /tools/Xilinx/Vivado/2021.1)}
 source "$VIVADO_ROOT/settings64.sh"
 XPM=$VIVADO_ROOT/data/ip/xpm
 HERE=$PWD
 
-# N:BEAT_W:aclk period (ps) -- the zcu216_v49_qsfp.tcl v49_geometry rows with N >= 2
+# N:BEAT_W:aclk period (ps) -- the zcu216_uhd_v49.tcl v49_geometry rows with N >= 2
 # (1024: the sc8max 8ch F3 / 16ch F6 builds at 187.5 MHz)
 COMBOS=${COMBOS:-"2:128:3333 2:256:3333 4:128:3333 4:256:3333 4:512:3333 \
 8:256:6667 8:256:3333 8:512:3333 16:512:16667 16:512:6667 16:512:3333 \

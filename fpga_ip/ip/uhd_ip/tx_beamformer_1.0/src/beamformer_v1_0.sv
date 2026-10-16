@@ -1,6 +1,6 @@
 //==============================================================================
 // Module      : beamformer_v1_0
-// Project     : SPEAR-hw / ip_design
+// Project     : rfsoc-uhd / fpga_ip/ip_design/uhd_ip
 //------------------------------------------------------------------------------
 // Description :
 //   Digital beamforming front end for up to 16 antenna channels (NUM_CH, see
@@ -57,11 +57,9 @@
 //   rounding and overflow behaviour.
 //
 // Verification:
-//   sim/beamformer_v1_0_tb.sv drives all 33 AXI-Stream interfaces (1 weight +
-//   16 in + 16 out) with VIP agents and scoreboards every channel against a
-//   golden complex-multiply model.  Run with `make` (Vivado xvlog/xelab/xsim).
-//   All 480 driven beats are scored, with the sinks held continuously ready as
-//   the design requires.
+//   Inside tx_beamformer: sim/run_sim_bf.sh (`make sim-bf`) checks every beat
+//   bit-exactly against check_bf.py's model of this arithmetic, for every
+//   v49 (N_CH, BEAT_W) geometry.
 //==============================================================================
 `timescale 1 ns / 1 ps
 

@@ -1,6 +1,6 @@
 // tb_udp_streamer -- drives udp_streamer and dumps every emitted frame.
 // Frames are checked by check_frames.py (Ethernet/IPv4/UDP/VRT, checksums,
-// timestamps, payload), so the RTL is held to rfsoc_lib/uhd/PROTOCOL.md.
+// timestamps, payload), so the RTL is held to the Protocol (top AGENTS.md).
 //
 // ADC data model (pattern off): the slot with timestamp t is
 //   I = t*3 (16 bit), Q = t ^ 16'h5A5A.
@@ -9,7 +9,7 @@
 // TSF (check_frames.py --tick-step --width).
 //
 // S_WIDTH (xelab -generic_top, 128/256/512): the ADC clock follows the
-// PROTOCOL.md 9 table (300 / 150 / 60 MHz) and time offsets in the sequence
+// Protocol §9 table (300 / 150 / 60 MHz) and time offsets in the sequence
 // scale with the beat so the scenarios keep their length in adc_clk cycles.
 //
 // FMT (xelab -generic_top, 0 sc16 / 1 sc8 / 2 sc12 / 3 fc32): the FMT register

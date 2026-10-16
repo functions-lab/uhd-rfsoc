@@ -20,8 +20,8 @@ class MyMTS:
         self.CLOCKWIZARD_LOCK_ADDRESS = 0x0004
         self.CLOCKWIZARD_RESET_ADDRESS = 0x0000
         self.CLOCKWIZARD_RESET_TOKEN = 0x000A
-        if self.board in ("RFSoC4x2", "ZCU208"):
-            # Both expose only tiles 228/230 (DAC) and 224/226 (ADC) — 2-of-4 mask
+        if self.board == "RFSoC4x2":
+            # only tiles 228/230 (DAC) and 224/226 (ADC) are used: 2-of-4 mask
             self.ACTIVE_DAC_TILES = 0b0101
             self.ACTIVE_ADC_TILES = 0b0101
             self.DAC_REF_TILE = 2

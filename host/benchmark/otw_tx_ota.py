@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""otw_tx_ota.py -- TX OTW converter check over the air (PROTOCOL.md section 10).
+"""otw_tx_ota.py -- TX OTW converter check over the air (Protocol §10).
 
 There is no digital TX -> RX loopback, so each TX wire format is compared
 through the RF link: TX channel --tx sends a known two-tone burst (timed), every

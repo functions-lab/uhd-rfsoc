@@ -1,4 +1,4 @@
-// tb_udp_player -- plays the UHD host against udp_player (PROTOCOL.md 6/7).
+// tb_udp_player -- plays the UHD host against udp_player (Protocol §6/7).
 //
 // The testbench builds host frames (ARP requests, VRT sample packets) and
 // feeds them to s_axis_rx the way a CMAC does: no tready, random tvalid gaps
@@ -25,10 +25,10 @@
 // (M_WIDTH/32)*TICK_STEP per beat, packet TSFs by TICK_STEP per slot, and
 // every time offset in the sequence is scaled by TICK_STEP*M_WIDTH/128 so the
 // scenarios keep the same length in adc_clk cycles. The ADC clock follows the
-// PROTOCOL.md 9 table (300 / 150 / 60 MHz for 128 / 256 / 512 bits).
+// Protocol §9 table (300 / 150 / 60 MHz for 128 / 256 / 512 bits).
 // check_player.py --tick-step/--width must match.
 //
-// FMT (xelab -generic_top; 0 sc16, 1 sc8, 2 sc12, 3 fc32; PROTOCOL.md 10): the
+// FMT (xelab -generic_top; 0 sc16, 1 sc8, 2 sc12, 3 fc32; Protocol §10): the
 // player's FMT register. Packets then carry wire-format samples (model below,
 // mirrored in check_player.py) whose payload bytes are logged as
 //   W <burst> <first slot> <hex>

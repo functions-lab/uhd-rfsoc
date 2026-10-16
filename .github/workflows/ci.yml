@@ -1,0 +1,93 @@
+# CI: everything that runs without a board. The host module on x86_64 and
+# aarch64 (Ubuntu 24.04: UHD 4.6, DPDK 23.11), its SIMD kernels against the
+# scalar ones bit for bit, the Python and shell sources, the GNU Radio
+# flowgraphs. FPGA builds need Vivado and are not run here.
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  host:
+    name: host module (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install UHD 4.6 and DPDK
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake g++ pkg-config libboost-dev libuhd-dev uhd-host libdpdk-dev
+      - name: Configure
+        run: cmake -S host -B host/build -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build host/build -j"$(nproc)"
+      - name: The module loads (every symbol resolves)
+        run: python3 -c "import ctypes; ctypes.CDLL('host/build/libuhd_zcu216.so', mode=ctypes.RTLD_GLOBAL | 2)"
+      - name: "uhd_find_devices runs with the module loaded (no board: none found)"
+        run: |
+          UHD_MODULE_PATH=$PWD/host/build/libuhd_zcu216.so uhd_find_devices --args type=zcu216 2>&1 | tee find.log || true
+          ! grep -i -E 'error|failed|exception' find.log
+      - name: Kernels, SIMD against scalar
+        run: |
+          grep -o -m1 -E 'avx512(f|bw)|asimd' /proc/cpuinfo | sort -u || true
+          host/build/zcu216_kernel_check
+      - name: Package
+        run: |
+          d=rfsoc-uhd-host-ubuntu24.04-${{ matrix.arch }}
+          mkdir -p $d
+          cp host/build/libuhd_zcu216.so host/build/zcu216-uhd \
+             host/build/zcu216_kernel_check host/build/zcu216_kernel_bench \
+             host/setup_cx5.sh host/setup_dpdk.sh $d/
+          tar czf $d.tar.gz $d
+      - uses: actions/upload-artifact@v4
+        with:
+          name: host-${{ matrix.arch }}
+          path: rfsoc-uhd-host-ubuntu24.04-${{ matrix.arch }}.tar.gz
+
+  sources:
+    name: Python and shell sources
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python compiles
+        run: python3 -m compileall -q -x '/(uhd|gnuradio/gnuradio)/' rfsoc host
+      - name: The daemon parses its arguments without a board
+        run: python3 rfsoc/server/zcu216_uhd_daemon.py --help > /dev/null
+      - name: Shell scripts parse
+        run: |
+          for f in $(git ls-files '*.sh') host/tools/zcu216-uhd; do bash -n "$f"; done
+      - name: shellcheck (errors)
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends shellcheck
+          shellcheck -S error $(git ls-files '*.sh') host/tools/zcu216-uhd
+
+  gnuradio:
+    name: GNU Radio flowgraphs
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install GNU Radio 3.10
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gnuradio
+      - name: Every flowgraph compiles
+        run: |
+          mkdir -p out
+          for g in host/gnuradio/grc/*.grc; do echo "$g"; grcc -o out "$g"; done
+          python3 -m py_compile out/*.py

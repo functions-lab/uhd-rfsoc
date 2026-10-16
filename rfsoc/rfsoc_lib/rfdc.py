@@ -18,8 +18,7 @@ def nco_on_sysref():
     ZCU216_CONFIG['NCOEventSource']: "TILE" (default) applies them per tile
     as they are written; "SYSREF" holds them until setup() pulses SYSREF into
     the converters, so every tile takes its NCO frequency and phase reset on
-    the same edge (the v47 beamforming designs' cross-tile phase alignment;
-    the config/ZCU216 JSON files select it). SYSREF must be running for it --
+    the same edge (cross-tile phase alignment). SYSREF must be running for it --
     with no SYSREF an update never lands.
     """
     src = str(ZCU216_CONFIG.get('NCOEventSource', 'TILE')).upper()
@@ -35,7 +34,7 @@ class MyRFdcStatus:
         # Keep the rfdc handle: IPStatus must be RE-READ for anything dynamic.
         # This used to snapshot IPStatus once at construction, so TileState was
         # frozen at whatever it was when the task object was built -- measured
-        # on zcu216-0: state read 15 on every tile immediately after
+        # on a ZCU216: state read 15 on every tile immediately after
         # tile.ShutDown(), and is_ready() therefore returned True on any warm
         # board, silently skipping set_external_clocks() + init() (the only
         # path to DynamicPLLConfig). Enable masks are static configuration and
@@ -359,7 +358,7 @@ class MyRFdc:
             for tile in self.adc_tiles:
                 if self.rfdc_status.get_adc_tile_enb(tile.tile_id) and                         not int(tile.PLLConfig.get('Enabled', 0)):
                     return False
-            # ENABLED IS A PROGRAMMED FLAG, NOT A LOCK. Measured on zcu216-0:
+            # ENABLED IS A PROGRAMMED FLAG, NOT A LOCK. Measured on a ZCU216:
             # every ADC tile read PLLConfig Enabled=1 while PLLLockStatus was 1
             # (XRFDC_PLL_UNLOCKED) -- the tile free-ran at an arbitrary rate and
             # the fabric interface FIFO emitted 48-sample stale pages (both FIFO

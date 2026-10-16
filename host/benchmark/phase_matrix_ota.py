@@ -15,7 +15,7 @@ the tone's complex amplitude at RX r. Then
     offsets were purely the hardware chains, every RX would see the same TX
     offsets (and vice versa) and g would be ~0.
 --reps K repeats the matrix (spread = noise), --retune re-tunes every channel
-between repeats (NCO determinism, PROTOCOL.md section 3d). --save FILE writes
+between repeats (NCO determinism, Protocol §3d). --save FILE writes
 the matrices (numpy .npz) so runs before and after a bitstream reload can be
 compared with --compare FILE.
 

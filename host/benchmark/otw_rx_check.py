@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""otw_rx_check.py -- bit-exact check of the FPGA RX OTW converter (PROTOCOL.md
-sections 5, 9, 10) on every channel of an N-channel build, through stock UHD.
+"""otw_rx_check.py -- bit-exact check of the FPGA RX OTW converter (Protocol
+§5, §9, §10) on every channel of an N-channel build, through stock UHD.
 
 Streams the section-5 test pattern (device arg pattern=1) as timed num_done
 bursts into a preallocated buffer, writes one file per channel and burst in the

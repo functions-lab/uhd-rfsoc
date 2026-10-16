@@ -1,6 +1,6 @@
 // ch_interleave -- re-order the 32-bit slots of one AXIS beat between the
 // block design's per-channel layout and the sample-major layout of the UDP
-// data plane (rfsoc_lib/uhd/PROTOCOL.md section 9).
+// data plane (Protocol §9).
 //
 // A slot is one complex int16 sample (I in [15:0], Q in [31:16]). With
 // S = BEAT_W / (32*N_CH) samples of each channel per beat:

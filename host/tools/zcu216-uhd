@@ -17,8 +17,9 @@
 #               big.LITTLE; dpdk::default_layout): EAL main on C0, the RX and
 #               TX polling lcores on C1 (C2), one conversion worker per further
 #               core, and it pins the application to the CPUs those leave free
-#               (wei-duke-wsp5: main/app 0+6, lcores 1+7, workers 2,3,4,5;
-#               DGX Spark: app 5,8, lcores 6,7, workers 9,15-19). So by default
+#               (6-core / 12-thread x86: main/app 0+6, lcores 1+7, workers
+#               2,3,4,5; on big.LITTLE the fast cores by cpu_capacity, the
+#               little ones left to the system). So by default
 #               no taskset here. ZCU216_APP_CPUS=<list> sets the app set (=all:
 #               no taskset either). When the lcores or workers are moved with the device
 #               args dpdk_*_core(s)= / worker_cpus=, also export

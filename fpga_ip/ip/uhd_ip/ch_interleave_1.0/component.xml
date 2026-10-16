@@ -106,7 +106,7 @@
         <spirit:parameters>
           <spirit:parameter>
             <spirit:name>viewChecksum</spirit:name>
-            <spirit:value>b9fbc803</spirit:value>
+            <spirit:value>5b821157</spirit:value>
           </spirit:parameter>
         </spirit:parameters>
       </spirit:view>
@@ -122,7 +122,7 @@
         <spirit:parameters>
           <spirit:parameter>
             <spirit:name>viewChecksum</spirit:name>
-            <spirit:value>b9fbc803</spirit:value>
+            <spirit:value>5b821157</spirit:value>
           </spirit:parameter>
         </spirit:parameters>
       </spirit:view>
@@ -277,7 +277,7 @@
       <spirit:file>
         <spirit:name>src/ch_interleave.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
-        <spirit:userFileType>CHECKSUM_b9fbc803</spirit:userFileType>
+        <spirit:userFileType>CHECKSUM_5b821157</spirit:userFileType>
         <spirit:userFileType>IMPORTED_FILE</spirit:userFileType>
       </spirit:file>
     </spirit:fileSet>
@@ -336,14 +336,14 @@
       </xilinx:taxonomies>
       <xilinx:displayName>ch_interleave</xilinx:displayName>
       <xilinx:definitionSource>package_project</xilinx:definitionSource>
-      <xilinx:vendorDisplayName>SPEAR</xilinx:vendorDisplayName>
+      <xilinx:vendorDisplayName>rfsoc-uhd</xilinx:vendorDisplayName>
       <xilinx:coreRevision>1</xilinx:coreRevision>
-      <xilinx:coreCreationDateTime>2026-10-09T19:17:52Z</xilinx:coreCreationDateTime>
+      <xilinx:coreCreationDateTime>2026-10-16T21:23:46Z</xilinx:coreCreationDateTime>
     </xilinx:coreExtensions>
     <xilinx:packagingInfo>
       <xilinx:xilinxVersion>2021.1</xilinx:xilinxVersion>
       <xilinx:checksum xilinx:scope="busInterfaces" xilinx:value="675bb6e9"/>
-      <xilinx:checksum xilinx:scope="fileGroups" xilinx:value="b95a12f8"/>
+      <xilinx:checksum xilinx:scope="fileGroups" xilinx:value="314218a9"/>
       <xilinx:checksum xilinx:scope="ports" xilinx:value="30929821"/>
       <xilinx:checksum xilinx:scope="hdlParameters" xilinx:value="c52a66b3"/>
       <xilinx:checksum xilinx:scope="parameters" xilinx:value="af78fd00"/>

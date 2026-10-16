@@ -10,8 +10,7 @@ so it peaks where the two paths add in phase and has a sharp null 180 deg
 away -- at the same theta whatever the two amplitudes are. Searching for the
 null (method "MIN") pins the phase down more tightly than the broad peak.
 
-Used by ArrayCalibTask (PYNQ, v47 beamforming designs) and by
-rfsoc_lib/uhd/benchmark/phase_cal.py (the same search through UHD).
+Used by host/benchmark/phase_cal.py (the search through UHD).
 """
 import numpy as np
 
@@ -68,8 +67,7 @@ def calib_phase(angles, powers, method="MIN", fit=False, power_db=True):
     """Calibration phase c (deg, wrapped to [-180, 180)) from a search.
 
     Weight exp(j*c) on the channel brings it in phase with channel 0: the
-    peak angle (MAX), or the null angle + 180 (MIN) -- the convention
-    CharmBeamformer applies to bf_calib_max.txt / bf_calib_min.txt.
+    peak angle (MAX), or the null angle + 180 (MIN).
 
     fit=False takes the single extreme point. fit=True instead fits the exact
     model P(theta) = A + B cos(theta - theta0) to every point (linear power;
@@ -77,7 +75,7 @@ def calib_phase(angles, powers, method="MIN", fit=False, power_db=True):
     same for MIN and MAX. The single point is fragile when the two paths
     differ in level: the null is then shallow and flat-bottomed, and a few
     percent of power noise moves the argmin by 10 deg or more. Measured over
-    the air on zcu216-0 at 950 MHz: argmin up to 14.7 deg off the
+    the air on a ZCU216 at 950 MHz: argmin up to 14.7 deg off the
     complex-sample offset where the null was 6-13 dB deep, the fit within
     1.6 deg on every channel.
     """

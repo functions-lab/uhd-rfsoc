@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """ZCU216 UHD daemon: makes the ZCU216 look like a USRP to UHD (type=zcu216).
 
-Contract: ../PROTOCOL.md -- UDP discovery (49700), line-based TCP control
+Contract: Protocol (../../AGENTS.md) -- UDP discovery (49700), line-based TCP control
 (49710), VRT-style UDP samples over the 100GbE CMAC link.
 
     # real hardware (root, PYNQ venv); every zcu216_v49_<N>ch_qsfp*.bit with a
@@ -13,7 +13,7 @@ The same daemon serves an RFSoC 4x2 (rfsoc4x2_v49_<N>ch_qsfp*.bit, N = 1, 2):
 only RFSoC 4x2 builds (boards.py). UHD still sees type=zcu216 (the protocol);
 discovery reports product=rfsoc4x2.
 
-Addresses (PROTOCOL.md §1, board_config.py): the management address in every
+Addresses (Protocol §1, board_config.py): the management address in every
 reply is the one the request arrived on (nothing configured); the FPGA's 100G
 data IP/MAC come from zcu216_uhd.conf (or --data-ip / --data-mac).
 """
@@ -266,12 +266,12 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--data-mac", default=None,
                    help="FPGA 100G MAC [config data_mac, else derived from the eth0 MAC]")
     p.add_argument("--serial", default=None, help="device serial [from eth0 MAC]")
-    p.add_argument("--name", default=None, help="device name [config name, else zcu216-0]")
+    p.add_argument("--name", default=None, help="device name [config name, else the board: zcu216, rfsoc4x2]")
     p.add_argument("--log", default=None, help="log file (default: stderr)")
     p.add_argument("--chain-grace-ms", type=float, default=1.0,
                    help="an open num_more chain streams this long past its end "
                         "before the daemon stops it; a continuation arriving "
-                        "within it is seamless (PROTOCOL.md section 4a) [%(default)s]")
+                        "within it is seamless (Protocol §4a) [%(default)s]")
     p.add_argument("-v", "--verbose", action="store_true")
     hw = p.add_argument_group("hardware backend")
     hw.add_argument("--lib-root", default=None,
@@ -283,7 +283,7 @@ def build_argparser() -> argparse.ArgumentParser:
                          "channel of that direction (all), of the retuned ones "
                          "(tuned), or never (off), with one mixer update event per "
                          "tile: fixed inter-channel phase within a tile after every "
-                         "tune (PROTOCOL.md section 3d) [%(default)s]")
+                         "tune (Protocol §3d) [%(default)s]")
     hw.add_argument("--rx-freq", type=float, default=600e6, help="initial RX freq")
     hw.add_argument("--tx-freq", type=float, default=600e6, help="initial TX freq")
     from bringup import add_link_args
@@ -369,7 +369,7 @@ def main(argv=None) -> int:
         return 1
 
     core = ControlCore(be, serial=args.serial or default_serial(board.name),
-                       name=args.name, data_ip=args.data_ip,
+                       name=args.name or board.name.lower(), data_ip=args.data_ip,
                        data_mac=args.data_mac, mgmt_ip=args.mgmt_ip)
     try:
         ctl = ControlServer(core, args.bind, args.port, args.mgmt_ip)

@@ -32,7 +32,7 @@
 # (default: that N's first row); fs = converter sample rate in MS/s (default
 # 5000, the dual RF-ADC's maximum). The builds: normal family 1ch F2..40 and
 # 2ch F4..40, sc8max 2ch F2, all at fs 5000 (scripts/v49_ladder.sh); every one
-# is a run-time-rate template (PROTOCOL.md section 8), so 1ch F2 and 2ch F4
+# is a run-time-rate template (Protocol §8), so 1ch F2 and 2ch F4
 # serve the whole normal family. A build is named ..._fs<fs> for fs != 2400
 # and needs rfsoc/rfsoc_lib/xrfclk/RFSoC4x2/LMX2594_250.0_<fs>.0.txt on the board.
 

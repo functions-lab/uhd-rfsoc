@@ -1,5 +1,5 @@
 //
-// uhd_zcu216 -- OTW sample formats (PROTOCOL.md §10). The conversions are the
+// uhd_zcu216 -- OTW sample formats (Protocol §10). The conversions are the
 // kernels of zcu216_kernels.cpp.
 //
 #include "zcu216_otw.hpp"
@@ -24,7 +24,7 @@ const otw_info& otw_lookup(const std::string& name)
         if (name == f.name)
             return f;
     throw uhd::value_error("ZCU216: otw_format '" + name
-                           + "' is not one of sc16, sc8, sc12, fc32 (PROTOCOL.md §10)");
+                           + "' is not one of sc16, sc8, sc12, fc32 (Protocol §10)");
 }
 
 } // namespace zcu216

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """phase_check.py -- does the inter-channel phase survive a retune?
-(PROTOCOL.md section 3d: the daemon resets the NCO phases of a direction
+(Protocol §3d: the daemon resets the NCO phases of a direction
 together after every tune, one update event per tile.)
 
 Hardware check, not for the emulator (it has no phase). Feed ONE CW tone to

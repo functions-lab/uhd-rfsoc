@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check frames.hex from tb_udp_streamer against rfsoc_lib/uhd/PROTOCOL.md.
+"""Check frames.hex from tb_udp_streamer against the Protocol (top AGENTS.md).
 
 Every frame is parsed the way the host stack sees it: Ethernet II, IPv4 with a
 valid header checksum, UDP, then the VRT header decoded little-endian. The
@@ -12,7 +12,7 @@ Slot i of a packet has timestamp TSF + i*N (N = TICK_STEP ticks per slot,
 default 1); a W-bit ADC beat (W = S_WIDTH, default 128) is W/32 slots and
 spans (W/32)*N ticks.
 
---fmt (0 sc16, 1 sc8, 2 sc12, 3 fc32; PROTOCOL.md 10): the payload is
+--fmt (0 sc16, 1 sc8, 2 sc12, 3 fc32; Protocol §10): the payload is
 compared byte for byte with the sc16 model passed through otw_ref's reference
 converter; sc12 payloads are also decoded with the port of UHD's unpack and
 compared value for value. fc32 at S_WIDTH 512, and every format but sc8 at

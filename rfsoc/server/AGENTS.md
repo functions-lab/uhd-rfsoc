@@ -1,12 +1,13 @@
-# AGENTS.md — rfsoc_lib/uhd/server (the board side)
+# AGENTS.md — rfsoc/server (the board side)
 
-Read `../AGENTS.md` first (environment, sharing rules, invariants). This file
-is the detailed reference of the daemon; `README.md` is the short version.
+Read the top `AGENTS.md` first (rules, and the Protocol this daemon serves).
+This file is the detailed reference of the daemon; `README.md` is the short
+version.
 
 ## Rules for this directory
 - Runs ON THE BOARD (PYNQ venv, root). Every FPGA address lives in
   `eth100g.py`, `tx_beamformer.py`, `rx_beamformer.py` (sources of truth: the
-  RTL headers in `hw_design/ip_design/uhd_ip/src`). Never add a fallback
+  RTL headers in `fpga_ip/ip_design/uhd_ip/src`). Never add a fallback
   address: blocks are found by name in the `.hwh`.
 - Reuse `rfsoc_lib`: RFDC bring-up (`RfdcTask`, `rfdc_config`), clocks
   (`xrfclk/ZCU216`, `gt_refclk.py` for the 8A34001), beamformer weights
@@ -14,22 +15,23 @@ is the detailed reference of the daemon; `README.md` is the short version.
 - No IP address in code: the FPGA data IP comes from the board's
   `zcu216_uhd.conf` (gitignored; template `zcu216_uhd.conf.example`), the
   management address from the incoming request.
-- Tests run on the board (`../benchmark/`). A behaviour change also goes
-  into `../PROTOCOL.md`.
-- Hardware runs hold the board lock (see `../AGENTS.md`).
+- Tests: `tests/client_check.py` against a running daemon, and the board
+  tests in `host/benchmark/` (driven from the host PC). A behaviour change
+  also goes into the Protocol (top `AGENTS.md`).
+- Never leave the daemon running, or load bitstreams, on a board unasked.
 
 ---
 
-## Reference (former README)
+## Reference
 
 `zcu216_uhd_daemon.py` makes a ZCU216 running a `zcu216_v49_<N>ch_qsfp` build
-(N = 1, 2, 4, 8, 16 channels, PROTOCOL.md §9) look like a USRP to the UHD host
-module (`type=zcu216`). The contract is `../PROTOCOL.md`.
-The rules in `hw_design/ZCU216/CLAUDE.md` bind this code, in particular: the
+(N = 1, 2, 4, 8, 16 channels, Protocol §9) look like a USRP to the UHD host
+module (`type=zcu216`). The contract is the Protocol (top `AGENTS.md`).
+The rules in `fpga_board/zcu216/AGENTS.md` bind this code, in particular: the
 RFDC comes up only through the proven `RfdcTask` pattern, at the factor
 compiled into the block design. A **template** build (its `MTS_clk_wiz` has
 dynamic reconfiguration) then changes the factor at run time, in one place
-only: `HwBackend._retune_hw` (PROTOCOL.md §8). It must end with MTS locked,
+only: `HwBackend._retune_hw` (Protocol §8). It must end with MTS locked,
 the factor read back on every enabled block and the converter clock measured
 within 1 %, or it is undone. Two resets inside MTS undo a retune and are put
 back there: the clocking-wizard reset (MMCM -> build frequency) and the DAC
@@ -44,16 +46,17 @@ tile reset (interpolation -> build factor); ADC tiles keep theirs.
 | `zcu216_uhd.conf.example` | template of that file (placeholders only; the real file is git-ignored) |
 | `backend.py` | `Backend` interface; the v49 build table (`V49_GEOMETRY`), link checks (`link_problem`, `default_rate`), FC interval policy, TX/RX beamformer state and `steering_weights` (rfsoc_lib `Beamformer`) |
 | `hw_backend.py` | `HwBackend`: build scan (`.hwh`: factor, beat, TICK_STEP, TX buffer, TX/RX beamformers), overlay, compiled-geometry bring-up, NCO/DSA/VOP, sensors |
-| `tx_beamformer.py` | `eth100g/tx_beamformer` registers (0x80060000, N >= 2 builds; PROTOCOL.md §11), mapped only from the overlay's ip_dict |
+| `tx_beamformer.py` | `eth100g/tx_beamformer` registers (0x80060000, N >= 2 builds; Protocol §11), mapped only from the overlay's ip_dict |
 | `rx_beamformer.py` | `eth100g/rx_beamformer` registers (0x80070000, the N >= 2 builds that carry it; §11), mapped only from the ip_dict; `beam_payload`, the bit-exact reference of the RX beam |
 | `eth100g.py` | the 100G FPGA addresses (final, from `eth100g.tcl` + RTL headers): `udp_streamer` 0x80020000, `udp_player` 0x80030000, `cmac_gpio` 0x80040000 (ctl/status of `cmac_100g.v`), `cmac_freq` 0x80050000 (refclk / user clock kHz). Resolved by ip_dict name, addresses as fallback. No PG203 AXI4-Lite in this build. No DRAM path: the player is always the DAC source |
 | `bringup.py` | step-by-step link bring-up for manual use (prints everything), `--status` read-only dump; its steps are also what `HwBackend` runs |
-| `rx_cmdq.py` | the RX stream-command queue (PROTOCOL.md §4a) over the streamer's one command slot: FIFO, late markers, `num_more` chains, for `HwBackend` |
+| `rx_cmdq.py` | the RX stream-command queue (Protocol §4a) over the streamer's one command slot: FIFO, late markers, `num_more` chains, for `HwBackend` |
 | `cmd_timer.py` | timed commands (§3c): `set_*_freq` / `set_*_gain` / `set_time` with `at=<ticks>`, grouped by time, run by the FPGA timekeeper |
 | `vrt.py` | wire format of §4-7 packets, test pattern, async packets, the §10 reference conversions (`sc16_to_wire`, `wire_to_sc16`, `pack_sc12`) |
-| `gt_refclk.py` | 8A34001 (U409, `/dev/i2c-10` @0x5B) GT refclk for Q7/Q11: `read_status()` (read-only by default), `program_gt_refclk(156.25, dry_run=...)` applies a register file after checking it gives the target on Q7/Q11 |
+| `../rfsoc_lib/gt_refclk.py` | 8A34001 (U409, `/dev/i2c-10` @0x5B) GT refclk for Q7/Q11: `read_status()` (read-only by default), `program_gt_refclk(156.25, dry_run=...)` applies a register file after checking it gives the target on Q7/Q11 |
 | `zcu216-uhd.service` | systemd unit template (hardware mode; not installed by anything) |
-| `deploy.sh` | rsync to the board, no start |
+| `../push_bitstreams.sh` | run on the build machine: copies `*_v49_*ch_qsfp*.bit` + `.hwh` into this directory on the board, md5-checked; never loads or starts anything |
+| `../../run_daemon.sh` | start / stop / status / log of the daemon on the board (root, PYNQ venv, log `/tmp/uhd_daemon.log`) |
 | `tests/client_check.py` | end-to-end protocol check against a running daemon on the board (discovery, claim, RX/TX streams, OTW formats, beamformer registers) |
 
 ### RFSoC 4x2
@@ -73,7 +76,7 @@ NEW_CONFIG into it. And its 100G refclk is a Si570 running from power-up
 skipped. Discovery reports `product=rfsoc4x2` (type stays `zcu216`, the
 protocol).
 
-## Addresses (PROTOCOL.md §1)
+## Addresses (Protocol §1)
 
 Nothing in the code holds an IP address. The board's LAN address is learned
 per request: a discovery reply carries the address the request arrived on
@@ -85,21 +88,24 @@ overrides both). The FPGA's 100G identity is configuration, in
 
     data_ip  = <fpga-data-ip>    # required in hardware mode: on the subnet of the PC's 100G port
     data_mac = <fpga-data-mac>   # optional: default = the eth0 MAC, locally administered
-    name     = zcu216-0          # optional
+    name     = <device-name>     # optional: default the board's (zcu216, rfsoc4x2)
 
 `--data-ip` / `--data-mac` / `--name` override the file. Without a data IP
 the hardware daemon exits with a message saying where to put it.
-`cp zcu216_uhd.conf.example zcu216_uhd.conf` and edit; `deploy.sh` never
-copies or deletes that file on the board.
+`cp zcu216_uhd.conf.example zcu216_uhd.conf` and edit. The file is
+gitignored, so a `git pull` on the board leaves it alone, and
+`push_bitstreams.sh` copies only bitstreams.
 
 ## Running
 
-Hardware (root, PYNQ venv; downloads the bitstream unless `--no-load`):
+Usually `../../run_daemon.sh` (start in the background, `stop`, `status`,
+`log`, `fg`; extra arguments go to the daemon). By hand -- hardware, root,
+PYNQ venv; downloads the bitstream unless `--no-load`:
 
     sudo bash -c 'source /etc/profile.d/pynq_venv.sh && \
         python3 zcu216_uhd_daemon.py [--bitstream-dir DIR] [--bitstream X.bit]'
 
-Builds (PROTOCOL.md §8, §9): every `zcu216_v49_<N>ch_qsfp*.bit` with a `.hwh`
+Builds (Protocol §8, §9): every `zcu216_v49_<N>ch_qsfp*.bit` with a `.hwh`
 next to it in `--bitstream-dir` (default: this directory) is one (channel
 count, rate). N comes from the name; from the `.hwh`: F, the converter rate
 fs and its reference clock, the fabric clock and data width (every enabled
@@ -112,8 +118,8 @@ so **a build's tick rate is its aggregate slot rate** (N x per-channel rate);
 it differs per build, never one value per N. Files that are inconsistent,
 lack a `.hwh` or duplicate an (N, rate) are logged and skipped.
 
-The builds (`hw_design/ZCU216/scripts/v49_ladder.sh`; the full list, with
-the wire formats each carries, is `../benchmark/oracle_builds.txt`; names
+The builds (`fpga_board/zcu216/scripts/v49_ladder.sh`; the full list, with
+the wire formats each carries, is `host/benchmark/oracle_builds.txt`; names
 `zcu216_v49_<N>ch_qsfp_f<F>[_fs<fs>]`, `_fs` when fs != 2400):
 
 | family | N | fs (MS/s) | factors F (one build each) | per-channel rate | beat | wire formats |
@@ -135,7 +141,7 @@ payload rate (`backend.link_problem`); RX fc32 is never offered on a
 1024-bit-beat build carries sc8 only (one sc8 wire word per clock). The
 converters' LMX2594 is programmed from the `.hwh` reference clock:
 `rfsoc_lib/xrfclk/ZCU216/LMX2594_250.0_<fs>.0.txt` must exist for every fs
-(2250, 2500; `deploy.sh` FORCE=1 checks).
+(2250 and 2500 are in the repository).
 
 The one loaded at start is `--bitstream`, else `<dir>/zcu216_v49_1ch_qsfp.bit`
 (not part of the ladder), else the highest-rate build with the fewest channels
@@ -144,7 +150,7 @@ whose sc16 stream fits the link. `set_rx_rate`/`set_tx_rate` pick, among the
 loaded N's builds that carry the client's OTW formats, **the highest rate at
 or below the request** (1 ppm tolerance; below every rate, the lowest) --
 `backend.coerce_rate`, `protocol._set_rate`; if no build carries them the
-request is refused before any reload (PROTOCOL.md §3, §10). A request for the
+request is refused before any reload (Protocol §3, §10). A request for the
 rate in effect never reloads. Otherwise both stop streaming, reload that
 overlay and redo the FULL bring-up below (8A34001 only if its status says
 unconfigured), wait `ZCU216_RELOAD_SETTLE_S` (4 s) for the far-end NIC, then
@@ -166,18 +172,17 @@ ADC tiles (`HwBackend._mts_lock`: rfsoc_lib `MyMTS.init()` -- tile-sync reset,
 MTS clocking-wizard MMCM lock, `mts_dac`, `mts_adc`) after the RfdcTask
 bring-up and before the NCOs. It must end locked or the daemon refuses to
 serve; it runs up to `MTS_ATTEMPTS` (10) times, because an attempt can fail
-(the first after a board reboot on zcu216-0; on the templates, DAC alignment
+(the first after a board reboot on a ZCU216; on the templates, DAC alignment
 "delay 31 exceeds maximum" at some factors) and the next locks. The log line `[m] MTS LOCKED
 (attempt n)` carries the per-tile latency and offset; the mboard sensor
 `mts_locked` reports it (and that the MMCM is still locked) to the host.
 
 Useful hardware flags: `--allow-unlocked` (serve even if a converter tile
 clock is not good — enough for `pattern=1` tests), `--rx-freq/--tx-freq` (initial NCOs, default
-600 MHz like the donor notebook), `--lib-root` (dir holding `rfsoc_lib/`;
+600 MHz), `--lib-root` (dir holding `rfsoc_lib/`;
 searched upward from this file by default), `--nco-phase-reset all|tuned|off`
 (default `all`: after NCOs change, reset the NCO phase of every streamed
-channel of that direction together, one update event per tile -- PROTOCOL.md
-§3d; `off` if it misbehaves). Both backends: `--chain-grace-ms` (default 1:
+channel of that direction together, one update event per tile -- Protocol §3d; `off` if it misbehaves). Both backends: `--chain-grace-ms` (default 1:
 how long an open `num_more` chain streams past its end before the daemon
 stops it, §4a).
 
@@ -194,10 +199,12 @@ Manual bring-up on the board (root, PYNQ venv):
     python3 bringup.py --stream-host-ip <host-data-ip> --stream-host-mac <cx5 mac> --seconds 10
         # + on the PC: watch the NIC count it (nothing needs to receive it):
         #   ethtool -S <100g-iface> | grep -E "rx_vport_unicast_(packets|bytes)|rx_out_of_buffer"
-        # for a byte-level check use the daemon and host/tools/dpdk_rx_test.sh
+        # for a byte-level check use the daemon and host/benchmark/dpdk_rx_test.sh
 
-Deploy: `./deploy.sh [xilinx@zcu216-0] [/home/xilinx/jupyter_notebooks/SPEAR-qsfpv]`
-(`BIT_DIR=<dir>[:<dir>...]` also copies every `zcu216_v49_*ch_qsfp*.bit` + `.hwh` build, `NO_LIB=1` skips `rfsoc_lib`).
+Board setup: the board holds a git clone of the repository
+(`/home/xilinx/jupyter_notebooks/rfsoc-uhd`); code changes reach it with
+`git pull` there, bitstreams with `../push_bitstreams.sh <bit_dir>
+<user@board> [remote_checkout]` from the build machine.
 
 Tests:
 
@@ -246,7 +253,7 @@ Tests:
    A link that does not align is reported (`get_sensor cmac_aligned` = status
    bit0, `refclk_khz`, `usrclk_khz`), not fatal.
 
-## Semantics chosen where PROTOCOL.md is silent
+## Semantics chosen where the Protocol is silent
 
 * Rates: the highest build rate at or below the request among the builds
   that carry the client's OTW formats (else the lowest); RX and TX are one
@@ -302,7 +309,7 @@ Tests:
   default geometry (135 GHz, 1.07 mm) when the claim is released. On N = 1
   every `*_bf*` command is `ERR`; every `*_rbf*` command is `ERR` on a build
   without the RX beamformer (N = 1, or an older bitstream: `info rbf=0`).
-* Stream commands are queued (`rx_cmdq.py`, PROTOCOL.md §4a): the next one is
+* Stream commands are queued (`rx_cmdq.py`, Protocol §4a): the next one is
   issued when the streamer is idle (STATUS bit 0, which counts as busy for
   2 ms after a command was accepted, so a short burst is not taken for
   finished before its status bit crossed from adc_clk); a running `start_cont`
@@ -314,7 +321,7 @@ Tests:
   between packets; `num_more` ends without EOB. A reload forgets the queue.
 * `stream_setup_tx` replies `OK <tx_buf_words> <fc_interval> <consumed>`: the
   third token is the player's consumed-word count, which is free-running (only
-  a reset clears it, `rtl/udp_player.v`), so the host must use it as its
+  a reset clears it, `fpga_ip/ip_design/uhd_ip/src/udp_player.v`), so the host must use it as its
   flow-control baseline. Hosts that read only two tokens still parse it.
   `stream_stop_tx` flushes (flushed words count as consumed) and leaves the
   player as the DAC source, idle, so the DAC outputs zeros.

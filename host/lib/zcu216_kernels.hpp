@@ -1,7 +1,7 @@
 //
 // uhd_zcu216 -- sample kernels: de-interleave/interleave of the N channels of
-// the one wire stream (PROTOCOL §9) fused with the OTW <-> CPU format
-// conversion (PROTOCOL §10, zcu216_otw.hpp), scalar and SIMD.
+// the one wire stream (Protocol §9) fused with the OTW <-> CPU format
+// conversion (Protocol §10, zcu216_otw.hpp), scalar and SIMD.
 //
 // Every kernel addresses whole slots (sc12 too: its 4-slot groups are
 // unpacked per slot), so a call may start and end on any sample. The SIMD

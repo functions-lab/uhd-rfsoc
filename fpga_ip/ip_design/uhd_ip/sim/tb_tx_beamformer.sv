@@ -1,4 +1,4 @@
-// tb_tx_beamformer -- stimulus + register checks for rtl/tx_beamformer.v.
+// tb_tx_beamformer -- stimulus + register checks for src/tx_beamformer.v.
 //
 // Parameters (xelab -generic_top): N_CH, BEAT_W, PIPE, ACLK_PS (converter
 // clock period), WFILE (weight sets from `check_bf.py gen`, NSETS x N_CH words).

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """phase_cal.py -- inter-channel phase calibration with the TX and RX
 beamformers, then the residual phase offsets measured WITH the calibration
-applied (PROTOCOL.md section 11), over the air, through stock UHD calls.
+applied (Protocol §11), over the air, through stock UHD calls.
 
   calibrate --out cal.json [--method null|peak|matrix]
       Stores the per-channel offsets (calibration weight exp(-j * offset),

@@ -10,10 +10,10 @@ class RfdcConfig(dict):
     """The board config dict, readable in both key styles.
 
     Two styles meet here. The flat one (DACSampleRate, DACNCO,
-    DACInterpolationRate, ...) is what NEW_CONFIG dicts and the agentic and
-    UHD flows set. The per-tile/per-block one (DACSampleRate<t>,
-    DACNCO<t><b>, DACInterpFactor<t><b>, ADCDecimFactor<t><b>) is what the
-    config/<board>/*.json files and the v47 beamforming code use. A
+    DACInterpolationRate, ...) is what NEW_CONFIG dicts (the daemon's
+    bring-up) set. The per-tile/per-block one (DACSampleRate<t>,
+    DACNCO<t><b>, DACInterpFactor<t><b>, ADCDecimFactor<t><b>) addresses one
+    converter tile or block. A
     per-tile/per-block key that was never set reads its flat counterpart, so
     code in either style sees one configuration.
 
@@ -146,41 +146,8 @@ RFSOC4X2_CONFIG = merge_dict(RFSOC4X2_CONFIG, GLOBAL_VAR)
 RFSOC4X2_CONFIG = RfdcConfig(merge_dict(RFSOC4X2_CONFIG, EXP_CONFIG))
 
 
-# ZCU208 (xczu48dr) carries the same LMK04828 + LMX2594 clock chain as ZCU216
-# but exposes only 2 DAC tiles (228, 230) and 2 ADC tiles (224, 226).
-# Sample-rate / NCO defaults mirror ZCU216 — override per design.
-ZCU208_MIN_MAX_CONFIG = {
-    "RefClockForPLLMin": 102.40625,
-    "RefClockForPLLMax": 615.0,
-    "RefClockNoPLLDacMin": 500.0,
-    "RefClockNoPLLDacMax": 10000.0,
-    "RefClockNoPLLAdcMin": 500.0,
-    # dual-tile RF-ADC (ZU48DR): 5 GS/s, so a bypassed tile takes up to
-    # 5000 MHz (the quad-tile ZU49DR's limit is 2500)
-    "RefClockNoPLLAdcMax": 5000.0,
-}
-
-ZCU208_DEFAULT_CONFIG = {
-    "RefClockForPLL": 500.0,
-    "DACSampleRate": 2000.0,
-    "DACInterpolationRate": 2,
-    "DACNCO": 0,
-    "DACNyquistZone": 1,
-    "InvSincFIR": 1,
-    "ADCSampleRate": 2000.0,
-    "ADCInterpolationRate": 2,
-    "ADCNCO": -0,
-    "ADCNyquistZone": 1,
-}
-
-ZCU208_CONFIG = merge_dict(ZCU208_MIN_MAX_CONFIG, ZCU208_DEFAULT_CONFIG)
-ZCU208_CONFIG = merge_dict(ZCU208_CONFIG, GLOBAL_VAR)
-ZCU208_CONFIG = RfdcConfig(merge_dict(ZCU208_CONFIG, EXP_CONFIG))
-
-
 BOARD_CONFIGS = {
     "ZCU216": ZCU216_CONFIG,
-    "ZCU208": ZCU208_CONFIG,
     "RFSoC4x2": RFSOC4X2_CONFIG,
 }
 

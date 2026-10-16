@@ -1,8 +1,8 @@
-// tb_ch_interleave -- self-checking test of rtl/ch_interleave.v.
+// tb_ch_interleave -- self-checking test of src/ch_interleave.v.
 //
 // For every legal (N_CH, BEAT_W) pair (N_CH*32 <= BEAT_W) and REG = 0 and 1:
 //   * DIR 0 on a random stream, checked against an independent model of
-//     PROTOCOL.md 9 (channel-major slot k*S+s -> sample-major slot s*N+k);
+//     Protocol §9 (channel-major slot k*S+s -> sample-major slot s*N+k);
 //   * DIR 1 on a random stream, checked against the inverse model;
 //   * DIR 0 followed by DIR 1, checked to be the identity.
 // Streams have random tvalid and random downstream tready (sources hold their

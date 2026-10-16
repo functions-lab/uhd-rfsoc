@@ -14,17 +14,19 @@
 #                (residual offsets, coherent gain), the TX beamformer
 #                (bf_air_test.py) and the RX beamformer (rx_bf_air_test.py)
 #
-#   sudo -E env PATH=$PATH ADDR=<board-ip> benchmark/oracle.sh <suite|all> [filter]
+#   sudo -E env PATH=$PATH BOARD=xilinx@<board> ADDR=<board-ip> benchmark/oracle.sh <suite|all> [filter]
 #     filter: a substring of "<family> <N>ch <bitstream>" (e.g. sc8max, " 4ch ", _f3_)
 #
-# Builds: oracle_builds.txt (deployed on the board with server/deploy.sh);
-# BUILDS=<file> takes another list (an RFSoC 4x2: BUILDS=oracle_builds_rfsoc4x2.txt
-# and BOARD=xilinx@rfsoc4x2-0; the daemon picks the board from the bitstream).
-# Run as root on the PC (UHD over DPDK); the board is driven over ssh as the
-# invoking user ($SUDO_USER). Hold the board for the whole run.
-# Environment (no address is built in):
+# Builds: oracle_builds.txt (their bitstreams copied into the board's checkout
+# with rfsoc/push_bitstreams.sh); BUILDS=<file> takes another list (an RFSoC
+# 4x2: BUILDS=oracle_builds_rfsoc4x2.txt; the daemon picks the board from the
+# bitstream). Run as root on the PC (UHD over DPDK); the board is driven over
+# ssh as the invoking user ($SUDO_USER), passwordless (BatchMode). The run
+# restarts the board's daemon for every build: nothing else may use the board
+# meanwhile.
+# Environment (no address or host name is built in):
+#   BOARD      ssh target of the board, e.g. xilinx@<board> (required)
 #   ADDR       board LAN address [discovery: exactly one board]
-#   BOARD      ssh target of the board [xilinx@zcu216-0]
 #   BOARD_DIR  the board's git checkout of this repository
 #              [/home/xilinx/jupyter_notebooks/rfsoc-uhd]
 #   RUNS (10)  DUR (30)  FREQ (950e6: RF centre of the over-the-air tests)
@@ -42,7 +44,7 @@ case $SUITE in robustness|compliance|beamforming|all) ;; *)
 HERE=$(cd "$(dirname "$0")" && pwd)
 TOOLS=$HERE/../tools
 if command -v zcu216-uhd >/dev/null; then RUN=$(command -v zcu216-uhd); else RUN=$TOOLS/zcu216-uhd; fi
-BOARD=${BOARD:-xilinx@zcu216-0}
+[ -n "${BOARD:-}" ] || { echo "set BOARD=<user>@<board>: the ssh target of the board (e.g. xilinx@<board-ip>)" >&2; exit 2; }
 BUILDS=${BUILDS:-$HERE/oracle_builds.txt}
 case $BUILDS in /*) ;; *) [ -f "$BUILDS" ] || BUILDS=$HERE/$BUILDS ;; esac
 BOARD_DIR=${BOARD_DIR:-/home/xilinx/jupyter_notebooks/rfsoc-uhd}
@@ -105,8 +107,8 @@ while read -r FAM N RATE BIT FMTS BF <&3; do
     # it the RX lcore lands on CPU 1, shared with the application: at 16 ch x
     # 187.5 MS/s (97 % of the link) a capture lost 4 packets (gap ->
     # ERROR_CODE_OVERFLOW) in 3 of 3 over-the-air runs; with LAYOUT, 0 of 3.
-    # One layout for every family (results/README.md "sc8max": a deeper RX ring
-    # or tx_warmup=0 traded one host-side failure for another at 96 Gb/s duplex).
+    # One layout for every family (on the sc8max builds a deeper RX ring or
+    # tx_warmup=0 traded one host-side failure for another at 96 Gb/s duplex).
     BL=$LAYOUT
     A="type=zcu216,addr=$ADDR,channels=$N,$BL"
     WIRE=sc16; [ "$FMTS" = sc8 ] && WIRE=sc8

@@ -1,16 +1,17 @@
-# uhd_ip -- the ZCU216 UHD / 100GbE data-plane cores (udp_streamer, udp_player,
+# uhd_ip -- the UHD / 100GbE data-plane cores (udp_streamer, udp_player,
 # axis_pkt_arb, ch_interleave, tx_beamformer, rx_beamformer): sources,
 # testbenches and IP packaging.
 #
 #   src/            the RTL (Verilog-2001, XPM macros); register maps in the headers
-#   sim/            xsim testbenches + Python checkers (wire format: rfsoc_lib/uhd/PROTOCOL.md)
+#   sim/            xsim testbenches + Python checkers (wire format: the Protocol, top AGENTS.md)
 #   package_ip.tcl  -> ../../ip/uhd_ip/<core>_1.0 (user.org:uhd:<core>:1.0), the IP
-#                   repo the v49 block designs import (zcu216_v49_qsfp.tcl, zcu208_v49_qsfp.tcl)
+#                   repo the v49 block designs import (zcu216_uhd_v49.tcl, rfsoc4x2_uhd_v49.tcl)
 #   ooc_timing.tcl  out-of-context synth + place + route timing check
 #
 # After any change under src/: make sim sim-fmt && make package, and commit
 # src/ together with ../../ip/uhd_ip.
-VIVADO_ROOT ?= $(HOME)/Xilinx/Vivado/2021.1
+# Vivado 2021.1: the one on PATH, else Xilinx's default install location
+VIVADO_ROOT ?= $(or $(patsubst %/bin/vivado,%,$(realpath $(shell command -v vivado 2>/dev/null))),/tools/Xilinx/Vivado/2021.1)
 VIVADO      := $(VIVADO_ROOT)/bin/vivado
 
 .PHONY: all sim sim-streamer sim-player sim-fmt sim-max sim-wide sim-interleave sim-bf sim-rbf sim-arb package ooc clean
@@ -24,7 +25,7 @@ sim-streamer:
 sim-player:
 	VIVADO_ROOT=$(VIVADO_ROOT) sim/run_sim_player.sh
 
-# over-the-wire format sweep (PROTOCOL.md 10): sc16/sc8/sc12/fc32 x 128/256/512
+# over-the-wire format sweep (Protocol §10): sc16/sc8/sc12/fc32 x 128/256/512
 sim-fmt:
 	VIVADO_ROOT=$(VIVADO_ROOT) FMTS="0 1 2 3" TICK_STEPS=1 sim/run_sim.sh
 	VIVADO_ROOT=$(VIVADO_ROOT) FMTS="0 1 2 3" TICK_STEPS=1 sim/run_sim_player.sh
@@ -53,7 +54,7 @@ sim-interleave:
 sim-arb:
 	VIVADO_ROOT=$(VIVADO_ROOT) sim/run_sim_arb.sh
 
-# beamformers (PROTOCOL.md 11), every v49 (N_CH, BEAT_W, clock) geometry
+# beamformers (Protocol §11), every v49 (N_CH, BEAT_W, clock) geometry
 sim-bf:
 	VIVADO_ROOT=$(VIVADO_ROOT) sim/run_sim_bf.sh
 sim-rbf:

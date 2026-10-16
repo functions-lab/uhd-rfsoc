@@ -1,13 +1,13 @@
 // udp_streamer -- RFDC ADC samples -> Ethernet/IPv4/UDP/VRT frames for a CMAC.
 //
-// The wire format is rfsoc_lib/uhd/PROTOCOL.md section 4; that file is the
-// contract with the UHD host module, and every byte offset below comes from it.
+// The wire format is Protocol §4 (top AGENTS.md), the contract with the UHD
+// host module; every byte offset below comes from it.
 //
 //   s_axis  (adc_clk)   S_WIDTH-bit converter stream (128, 256, 512 or 1024), one
 //                       32-bit slot (complex int16, I low, Q high) per 32 bits,
 //                       slot 0 from bit 0. The RFDC ignores tready.
 //                       Forwarded unchanged on m_axis_adc (DDR capture path).
-//                       With N channels (PROTOCOL.md 9) the block design has
+//                       With N channels (Protocol §9) the block design has
 //                       already merged them into one beat, sample-major
 //                       (ch_interleave DIR=0): slot i = channel i%N, sample i/N.
 //   m_axis  (tx_clk)    512-bit CMAC TX AXIS, byte 0 first on the wire.
@@ -41,11 +41,11 @@
 //   0x6C STATUS RO [0] streaming [1] cmac rx aligned [2] cmac tx ready
 //                  [3] command rejected since last clear (start while busy)
 //   0x74 CMDS RO  stream commands accepted by the adc domain
-//   0x78 FMT  RW  [1:0] over-the-wire sample format (PROTOCOL.md 10):
+//   0x78 FMT  RW  [1:0] over-the-wire sample format (Protocol §10):
 //                 0 sc16, 1 sc8, 2 sc12, 3 fc32. Quasi-static like the header
 //                 fields: write it only while the stream is idle.
 //
-// Over-the-wire formats (PROTOCOL.md 10). The packer always builds 16-slot
+// Over-the-wire formats (Protocol §10). The packer always builds 16-slot
 // sc16 groups (one 512-bit word, after the test-pattern mux; fc32 uses 8-slot
 // half groups); a converter in adc_clk turns them into whole 64-byte wire words
 // before the data FIFO, so the FIFO, the descriptor word count, the framer and
@@ -71,7 +71,7 @@
 // fc32 at S_WIDTH = 512 would need two FIFO words per adc_clk cycle: it is not
 // supported. Every packet is then dropped at admission and counted in
 // OVERFLOWS (no frame is sent); the daemon refuses that combination.
-// S_WIDTH = 1024 (the sc8max builds, PROTOCOL.md 9) carries sc8 ONLY: a beat
+// S_WIDTH = 1024 (the sc8max builds, Protocol §9) carries sc8 ONLY: a beat
 // is 32 slots, the packer's group is the whole beat and the sc8 converter
 // turns it into exactly one wire word, so the FIFO takes one word per
 // adc_clk cycle (96 Gb/s at 187.5 MHz). sc16, sc12 and fc32 would need more
@@ -81,7 +81,7 @@
 // tick_rate, 1.2 GHz; 960 MHz for N = 16) whatever the converter factor F
 // compiled into the block design; one slot is TICK_STEP ticks (single
 // channel: F/2, so F = 2, 4, 8 -> 1, 2, 4; multi-channel builds: 1, one tick
-// per slot, PROTOCOL.md 9). A beat carries S_WIDTH/32 slots, so the
+// per slot, Protocol §9). A beat carries S_WIDTH/32 slots, so the
 // timekeeper advances by BEAT_TICKS = (S_WIDTH/32)*TICK_STEP per ADC beat and
 // slot k of a beat has timestamp now + k*TICK_STEP. Packet timestamps are
 // multiples of BEAT_TICKS. TIME_SET is aligned down to a multiple of
