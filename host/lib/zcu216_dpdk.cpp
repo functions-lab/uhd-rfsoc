@@ -404,7 +404,17 @@ void eal_init_once(const uhd::device_addr_t& args,
             if (seen.insert(c).second)
                 s += (s.empty() ? "" : ",") + std::to_string(c);
         toks.push_back("-l");
-        toks.push_back(s); // the first one is the main lcore
+        toks.push_back(s);
+        // DPDK makes the LOWEST listed lcore the main one unless told: say
+        // which (a layout whose main core is not the lowest CPU, e.g. on a
+        // big.LITTLE CPU, would otherwise lose an RX or TX lcore to it)
+        bool has_main = false;
+        for (const auto& t : toks)
+            has_main = has_main or t.compare(0, 12, "--main-lcore") == 0;
+        if (not has_main) {
+            toks.push_back("--main-lcore");
+            toks.push_back(std::to_string(main_core));
+        }
     }
     bool no_huge = false;
     for (const auto& t : toks)
@@ -684,8 +694,8 @@ const cpu_layout& default_layout()
         }
         std::sort(cores.begin(), cores.end());
         // heterogeneous CPUs (arm big.LITTLE, e.g. the DGX Spark's Cortex-X925
-        // + A725: /sys/.../cpu_capacity 1024 vs ~720): the fastest cores
-        // first, so the application, the lcores and the workers get them;
+        // + A725: /sys/.../cpu_capacity ~1000 vs ~720): the fast cores first
+        // (CPU order kept), so the application, the lcores and the workers get them;
         // workers only on cores within 90 % of the fastest (the little ones
         // stay with the system). Uniform capacity (x86): unchanged.
         auto capacity = [](unsigned c) {
@@ -699,9 +709,11 @@ const cpu_layout& default_layout()
             cap_max = std::max(cap_max, v), cap_min = std::min(cap_min, v);
         }
         const bool hetero = cap_max > 0 and cap_min < cap_max;
+        // fast = within 90 % of the fastest; CPU order inside each class
+        auto fast = [&](unsigned c) { return capacity(c) * 10 >= cap_max * 9; };
         if (hetero)
             std::stable_sort(cores.begin(), cores.end(), [&](const auto& a, const auto& b) {
-                return capacity(a.front()) > capacity(b.front());
+                return fast(a.front()) and not fast(b.front());
             });
         size_t k = 0;
         auto next = [&]() -> const std::vector<unsigned>* { return k < cores.size() ? &cores[k++] : nullptr; };
@@ -728,7 +740,7 @@ const cpu_layout& default_layout()
         if (k < cores.size()) {
             l.app = *c0;
             for (size_t i = k; i < cores.size(); i++)
-                if (not hetero or capacity(cores[i].front()) * 10 >= cap_max * 9)
+                if (not hetero or fast(cores[i].front()))
                     l.workers.push_back(cores[i].front());
         }
         return l;
