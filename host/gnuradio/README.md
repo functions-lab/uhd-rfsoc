@@ -35,7 +35,7 @@ snippet that issues the timed RX command and fires each burst.
 RFSoC 4x2 (`grc/rfsoc4x2_tones_normal_{1,2}ch.grc`, fs 5000: twice the
 ZCU216's per-channel rate at the same factor), run with
 `run_tones.sh rfsoc4x2 normal 1` / `... normal 2`. Their device args carry
-`product=rfsoc4x2`, so discovery picks the 4x2 with a ZCU216 on the network:
+`type=rfsoc4x2` (the module finds only RFSoC 4x2 boards with it) and run with plain sudo, nothing ZCU216 in them:
 
 | family | N | build | per-channel rate | wire |
 |---|---|---|---|---|

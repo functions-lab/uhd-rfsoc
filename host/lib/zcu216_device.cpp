@@ -1382,10 +1382,20 @@ void zcu216_device::_build_bf_nodes(const fs_path& b, std::shared_ptr<bf_ctl> bf
 // ---------------------------------------------------------------------------
 // registration
 // ---------------------------------------------------------------------------
-static device_addrs_t zcu216_find(const device_addr_t& hint)
+static device_addrs_t zcu216_find(const device_addr_t& hint_in)
 {
-    if (hint.has_key("type") and hint["type"] != "zcu216")
+    // type=zcu216: any board this module serves (the protocol's name);
+    // type=rfsoc4x2: only RFSoC 4x2 boards (product=rfsoc4x2), reported as
+    // type=rfsoc4x2
+    const std::string type = hint_in.get("type", "zcu216");
+    if (type != "zcu216" and type != "rfsoc4x2")
         return {};
+    device_addr_t hint = hint_in;
+    if (type == "rfsoc4x2") {
+        if (hint.get("product", "rfsoc4x2") != "rfsoc4x2")
+            return {};
+        hint["product"] = "rfsoc4x2";
+    }
     // multi-board addr0=,addr1= hints and other device families' selectors
     if (hint.has_key("addr0") or hint.has_key("resource") or hint.has_key("mgmt_addr"))
         return {};
@@ -1398,7 +1408,7 @@ static device_addrs_t zcu216_find(const device_addr_t& hint)
     }
     // Fallback: explicit type=zcu216,addr=... but UDP discovery filtered:
     // ask the control port directly.
-    if (found.empty() and hint.has_key("addr") and hint.get("type", "") == "zcu216") {
+    if (found.empty() and hint.has_key("addr") and hint_in.has_key("type")) {
         try {
             ctrl_client cc(hint["addr"], uint16_t(hint.cast<int>("ctrl_port", kCtrlPort)), 1.0);
             device_addr_t info = parse_kv(cc.call("info"));
@@ -1410,7 +1420,8 @@ static device_addrs_t zcu216_find(const device_addr_t& hint)
             dev["type"] = "zcu216";
             if (not dev.has_key("addr"))
                 dev["addr"] = hint["addr"];
-            found.push_back(dev);
+            if (not hint.has_key("product") or dev.get("product", "") == hint["product"])
+                found.push_back(dev);
         } catch (const std::exception&) {
         }
     }
@@ -1427,6 +1438,9 @@ static device_addrs_t zcu216_find(const device_addr_t& hint)
         for (const auto& k : hint.keys())
             if (not dev.has_key(k) and k != "find_all")
                 dev[k] = hint[k];
+    if (type == "rfsoc4x2")
+        for (auto& dev : found)
+            dev["type"] = "rfsoc4x2";
     return found;
 }
 

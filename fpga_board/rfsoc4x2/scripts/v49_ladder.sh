@@ -33,10 +33,13 @@ name_of() { local n=$1 f=$2 fs=$3; echo "rfsoc4x2_v49_${n}ch_qsfp_f${f}$([ "$fs"
 # 322 MHz domain (udp_player / axis_pkt_arb), and closed with
 # Performance_ExtraTimingOpt -- except 2ch F16, still -0.164 with it, which
 # closed with Performance_Explore (+0.051, 3 runs; NetDelay_high +0.034,
-# SpreadLogic_high -0.278) (2026-10-11)
+# SpreadLogic_high -0.278) (2026-10-11, the ZCU208 port). On the RFSoC 4x2
+# (QSFP28 on quad 128) the 1ch F2 template missed by 0.036 ns the same way
+# (udp_player, txoutclk) and closed with Performance_ExtraTimingOpt (+0.013;
+# Performance_Explore +0.014) (2026-10-16).
 strategy_of() {
     case $1 in
-        rfsoc4x2_v49_1ch_qsfp_f10_fs5000|rfsoc4x2_v49_1ch_qsfp_f20_fs5000|rfsoc4x2_v49_2ch_qsfp_f5_fs5000)
+        rfsoc4x2_v49_1ch_qsfp_f2_fs5000|rfsoc4x2_v49_1ch_qsfp_f10_fs5000|rfsoc4x2_v49_1ch_qsfp_f20_fs5000|rfsoc4x2_v49_2ch_qsfp_f5_fs5000)
             echo Performance_ExtraTimingOpt ;;
         rfsoc4x2_v49_2ch_qsfp_f16_fs5000)
             echo Performance_Explore ;;

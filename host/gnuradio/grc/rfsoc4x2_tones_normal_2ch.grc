@@ -20,7 +20,7 @@ options:
     realtime_scheduling: ''
     run: 'True'
     run_command: /bin/bash -c 'exec pkexec env DISPLAY="$DISPLAY" XAUTHORITY="$XAUTHORITY"
-      /usr/local/bin/zcu216-uhd "$0" -u "$1"' {python} {filename}
+      "$0" -u "$1"' {python} {filename}
     run_options: prompt
     sizing_mode: fixed
     thread_safe_setters: ''
@@ -75,7 +75,7 @@ blocks:
   id: variable
   parameters:
     comment: ''
-    value: '"type=zcu216,product=rfsoc4x2,channels=2" + (",addr=" + addr if addr else
+    value: '"type=rfsoc4x2,channels=2" + (",addr=" + addr if addr else
       "")'
   states:
     bus_sink: false
@@ -188,12 +188,12 @@ blocks:
       \        cmd.num_samps = tb.cap_len\n        cmd.stream_now = False\n      \
       \  cmd.time_spec = _uhd.time_spec(t0 + tb.cap_offset / tb.samp_rate)\n     \
       \   _src.issue_stream_cmd(cmd)\n        tb.bursts_sent += 1\n        _time.sleep(tb.period)\n\
-      threading.Thread(target=_bursts, daemon=True).start()\n# ZCU216_GR_SNAPSHOT=<png>:\
-      \ save the window after ZCU216_GR_SNAPSHOT_S (default 6) s and quit\n_snap =\
-      \ os.environ.get(\"ZCU216_GR_SNAPSHOT\")\nif _snap:\n    self.resize(1600, 600)\n\
+      threading.Thread(target=_bursts, daemon=True).start()\n# RFSOC4X2_GR_SNAPSHOT=<png>:\
+      \ save the window after RFSOC4X2_GR_SNAPSHOT_S (default 6) s and quit\n_snap =\
+      \ os.environ.get(\"RFSOC4X2_GR_SNAPSHOT\")\nif _snap:\n    self.resize(1600, 600)\n\
       \    def _shot(tb=self):\n        tb.grab().save(_snap)\n        print(f\"snapshot\
       \ {_snap} after {tb.bursts_sent} bursts\", flush=True)\n        tb.close()\n\
-      \    _Qt.QTimer.singleShot(int(1000 * float(os.environ.get(\"ZCU216_GR_SNAPSHOT_S\"\
+      \    _Qt.QTimer.singleShot(int(1000 * float(os.environ.get(\"RFSOC4X2_GR_SNAPSHOT_S\"\
       , \"6\"))), _shot)\n"
     comment: ''
     priority: '0'
@@ -420,7 +420,7 @@ blocks:
 - name: tones
   id: epy_block
   parameters:
-    _source_code: "\"\"\"\nEmbedded Python block (GRC epy_block) of the zcu216_tones_*\
+    _source_code: "\"\"\"\nEmbedded Python block (GRC epy_block) of the rfsoc4x2_tones_*\
       \ flowgraphs:\none timed TX burst per message on the `fire` port, the same tone\
       \ on every\nchannel.\n\nEvery channel carries amp x exp(j 2 pi tone_step n)\
       \ (tone_step: the tone as\na fraction of the sample rate; the flowgraphs pass\
@@ -440,7 +440,7 @@ blocks:
       \ sample and reports nothing.\n\"\"\"\nimport numpy as np\nimport pmt\nfrom\
       \ gnuradio import gr\n\n\nclass blk(gr.sync_block):\n    def __init__(self,\
       \ nchan=2, burst_len=32768, amp=0.25, tone_step=1.0 / 64):\n        gr.sync_block.__init__(self,\
-      \ name=\"ZCU216 tone bursts\", in_sig=None,\n                              \
+      \ name=\"RFSoC 4x2 tone bursts\", in_sig=None,\n                              \
       \ out_sig=[np.complex64] * int(nchan))\n        self.nchan, self.burst_len =\
       \ int(nchan), int(burst_len)\n        n = np.arange(self.burst_len)\n      \
       \  self.sig = (amp * np.exp(2j * np.pi * tone_step * n)).astype(np.complex64)\n\
@@ -474,7 +474,7 @@ blocks:
     nchan: nchan
     tone_step: tone / samp_rate
   states:
-    _io_cache: ('ZCU216 tone bursts', 'blk', [('nchan', '2'), ('burst_len', '32768'),
+    _io_cache: ('RFSoC 4x2 tone bursts', 'blk', [('nchan', '2'), ('burst_len', '32768'),
       ('amp', '0.25'), ('tone_step', '0.015625')], [('fire', 'message', 1)], [('0',
       'complex', 1), ('1', 'complex', 1)], '', ['burst_len', 'nchan'])
     bus_sink: false

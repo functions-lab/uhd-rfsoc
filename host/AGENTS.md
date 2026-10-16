@@ -338,7 +338,7 @@ application with larger buffers (GNU Radio, `rx_samples_to_file --spb`,
 
 | arg | default | meaning |
 |---|---|---|
-| `type` | | `zcu216`. With any other `type` the module returns nothing without touching the network. |
+| `type` | | `zcu216` (any board this module serves) or `rfsoc4x2` (RFSoC 4x2 boards only, reported as `type=rfsoc4x2`). With any other `type` the module returns nothing without touching the network. |
 | `addr` | broadcast | board management IP (control). Without it, discovery broadcasts on every IPv4 interface for 150 ms (`find_timeout=`) and each board answers with the address it was reached on. If UDP discovery is filtered, `type=zcu216,addr=` falls back to `info` over TCP. |
 | `serial`, `name`, `product` | | filter discovery results (`product=zcu216` or `rfsoc4x2`: the board kind) |
 | `channels` | 1 | the build to use: N = 1, 2, 4, 8 or 16 channels in one stream (PROTOCOL §9). Sent as `set_channels N` right after `claim`; the daemon loads that N's default build -- the fastest whose sc16 stream fits the link: 1250 MS/s at 1-2 channels, 750 / 375 / 187.5 MS/s at 4 / 8 / 16 -- if another is loaded (seconds, `rate_timeout`). A daemon that answers `ERR unknown command` is a 1-channel daemon: the module warns and uses N = 1. |
