@@ -6,8 +6,8 @@ options:
     cmake_opt: ''
     comment: ''
     copyright: ''
-    description: 'ZCU216 sc8max 16ch (zcu216_v49_16ch_qsfp_f6_fs2250): timed tone bursts,
-      captured on every channel'
+    description: 'ZCU216 sc8max 16ch (zcu216_v49_16ch_qsfp_f6_fs2250): timed tone
+      bursts, captured on every channel'
     gen_cmake: 'On'
     gen_linking: dynamic
     generate_options: qt_gui
@@ -75,8 +75,8 @@ blocks:
   id: variable
   parameters:
     comment: ''
-    value: '"type=zcu216,channels=16" + ",otw=sc8" + (",addr=" + addr if addr else
-      "")'
+    value: '"type=zcu216,product=zcu216,channels=16" + ",otw=sc8" + (",addr=" + addr
+      if addr else "")'
   states:
     bus_sink: false
     bus_source: false
@@ -136,7 +136,7 @@ blocks:
   id: variable
   parameters:
     comment: ''
-    value: 3.75e+08
+    value: '3.75e+08'
   states:
     bus_sink: false
     bus_source: false
@@ -968,32 +968,50 @@ blocks:
     coordinate: [320, 840]
     rotation: 0
     state: enabled
+- name: tone
+  id: parameter
+  parameters:
+    alias: ''
+    comment: ''
+    hide: none
+    label: tone above the RF centre (Hz)
+    short_id: t
+    type: eng_float
+    value: 1e+07
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [520, 8]
+    rotation: 0
+    state: enabled
 - name: tones
   id: epy_block
   parameters:
     _source_code: "\"\"\"\nEmbedded Python block (GRC epy_block) of the zcu216_tones_*\
       \ flowgraphs:\none timed TX burst per message on the `fire` port, the same tone\
       \ on every\nchannel.\n\nEvery channel carries amp x exp(j 2 pi tone_step n)\
-      \ (tone_step: a fraction of\nthe sample rate; 1/64 = 64 samples per period).\
-      \ A message on `fire` (a pmt\ndouble: the device time t0, seconds) queues one\
-      \ burst of `burst_len` samples\nper channel, tagged for gr-uhd's USRP Sink on\
-      \ output 0: tx_sob + tx_time (t0)\non its first sample, tx_eob on its last.\
-      \ Between bursts the block emits\nnothing, so the sink sends nothing.\n\nThe\
-      \ burst is requested by message, not by a method call, because a message\nwakes\
-      \ the block's thread at once: a source block that returned 0 items is\notherwise\
-      \ left idle for up to 250 ms by GNU Radio's scheduler, which made the\nburst\
-      \ miss its start time (late packet, then an underflow per packet).\n\nThe block's\
-      \ very first output is one zero sample tagged tx_eob. gr-uhd's USRP\nSink opens\
-      \ a timed burst when it starts (an empty start-of-burst packet at\nnow + 0.15\
-      \ s) and never ends it; left open, the first real burst would close\nit with\
-      \ a packet whose time has passed -- a late (L) event. Ending it at once,\nwell\
-      \ before its time, plays one zero sample and reports nothing.\n\"\"\"\nimport\
-      \ numpy as np\nimport pmt\nfrom gnuradio import gr\n\n\nclass blk(gr.sync_block):\n\
-      \    def __init__(self, nchan=16, burst_len=32768, amp=0.25, tone_step=1.0 /\
-      \ 64):\n        gr.sync_block.__init__(self, name=\"ZCU216 tone bursts\", in_sig=None,\n\
-      \                               out_sig=[np.complex64] * int(nchan))\n     \
-      \   self.nchan, self.burst_len = int(nchan), int(burst_len)\n        n = np.arange(self.burst_len)\n\
-      \        self.sig = (amp * np.exp(2j * np.pi * tone_step * n)).astype(np.complex64)\n\
+      \ (tone_step: the tone as\na fraction of the sample rate; the flowgraphs pass\
+      \ tone / samp_rate, 10 MHz\nby default). A message on `fire` (a pmt\ndouble:\
+      \ the device time t0, seconds) queues one burst of `burst_len` samples\nper\
+      \ channel, tagged for gr-uhd's USRP Sink on output 0: tx_sob + tx_time (t0)\n\
+      on its first sample, tx_eob on its last. Between bursts the block emits\nnothing,\
+      \ so the sink sends nothing.\n\nThe burst is requested by message, not by a\
+      \ method call, because a message\nwakes the block's thread at once: a source\
+      \ block that returned 0 items is\notherwise left idle for up to 250 ms by GNU\
+      \ Radio's scheduler, which made the\nburst miss its start time (late packet,\
+      \ then an underflow per packet).\n\nThe block's very first output is one zero\
+      \ sample tagged tx_eob. gr-uhd's USRP\nSink opens a timed burst when it starts\
+      \ (an empty start-of-burst packet at\nnow + 0.15 s) and never ends it; left\
+      \ open, the first real burst would close\nit with a packet whose time has passed\
+      \ -- a late (L) event. Ending it at once,\nwell before its time, plays one zero\
+      \ sample and reports nothing.\n\"\"\"\nimport numpy as np\nimport pmt\nfrom\
+      \ gnuradio import gr\n\n\nclass blk(gr.sync_block):\n    def __init__(self,\
+      \ nchan=16, burst_len=32768, amp=0.25, tone_step=1.0 / 64):\n        gr.sync_block.__init__(self,\
+      \ name=\"ZCU216 tone bursts\", in_sig=None,\n                              \
+      \ out_sig=[np.complex64] * int(nchan))\n        self.nchan, self.burst_len =\
+      \ int(nchan), int(burst_len)\n        n = np.arange(self.burst_len)\n      \
+      \  self.sig = (amp * np.exp(2j * np.pi * tone_step * n)).astype(np.complex64)\n\
       \        self.message_port_register_in(pmt.intern(\"fire\"))\n        self.set_msg_handler(pmt.intern(\"\
       fire\"), self._fire)\n        self._pending = []\n        self._pos = None\n\
       \        self._t0 = 0.0\n        self._closed_start = False\n\n    def _fire(self,\
@@ -1022,7 +1040,7 @@ blocks:
     maxoutbuf: '0'
     minoutbuf: '0'
     nchan: nchan
-    tone_step: '0.015625'
+    tone_step: tone / samp_rate
   states:
     _io_cache: ('ZCU216 tone bursts', 'blk', [('nchan', '16'), ('burst_len', '32768'),
       ('amp', '0.25'), ('tone_step', '0.015625')], [('fire', 'message', 1)], [('0',

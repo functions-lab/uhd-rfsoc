@@ -55,6 +55,9 @@ exclude build build-* *.log *.jou *.backup.* .Xil __pycache__ *.pyc results/*/
 # Files only here inside mapped trees (xrfclk/RFSoC4x2/LMX2594_250.0_5000.0.txt,
 # host/benchmark/oracle_builds_rfsoc4x2.txt) are local: status / push ignore them.
 exclude ZCU208 oracle_builds_zcu208.txt
+# ---- the GNU Radio flowgraphs: the .grc files are the sources here (edited in GRC);
+# SPEAR's generator and its embedded block are not taken
+exclude make_flowgraphs.py zcu216_tone_bursts.py
 
 # ---- rewrites: the board designs carry this repository's names (zcu2xx_uhd_v49; the
 # block design inside is still named zcu2xx_v49_<N>ch_qsfp, so bitstreams are
