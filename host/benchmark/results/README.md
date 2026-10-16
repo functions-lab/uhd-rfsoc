@@ -303,6 +303,62 @@ the ladder, attempt 3 in the jumping sequence. Measured
 with the predecessor of `rate_loopback.py` (same pulse and criterion, 2
 trials per rate).
 
+## SIMD kernels on x86 (AVX-512) and aarch64 (NEON), 2026-10-16
+
+The kernels have two implementations of one algorithm (`../../lib/zcu216_kernels.cpp`):
+AVX-512 F + BW on x86, NEON on aarch64, chosen by the host's architecture
+(scalar on an x86 without AVX-512). `zcu216_kernel_check` (SIMD against
+scalar, every format pair, N = 1..16, edge values) gives 0 mismatches and the
+same output digests on both (RX `716ce70cb03059d5`, TX `b44eb762fc46d989`).
+`zcu216_kernel_bench`, one thread on wei-duke-wsp5 (GS/s of wire slots), the
+former AVX2 kernels -> AVX-512:
+
+| kernel | AVX2 | AVX-512 |
+|---|---|---|
+| RX sc16 -> fc32 N=1 / 4 / 8 / 16 | 4.51 / 2.52 / 2.99 / 2.88 | 4.13 / 3.42 / 3.62 / 3.58 |
+| RX sc16 -> sc16 N=4 | 4.00 | 7.02 |
+| RX sc8 -> sc16 / sc8 N=8 | 5.25 / 5.59 | 7.25 / 7.75 |
+| RX sc12 -> fc32 N=4 | 1.85 | 2.95 |
+| TX fc32 -> sc16 N=1 / 4 / 16 | 5.57 / 3.03 / 2.85 | 6.83 / 6.35 / 4.92 |
+| TX sc16 -> sc16 N=4 | 8.72 | 10.22 |
+| TX fc32 -> sc12 / sc8 N=4 | 1.85 / 3.96 | 4.19 / 4.94 |
+| TX sc8 -> sc8 N=8 | 7.30 | 8.15 |
+
+Strict full-rate duplex (`bench_strict.sh rxtx`, 30 s, every threshold 0), 3
+runs per wire format, then the over-the-air TX format check (`otw_tx_ota.py`):
+
+| host / board | build | sc16 | sc8 | OTA |
+|---|---|---|---|---|
+| wei-duke-wsp5 (AVX-512) / ZCU216 | 1ch 1250 MS/s | 3/3 | 3/3 | pass |
+| | 2ch 1250 MS/s | 2/3 | 3/3 | pass |
+| | 4ch 750 MS/s | 1/3 | 3/3 | pass |
+| | 8ch 375 MS/s | 0/3 | 3/3 | pass |
+| | 16ch 187.5 MS/s | 1/3 | 3/3 | pass |
+| | sc8max 4ch 1250 MS/s | -- | 3/3 | pass (sc8) |
+| | sc8max 8ch 750 MS/s | -- | 0/3 | pass (sc8) |
+| | sc8max 16ch 375 MS/s | -- | 0/3 | pass (sc8) |
+| DGX Spark (NEON) / RFSoC 4x2 | 1ch 2500 MS/s | 3/3 | 3/3 | pass |
+| | 2ch 1250 MS/s | 0/3 (8-10 TX underruns, TX 100.0 %) | 3/3 | pass |
+
+ZCU216 sc16 at 4-16 channels (97 % of the link): every failure is one RX ring
+overflow ~0.1 s after the stream starts, clean for the rest of the 30 s, the
+NIC missing nothing; the same with the former AVX2 kernels and with Vivado
+stopped and 18 GB free, so not the kernels. These builds passed 10/10 on
+2026-10-07 (above): a regression since, not yet located (candidates: the IP
+changes harvested 2026-10-12, the template bitstreams, the 2026-10-15 host
+changes). sc8max 8ch / 16ch (96 Gb/s each way) remain at this PC's limit,
+as before. The RFSoC 4x2 2ch sc8max (2 x 2500 MS/s) was still building.
+
+DGX Spark (GB10, 10 x Cortex-X925 + 10 x A725, ConnectX-7, UHD 4.6 /
+DPDK 23.11 from Ubuntu arm64), port enp1s0f0np0 forced to 100G CAUI-4 (autoneg
+off, lanes 4, RS-FEC) for the RFSoC 4x2: before a DGX OS update its CX-7
+transmitted at most ~16 Gb/s per PCIe function (kernel pktgen too, any queue
+count; RX at full rate), the known GB10 ConnectX-7 throttle (dmesg
+"insufficient power on the PCIe slot (27W)"); after `apt full-upgrade` and a
+reboot (kernel 7.0.0-1019-nvidia, CX-7 FW 28.45.4028) pktgen sends 98-99.6
+Gb/s. The module's layout puts the app (5, 8), the lcores (6, 7) and the
+workers (9, 15-19) on the X925 cores.
+
 ## Defects found and fixed during these measurements
 
 | symptom | cause | fix |
