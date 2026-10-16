@@ -6,3 +6,7 @@
 	path = host/gnuradio/gnuradio
 	url = https://github.com/gnuradio/gnuradio.git
 	shallow = true
+[submodule "host/sse2neon"]
+	path = host/sse2neon
+	url = https://github.com/DLTcollab/sse2neon.git
+	shallow = true

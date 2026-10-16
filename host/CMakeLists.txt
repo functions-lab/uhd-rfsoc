@@ -43,6 +43,19 @@ find_package(Threads REQUIRED)
 # UHD's public headers pull in Boost (ref_vector, equality_comparable, ...)
 find_package(Boost REQUIRED)
 
+# The sample kernels are one 128-bit SSE implementation (lib/zcu216_kernels.cpp):
+# native on x86, NEON on aarch64 through sse2neon (submodule host/sse2neon,
+# DLTcollab/sse2neon, a single header).
+set(_sse2neon_inc "")
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64")
+    set(_sse2neon_inc "${CMAKE_CURRENT_SOURCE_DIR}/sse2neon")
+    if(NOT EXISTS "${_sse2neon_inc}/sse2neon.h")
+        message(FATAL_ERROR "aarch64 build needs sse2neon: git submodule update --init --depth 1 host/sse2neon")
+    endif()
+    include_directories(BEFORE "${_sse2neon_inc}")
+    message(STATUS "uhd_zcu216: aarch64, SIMD kernels through sse2neon (${_sse2neon_inc})")
+endif()
+
 add_library(uhd_zcu216 MODULE
     lib/zcu216_util.cpp
     lib/zcu216_device.cpp
@@ -106,13 +119,23 @@ if(ZCU216_BUILD_BENCH)
     target_include_directories(zcu216_kernel_bench PRIVATE ${Boost_INCLUDE_DIRS})
     target_link_libraries(zcu216_kernel_bench PRIVATE ${UHD_LIBRARIES} Threads::Threads)
     target_compile_options(zcu216_kernel_bench PRIVATE -Wall -Wextra -Wno-unused-parameter)
-    add_executable(zcu216_dram_bench tools/zcu216_dram_bench.cpp
-        lib/zcu216_kernels.cpp lib/zcu216_pool.cpp lib/zcu216_otw.cpp)
-    target_include_directories(zcu216_dram_bench BEFORE PRIVATE "${_uhd_inc_shim}" lib)
-    target_include_directories(zcu216_dram_bench PRIVATE ${Boost_INCLUDE_DIRS})
-    target_link_libraries(zcu216_dram_bench PRIVATE ${UHD_LIBRARIES} Threads::Threads)
-    # its NIC thread streams with AVX2 intrinsics directly (the module picks AVX2 at run time)
-    target_compile_options(zcu216_dram_bench PRIVATE -Wall -Wextra -Wno-unused-parameter -mavx2)
+    # zcu216_kernel_check: the SIMD kernels against the scalar ones, bit for bit
+    add_executable(zcu216_kernel_check tools/zcu216_kernel_check.cpp
+        lib/zcu216_kernels.cpp lib/zcu216_otw.cpp)
+    target_include_directories(zcu216_kernel_check BEFORE PRIVATE "${_uhd_inc_shim}" lib)
+    target_include_directories(zcu216_kernel_check PRIVATE ${Boost_INCLUDE_DIRS})
+    target_link_libraries(zcu216_kernel_check PRIVATE ${UHD_LIBRARIES})
+    target_compile_options(zcu216_kernel_check PRIVATE -Wall -Wextra -Wno-unused-parameter)
+    # its NIC thread streams with AVX2 intrinsics directly (the module picks
+    # AVX2 at run time): x86 only
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|i.86")
+        add_executable(zcu216_dram_bench tools/zcu216_dram_bench.cpp
+            lib/zcu216_kernels.cpp lib/zcu216_pool.cpp lib/zcu216_otw.cpp)
+        target_include_directories(zcu216_dram_bench BEFORE PRIVATE "${_uhd_inc_shim}" lib)
+        target_include_directories(zcu216_dram_bench PRIVATE ${Boost_INCLUDE_DIRS})
+        target_link_libraries(zcu216_dram_bench PRIVATE ${UHD_LIBRARIES} Threads::Threads)
+        target_compile_options(zcu216_dram_bench PRIVATE -Wall -Wextra -Wno-unused-parameter -mavx2)
+    endif()
 endif()
 
 # UHD_LIB_PATH comes from UHDConfig.cmake (dir of libuhd.so), e.g.

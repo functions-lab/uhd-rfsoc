@@ -1,7 +1,7 @@
 //
 // zcu216_kernel_bench -- throughput of the uhd_zcu216 sample kernels, the
 // per-sample work of recv() / send(): the fused channel (de-)interleave and
-// format conversion, AVX2 against scalar against UHD 4.6's own converter, one
+// format conversion, SIMD (SSE / NEON) against scalar against UHD 4.6's own converter, one
 // thread on a cache-resident 512 KB payload (64 packets of 2048 sc16 slots,
 // packet by packet like recv()), and the worker pool on a 64-packet call.
 // GS/s of wire slots. No device, no root.
@@ -180,8 +180,8 @@ double secs_since(std::chrono::steady_clock::time_point t0)
 
 void bench()
 {
-    std::printf("\nthroughput, GS/s of wire slots (one thread unless noted; AVX2 %s)\n",
-        cpu_has_avx2() ? "available" : "NOT available");
+    std::printf("\nthroughput, GS/s of wire slots (one thread unless noted; SIMD %s %s)\n", simd_name(),
+        cpu_has_simd() ? "available" : "NOT available");
     const size_t PKT = 2048; // sc16 slots per packet
     const size_t NP  = 64;   // packets per call: 512 KB of sc16 payload
     struct rxcase
@@ -221,7 +221,7 @@ void bench()
                         op.data(), p * (S / NP));
                 reps++;
             }
-            std::printf("  %s %6.2f", simd ? "AVX2" : "scalar", reps * double(slots) / secs_since(t0) / 1e9);
+            std::printf("  %s %6.2f", simd ? "SIMD" : "scalar", reps * double(slots) / secs_since(t0) / 1e9);
         }
         if (c.uhd_in and c.N == 1) {
             const auto t0 = std::chrono::steady_clock::now();
@@ -266,7 +266,7 @@ void bench()
                 k(ip.data(), 0, S, pay.p, 0);
                 reps++;
             }
-            std::printf("  %s %6.2f", simd ? "AVX2" : "scalar", reps * double(slots) / secs_since(t0) / 1e9);
+            std::printf("  %s %6.2f", simd ? "SIMD" : "scalar", reps * double(slots) / secs_since(t0) / 1e9);
         }
         if (c.N == 1 and c.cpu == cpu_t::fc32 and c.otw == otw_t::sc16) {
             const auto t0 = std::chrono::steady_clock::now();
