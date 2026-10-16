@@ -5,6 +5,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <algorithm>
+#include <climits>
 #include <cctype>
 #include <chrono>
 #include <cstdio>
@@ -682,6 +683,26 @@ const cpu_layout& default_layout()
             cores.push_back(g);
         }
         std::sort(cores.begin(), cores.end());
+        // heterogeneous CPUs (arm big.LITTLE, e.g. the DGX Spark's Cortex-X925
+        // + A725: /sys/.../cpu_capacity 1024 vs ~720): the fastest cores
+        // first, so the application, the lcores and the workers get them;
+        // workers only on cores within 90 % of the fastest (the little ones
+        // stay with the system). Uniform capacity (x86): unchanged.
+        auto capacity = [](unsigned c) {
+            std::ifstream t("/sys/devices/system/cpu/cpu" + std::to_string(c) + "/cpu_capacity");
+            long v = 0;
+            return (t >> v) ? v : 0L;
+        };
+        long cap_max = 0, cap_min = LONG_MAX;
+        for (const auto& g : cores) {
+            const long v = capacity(g.front());
+            cap_max = std::max(cap_max, v), cap_min = std::min(cap_min, v);
+        }
+        const bool hetero = cap_max > 0 and cap_min < cap_max;
+        if (hetero)
+            std::stable_sort(cores.begin(), cores.end(), [&](const auto& a, const auto& b) {
+                return capacity(a.front()) > capacity(b.front());
+            });
         size_t k = 0;
         auto next = [&]() -> const std::vector<unsigned>* { return k < cores.size() ? &cores[k++] : nullptr; };
         const auto* c0 = next();
@@ -707,7 +728,8 @@ const cpu_layout& default_layout()
         if (k < cores.size()) {
             l.app = *c0;
             for (size_t i = k; i < cores.size(); i++)
-                l.workers.push_back(cores[i].front());
+                if (not hetero or capacity(cores[i].front()) * 10 >= cap_max * 9)
+                    l.workers.push_back(cores[i].front());
         }
         return l;
     }();
