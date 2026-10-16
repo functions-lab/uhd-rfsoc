@@ -13,14 +13,14 @@
 #               `cmake --install`), or $ZCU216_MODULE if set (e.g. a build tree
 #               copy; do not mix two different copies in one process).
 #   affinity    the module places itself by the CPU topology (physical cores
-#               C0, C1, ... = hyperthread sibling groups; dpdk::default_layout):
-#               EAL main on C0, the RX and TX polling lcores on the two threads
-#               of C1, one conversion worker per middle core, and the app is
-#               started with taskset on the threads of the FIRST core, with
-#               the EAL main lcore (the application thread itself)
-#               (wei-duke-wsp5: main/app 0+6, lcores 1+7, workers 2,3,4,5).
-#               ZCU216_APP_CPUS=<list> overrides the app set, =all skips
-#               taskset. When the lcores or workers are moved with the device
+#               C0, C1, ... = hyperthread sibling groups, fast cores first on
+#               big.LITTLE; dpdk::default_layout): EAL main on C0, the RX and
+#               TX polling lcores on C1 (C2), one conversion worker per further
+#               core, and it pins the application to the CPUs those leave free
+#               (wei-duke-wsp5: main/app 0+6, lcores 1+7, workers 2,3,4,5;
+#               DGX Spark: app 5,8, lcores 6,7, workers 9,15-19). So by default
+#               no taskset here. ZCU216_APP_CPUS=<list> sets the app set (=all:
+#               no taskset either). When the lcores or workers are moved with the device
 #               args dpdk_*_core(s)= / worker_cpus=, also export
 #               ZCU216_LCORE_CPUS / ZCU216_WORKER_CPUS (and ZCU216_RX_WORKERS)
 #               to match: the app then gets every online CPU they leave free.
@@ -74,9 +74,8 @@ cores() {
 TASKSET=()
 CPUS=${ZCU216_APP_CPUS:-}
 if [ "$CPUS" != all ]; then
-    if [ -z "$CPUS" ] && [ -z "$LCORE_CPUS" ] && [ -z "${ZCU216_WORKER_CPUS:-}" ] \
-       && [ "$(cores | wc -l)" -ge 4 ]; then
-        CPUS=$(cores | head -1)               # the module's default layout
+    if [ -z "$CPUS" ] && [ -z "$LCORE_CPUS" ] && [ -z "${ZCU216_WORKER_CPUS:-}" ]; then
+        CPUS=all                              # the module's default layout places the app
     fi
     if [ -z "$CPUS" ]; then
         LCORE_CPUS=${LCORE_CPUS:-1-5}
@@ -100,7 +99,7 @@ if [ "$CPUS" != all ]; then
         done
         CPUS=$(IFS=,; echo "${free[*]}")
     fi
-    [ -n "$CPUS" ] && command -v taskset >/dev/null && TASKSET=(taskset -c "$CPUS")
+    [ -n "$CPUS" ] && [ "$CPUS" != all ] && command -v taskset >/dev/null && TASKSET=(taskset -c "$CPUS")
 fi
 
 # ---- run (as root)
