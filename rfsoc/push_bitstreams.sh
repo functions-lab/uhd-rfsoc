@@ -3,6 +3,7 @@
 #
 #   rfsoc/push_bitstreams.sh [bit_dir] [user@host] [remote_checkout]
 #   defaults: fpga_board/zcu216/build/v49_qsfp/bitstreams  xilinx@zcu216-0
+#   (the RFSoC 4x2: fpga_board/rfsoc4x2/build/v49_qsfp/bitstreams xilinx@rfsoc4x2-0)
 #             /home/xilinx/jupyter_notebooks/rfsoc-uhd
 #
 # The code reaches the board by git (README "Board"); the bitstreams do not
@@ -18,12 +19,12 @@ RDIR=${3:-/home/xilinx/jupyter_notebooks/rfsoc-uhd}
 SSH="ssh -o BatchMode=yes -o ConnectTimeout=10"
 shopt -s nullglob
 files=()
-for bit in "$BIT_DIR"/zcu2*_v49_*ch_qsfp*.bit; do
+for bit in "$BIT_DIR"/*_v49_*ch_qsfp*.bit; do
     hwh=${bit%.bit}.hwh
     [[ -f $hwh ]] || { echo "missing $hwh (next to $bit)" >&2; exit 1; }
     files+=("$bit" "$hwh")
 done
-[[ ${#files[@]} -gt 0 ]] || { echo "no zcu2*_v49_*ch_qsfp*.bit in $BIT_DIR" >&2; exit 1; }
+[[ ${#files[@]} -gt 0 ]] || { echo "no *_v49_*ch_qsfp*.bit in $BIT_DIR" >&2; exit 1; }
 $SSH "$TARGET" "test -d '$RDIR/rfsoc/server'" || { echo "$TARGET:$RDIR is not a checkout of this repository (git push first)" >&2; exit 1; }
 rsync -a -e "$SSH" "${files[@]}" "$TARGET:$RDIR/rfsoc/server/"
 names=$(for f in "${files[@]}"; do basename "$f"; done)

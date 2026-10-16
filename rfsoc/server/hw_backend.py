@@ -1453,11 +1453,22 @@ class HwBackend(Backend):
     def get_rx_gain(self, ch):
         return self._rx_gain[ch]
 
+    @staticmethod
+    def _output_curr_ua(blk) -> int:
+        """XRFdc_GetOutputCurr of a DAC block, in uA. Not blk.OutputCurr: PYNQ's
+        xrfdc declares that property "int" but the C function takes a u32 *,
+        which cffi refuses ("initializer for ctype 'unsigned int *' must be a
+        pointer to same type"). Reached only on a VOP build (the RFSoC 4x2's)."""
+        import xrfdc
+        v = xrfdc._ffi.new("u32*")
+        blk._call_function_implicit("GetOutputCurr", v)
+        return int(v[0])
+
     def _read_vop_gain(self, ch) -> float:
         if not self.geo.vop_mode:
             return 0.0
         try:
-            return gain_for_vop_ua(self._dac_block(ch)[2].OutputCurr)
+            return gain_for_vop_ua(self._output_curr_ua(self._dac_block(ch)[2]))
         except Exception as e:
             log.warning("DAC OutputCurr readback failed (%s)", e)
             return 0.0
@@ -1474,7 +1485,7 @@ class HwBackend(Backend):
         blk = self._dac_block(ch)[2]
         with self._lock:
             blk.SetDACVOP(vop_ua_for_gain(float(db)))
-            self._tx_gain[ch] = gain_for_vop_ua(blk.OutputCurr)
+            self._tx_gain[ch] = gain_for_vop_ua(self._output_curr_ua(blk))
         return self._tx_gain[ch]
 
     def get_tx_gain(self, ch):
