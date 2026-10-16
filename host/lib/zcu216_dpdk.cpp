@@ -739,6 +739,10 @@ const cpu_layout& default_layout()
         // the last core and 3 workers, lost ~1 GB/s of RX at sc12)
         if (k < cores.size()) {
             l.app = *c0;
+            // big.LITTLE: no hyperthread sibling beside the main lcore, so the
+            // application (an RX and a TX thread) gets one more fast core
+            if (hetero and c0->size() == 1 and k < cores.size() and fast(cores[k].front()))
+                l.app.push_back(cores[k++].front());
             for (size_t i = k; i < cores.size(); i++)
                 if (not hetero or fast(cores[i].front()))
                     l.workers.push_back(cores[i].front());

@@ -1265,6 +1265,25 @@ void zcu216_device::_place_app(const device_addr_t& args)
         for (unsigned c : online)
             if (not busy_cores.count(c))
                 want.insert(c);
+        // big.LITTLE (DGX Spark): only the fast cores (within 90 % of the
+        // highest cpu_capacity) if any is left; recv()'s planning and the
+        // inline conversion run on these threads
+        {
+            auto cap = [](unsigned c) {
+                std::ifstream t("/sys/devices/system/cpu/cpu" + std::to_string(c) + "/cpu_capacity");
+                long v = 0;
+                return (t >> v) ? v : 0L;
+            };
+            long mx = 0;
+            for (unsigned c : online)
+                mx = std::max(mx, cap(c));
+            std::set<unsigned> fast;
+            for (unsigned c : want)
+                if (mx > 0 and cap(c) * 10 >= mx * 9)
+                    fast.insert(c);
+            if (not fast.empty() and fast.size() < want.size())
+                want = fast;
+        }
         if (want.empty()) // every core busy: at least off the busy CPUs themselves
             for (unsigned c : online)
                 if (not busy.count(c))
