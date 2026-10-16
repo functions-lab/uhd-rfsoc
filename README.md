@@ -90,18 +90,27 @@ measured results), `host/gnuradio/README.md` (GNU Radio).
 
 ## Board
 
-The ZCU216 (`xilinx@zcu216-0`) holds a git checkout of this repository at
-`/home/xilinx/jupyter_notebooks/rfsoc-uhd`, kept on the PC's branch and commit:
+Each board holds a git checkout of this repository at
+`/home/xilinx/jupyter_notebooks/rfsoc-uhd`, kept on the PC's branch and
+commit: the ZCU216 `xilinx@zcu216-0` (git remote `zcu216`) and the RFSoC 4x2
+`xilinx@rfsoc4x2-0`, which runs the ZCU208 bitstreams (remote `rfsoc4x2`):
 
 ```
-git remote add zcu216 xilinx@zcu216-0:/home/xilinx/jupyter_notebooks/rfsoc-uhd   # once
-sync/board.sh hooks on      # once: every commit / checkout here updates the board
-sync/board.sh status        # both sides: branch, commit, uncommitted files
-sync/board.sh push          # PC -> board
-sync/board.sh pull          # board -> PC (after committing on the board)
+git remote add zcu216   xilinx@zcu216-0:/home/xilinx/jupyter_notebooks/rfsoc-uhd     # once
+git remote add rfsoc4x2 xilinx@rfsoc4x2-0:/home/xilinx/jupyter_notebooks/rfsoc-uhd   # once
+git config board.remotes "zcu216 rfsoc4x2"   # once: the boards push / status / the hooks go to
+sync/board.sh hooks on      # once: every commit / checkout here updates every board
+sync/board.sh status        # every side: branch, commit, uncommitted files
+sync/board.sh push          # PC -> boards (-b <remote>: one board)
+sync/board.sh -b zcu216 pull   # board -> PC (after committing on the board)
 ```
+
+A new board's checkout starts empty: on the board `git init
+~/jupyter_notebooks/rfsoc-uhd && git -C ~/jupyter_notebooks/rfsoc-uhd config
+receive.denyCurrentBranch updateInstead`, then `sync/board.sh -b <remote> push`.
 
 Kept on the board only (not in git): the bitstreams in `rfsoc/server/`
-(`rfsoc/push_bitstreams.sh` copies them) and the board's settings
-`rfsoc/server/zcu216_uhd.conf` (from `zcu216_uhd.conf.example`: `data_ip`,
-`name`).
+(`rfsoc/push_bitstreams.sh` copies them: `rfsoc/push_bitstreams.sh
+fpga_board/zcu208/build/v49_qsfp/bitstreams xilinx@rfsoc4x2-0` for the 4x2)
+and the board's settings `rfsoc/server/zcu216_uhd.conf` (from
+`zcu216_uhd.conf.example`: `data_ip`, `name`).

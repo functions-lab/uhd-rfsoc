@@ -23,6 +23,9 @@ OUT=/tmp/uhd_daemon.out
 
 pids() { pgrep -f '[z]cu216_uhd_daemon[.]py' || true; }
 
+# PYNQ's board name (its xrfclk needs $BOARD set), as /etc/profile.d/boardname.sh sets it
+pynq_board() { [ -n "${BOARD:-}" ] && echo "$BOARD" || tr -d '\0' < /proc/device-tree/chosen/pynq_board 2>/dev/null || echo ZCU216; }
+
 addr() { ip -4 -br addr show eth0 2>/dev/null | awk '{print $3}' | cut -d/ -f1; }
 
 check() {
@@ -46,7 +49,7 @@ start() {
     sudo true                                   # ask for the password before going to the background
     [ -f "$LOG" ] && sudo mv -f "$LOG" "$LOG.1"
     cd "$SRV"
-    sudo env BOARD=${BOARD:-ZCU216} XILINX_XRT=/usr setsid nohup "$PY" zcu216_uhd_daemon.py \
+    sudo env BOARD="$(pynq_board)" XILINX_XRT=/usr setsid nohup "$PY" zcu216_uhd_daemon.py \
         --allow-unlocked --log "$LOG" "$@" > "$OUT" 2>&1 < /dev/null &
     echo "starting (loads the bitstream and locks MTS; ~20 s), log $LOG"
     for _ in $(seq 120); do
@@ -89,7 +92,7 @@ status() {
 case ${1:-start} in
 start)   shift || true; start "$@" ;;
 fg)      shift; check; cd "$SRV"; [ -z "$(pids)" ] || { echo "already running: ./run_daemon.sh stop first" >&2; exit 1; }
-         exec sudo env BOARD=${BOARD:-ZCU216} XILINX_XRT=/usr "$PY" zcu216_uhd_daemon.py --allow-unlocked "$@" ;;
+         exec sudo env BOARD="$(pynq_board)" XILINX_XRT=/usr "$PY" zcu216_uhd_daemon.py --allow-unlocked "$@" ;;
 stop)    stop ;;
 restart) shift; stop; start "$@" ;;
 status)  status ;;
