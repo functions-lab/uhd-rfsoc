@@ -36,12 +36,11 @@ sc16-max build) reloads; a reload redoes the WHOLE bring-up above
 (`_switch_to`).
 The DAC is always fed by the UDP player (the DRAM/DMA path is gone).
 
-The same daemon serves the ZCU208 (zcu208_v49_<N>ch_qsfp*, N = 1, 2; dual
-RF-ADC tiles, channel map in boards.py). Everything board-specific -- the
+The same daemon serves the RFSoC 4x2 (rfsoc4x2_v49_<N>ch_qsfp*, N = 1, 2;
+dual RF-ADC tiles, channel map in boards.py). Everything board-specific -- the
 bitstream names, which slices carry channel c, the IP-slice / xrfdc-block
-numbering of a dual ADC tile, the rfsoc_lib board name -- comes from the
-`Board` the backend is given; this file names no board. The ZCU208 path is
-built but NOT board-tested (hw_design/ZCU208/CLAUDE.md).
+numbering of a dual ADC tile, the rfsoc_lib board name, the GT refclk source
+-- comes from the `Board` the backend is given; this file names no board.
 """
 from __future__ import annotations
 
@@ -566,7 +565,7 @@ class HwBackend(Backend):
                  board: Optional[Board] = None):
         # the board: given, else the one the bitstream's name belongs to
         self.board = board or board_of_bitstream(bitstream) or get_board(None)
-        self.product = self.board.prefix          # discovery product= (zcu216 / zcu208)
+        self.product = self.board.prefix          # discovery product= (zcu216 / rfsoc4x2)
         if nco_phase_reset not in ("all", "tuned", "off"):
             raise ValueError(f"nco_phase_reset {nco_phase_reset!r}: all|tuned|off")
         self.nco_phase_reset = nco_phase_reset
@@ -790,6 +789,10 @@ class HwBackend(Backend):
         from eth100g import Eth100G
         from bringup import link_bringup
         self.eth = Eth100G(self.ol)
+        if self.board.gt_refclk != "8a34001":
+            # a fixed oscillator (RFSoC 4x2: Si570): nothing to program
+            pr(f"[b] GT refclk: {self.board.name} {self.board.gt_refclk}, fixed (not programmed)")
+            refclk = False
         self.link = link_bringup(self.eth, refclk=refclk, pr=pr, **self._link)
         pr(f"[e] MAC/IP {self.data_mac} {self.data_ip} -> streamer + player (ARP on)")
         self.eth.set_addresses(self.data_mac, self.data_ip)
@@ -1176,7 +1179,7 @@ class HwBackend(Backend):
         fail (the first after a board reboot on zcu216-0; DAC alignment, see
         MTS_ATTEMPTS), so it runs up to MTS_ATTEMPTS times; the attempt that
         locked is logged. MyMTS takes
-        the board's tile mask and reference tile (ZCU208: tiles 0 and 2,
+        the board's tile mask and reference tile (RFSoC 4x2: tiles 0 and 2,
         RefTile 2)."""
         from rfsoc_lib.mts import MyMTS
         mts = MyMTS(self.ol.rfdc.usp_rf_data_converter, self.ol,
@@ -1234,7 +1237,7 @@ class HwBackend(Backend):
 
         The compiled factors are per IP slice; they are read back per xrfdc
         block (a dual ADC tile's I and Q slices 2k, 2k+1 are block k). A tile
-        the board leaves unpowered (RfdcTask set_board_rules; ZCU208 tiles 1
+        the board leaves unpowered (RfdcTask set_board_rules; RFSoC 4x2 tiles 1
         and 3) is listed but not read: its blocks were never initialised and
         it carries no streamed channel (the build's verify_rate_variant
         checked its compiled factor)."""

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# v49_ladder.sh [STEP] (ZCU208) -- build every v49 bitstream (`make v49-ladder`):
+# v49_ladder.sh [STEP] (RFSoC 4x2) -- build every v49 bitstream (`make v49-ladder`):
 # the normal family (the max-rate factor of each channel count and every RFDC
 # factor below it, down to 40) and the sc8max 2ch build, all at fs 5000. See v49_geometry in
-# block_designs/zcu208_uhd_v49/zcu208_uhd_v49.tcl for the table; rfsoc_lib/uhd/benchmark/oracle_builds.txt
+# block_designs/rfsoc4x2_uhd_v49/rfsoc4x2_uhd_v49.tcl for the table; host/benchmark/oracle_builds_rfsoc4x2.txt
 # lists the same builds for the board tests.
 #
 #   STEP          bd | synth | bit (default bit; bd checks every block design fast)
@@ -22,12 +22,12 @@ MAXPAR=${MAXPAR:-3}; MIN_FREE_GB=${MIN_FREE_GB:-12}; JOBS=${JOBS:-8}
 OUT=build/v49_qsfp; LOGS=$OUT/logs; mkdir -p "$LOGS"
 
 # N:F:fs -- the max-rate builds of both families first, then the rest of the
-# normal family's ladder (v49_geometry in block_designs/zcu208_uhd_v49/zcu208_uhd_v49.tcl)
+# normal family's ladder (v49_geometry in block_designs/rfsoc4x2_uhd_v49/rfsoc4x2_uhd_v49.tcl)
 BUILDS=("1:2:5000" "2:4:5000" "2:2:5000")
 for f in 3 4 5 6 8 10 12 16 20 24 40; do BUILDS+=("1:$f:5000"); done
 for f in 5 6 8 10 12 16 20 24 40; do BUILDS+=("2:$f:5000"); done
 
-name_of() { local n=$1 f=$2 fs=$3; echo "zcu208_v49_${n}ch_qsfp_f${f}$([ "$fs" = 2400 ] || echo _fs$fs)"; }
+name_of() { local n=$1 f=$2 fs=$3; echo "rfsoc4x2_v49_${n}ch_qsfp_f${f}$([ "$fs" = 2400 ] || echo _fs$fs)"; }
 # implementation strategy per build (default: Vivado's). These missed timing by
 # 0.02-0.24 ns with the default, each on a routing-dominated path in the CMAC
 # 322 MHz domain (udp_player / axis_pkt_arb), and closed with
@@ -36,9 +36,9 @@ name_of() { local n=$1 f=$2 fs=$3; echo "zcu208_v49_${n}ch_qsfp_f${f}$([ "$fs" =
 # SpreadLogic_high -0.278) (2026-10-11)
 strategy_of() {
     case $1 in
-        zcu208_v49_1ch_qsfp_f10_fs5000|zcu208_v49_1ch_qsfp_f20_fs5000|zcu208_v49_2ch_qsfp_f5_fs5000)
+        rfsoc4x2_v49_1ch_qsfp_f10_fs5000|rfsoc4x2_v49_1ch_qsfp_f20_fs5000|rfsoc4x2_v49_2ch_qsfp_f5_fs5000)
             echo Performance_ExtraTimingOpt ;;
-        zcu208_v49_2ch_qsfp_f16_fs5000)
+        rfsoc4x2_v49_2ch_qsfp_f16_fs5000)
             echo Performance_Explore ;;
     esac
 }

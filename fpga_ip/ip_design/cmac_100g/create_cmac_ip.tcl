@@ -11,6 +11,11 @@
 # with an out-of-context checkpoint may not sit inside a block-design module
 # reference (filemgmt 56-328), and cmac_100g is one.
 #
+# CMAC_LANES selects the GT sites: zsfp (default; the zSFP28 cages above) or
+# qsfp128 (the RFSoC 4x2 QSFP28: X0Y4..X0Y7, one quad, on MGTREFCLK0_128 from
+# its Si570 at 156.25 MHz). qsfp128 sets the Verilog define CMAC_ONE_QUAD, which
+# makes the wrapper RTL use quad 128's QPLL0 alone.
+#
 # CMAC_REFCLK selects the refclk the 8A34001 is programmed to. 156.25 needs a
 # fractional QPLL0 (SDM 2^23); 161.1328125 is integer. The QPLL common
 # settings live in cmac/refclk_<f>/cmac_caui4_common_wrapper.v and must match.
@@ -18,6 +23,14 @@
 set cmac_dir [file dirname [file normalize [info script]]]
 if {![info exists CMAC_REFCLK]} { set CMAC_REFCLK 156.25 }
 set fracn [expr {$CMAC_REFCLK == 156.25 ? 8388608 : 0}]
+if {![info exists CMAC_LANES]} { set CMAC_LANES zsfp }
+switch -- $CMAC_LANES {
+  zsfp    { set gt_ch {X0Y9 X0Y8 X0Y5 X0Y4}
+            set gt_ref {X0Y4 clk1 X0Y5 clk1 X0Y8 clk1-1 X0Y9 clk1-1} }
+  qsfp128 { set gt_ch {X0Y7 X0Y6 X0Y5 X0Y4}
+            set gt_ref {X0Y4 clk0 X0Y5 clk0 X0Y6 clk0 X0Y7 clk0} }
+  default { error "create_cmac_ip: CMAC_LANES $CMAC_LANES (zsfp or qsfp128)" }
+}
 
 create_ip -name cmac_usplus -vendor xilinx.com -library ip -version 3.1 -module_name cmac_caui4
 set_property -dict [list \
@@ -35,7 +48,7 @@ create_ip -name gtwizard_ultrascale -vendor xilinx.com -library ip -version 1.7 
 set gt [get_ips cmac_caui4_gt]
 set_property CONFIG.PRESET {GTY-CAUI_4} $gt
 set_property -dict [list \
-  CONFIG.CHANNEL_ENABLE {X0Y9 X0Y8 X0Y5 X0Y4} \
+  CONFIG.CHANNEL_ENABLE $gt_ch \
   CONFIG.TX_MASTER_CHANNEL {X0Y4} CONFIG.RX_MASTER_CHANNEL {X0Y4} \
   CONFIG.GT_DIRECTION {BOTH} \
   CONFIG.TX_LINE_RATE {25.78125} CONFIG.RX_LINE_RATE {25.78125} \
@@ -56,8 +69,8 @@ set_property -dict [list \
   CONFIG.ENABLE_OPTIONAL_PORTS {loopback_in gtwiz_reset_tx_datapath_in gtwiz_reset_rx_datapath_in rxrecclkout_out gtpowergood_out rxdfelpmreset_in rxlpmen_in rxprbscntreset_in rxprbserr_out rxprbssel_in txprbssel_in rxresetdone_out txresetdone_out rxbufstatus_out drpaddr_in drpdi_in drpen_in drpwe_in drpdo_out drprdy_out drpclk_in txpostcursor_in txprecursor_in txdiffctrl_in eyescanreset_in eyescantrigger_in rxcdrhold_in rxdfelfhold_in txprbsforceerr_in txpolarity_in txinhibit_in txpippmen_in txpippmsel_in rxpolarity_in rxrate_in eyescandataerror_out txctrl0_in txctrl1_in rxctrl0_out rxctrl1_out txbufstatus_out} \
 ] $gt
 set_property -dict [list \
-  CONFIG.TX_REFCLK_SOURCE {X0Y4 clk1 X0Y5 clk1 X0Y8 clk1-1 X0Y9 clk1-1} \
-  CONFIG.RX_REFCLK_SOURCE {X0Y4 clk1 X0Y5 clk1 X0Y8 clk1-1 X0Y9 clk1-1} \
+  CONFIG.TX_REFCLK_SOURCE $gt_ref \
+  CONFIG.RX_REFCLK_SOURCE $gt_ref \
 ] $gt
 
 foreach x {cmac_caui4 cmac_caui4_gt} {
@@ -67,4 +80,7 @@ foreach x {cmac_caui4 cmac_caui4_gt} {
 
 add_files -norecurse [glob $cmac_dir/cmac_*.v]
 add_files -norecurse $cmac_dir/refclk_$CMAC_REFCLK/cmac_caui4_common_wrapper.v
+if {$CMAC_LANES eq "qsfp128"} {
+  set_property verilog_define [concat [get_property verilog_define [current_fileset]] CMAC_ONE_QUAD] [current_fileset]
+}
 update_compile_order -fileset sources_1

@@ -6,6 +6,9 @@
 // the 8A34001 (Q11) on MGTREFCLK1_128 (Y34/Y35) feeding both QPLL commons.
 // The core-support hierarchy below (cmac/cmac_caui4_*.v) is the example's, with
 // the split-quad edits proven to place and route.
+// With CMAC_ONE_QUAD defined (create_cmac_ip.tcl CMAC_LANES qsfp128: the
+// RFSoC 4x2 QSFP28) the four lanes are GTY X0Y4..X0Y7 in quad 128 alone, on
+// MGTREFCLK0_128 (its Si570), and only quad 128's QPLL common is built.
 //
 // What replaces the example's packet generator/monitor:
 //   * the CMAC TX/RX 512-bit AXIS on s_axis_tx / m_axis_rx (usr_clk domain,

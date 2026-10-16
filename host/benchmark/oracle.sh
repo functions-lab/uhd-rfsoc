@@ -18,8 +18,8 @@
 #     filter: a substring of "<family> <N>ch <bitstream>" (e.g. sc8max, " 4ch ", _f3_)
 #
 # Builds: oracle_builds.txt (deployed on the board with server/deploy.sh);
-# BUILDS=<file> takes another list (a ZCU208: BUILDS=oracle_builds_zcu208.txt
-# and BOARD=<its ssh target>; the daemon picks the board from the bitstream).
+# BUILDS=<file> takes another list (an RFSoC 4x2: BUILDS=oracle_builds_rfsoc4x2.txt
+# and BOARD=xilinx@rfsoc4x2-0; the daemon picks the board from the bitstream).
 # Run as root on the PC (UHD over DPDK); the board is driven over ssh as the
 # invoking user ($SUDO_USER). Hold the board for the whole run.
 # Environment (no address is built in):

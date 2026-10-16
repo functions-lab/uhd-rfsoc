@@ -34,9 +34,16 @@ check() {
     compgen -G "$SRV/*_v49_*ch_qsfp*.bit" > /dev/null || { echo "no bitstreams in $SRV: copy them with rfsoc/push_bitstreams.sh (on the PC)" >&2; exit 1; }
 }
 
+# the channel counts of the bitstreams here (<board>_v49_<N>ch_qsfp*.bit), e.g. 1/2/4/8/16
+chan_counts() {
+    local f n=(); for f in "$SRV"/*_v49_*ch_qsfp*.bit; do f=${f##*_v49_}; n+=("${f%%ch_*}"); done
+    printf '%s\n' "${n[@]}" | sort -nu | paste -sd/
+}
+
 serving_hint() {
+    local c; c=$(chan_counts)
     echo "on the PC:  uhd_find_devices --args type=zcu216"
-    echo "            sudo uhd_usrp_probe --args type=zcu216,addr=$(addr),channels=4   # channels=1/2/4/8/16"
+    echo "            sudo uhd_usrp_probe --args type=zcu216,addr=$(addr),channels=${c%%/*}   # channels=$c"
 }
 
 start() {

@@ -8,10 +8,10 @@ Contract: ../PROTOCOL.md -- UDP discovery (49700), line-based TCP control
     # .hwh in --bitstream-dir is a selectable build (N channels, one factor):
     sudo -E python3 zcu216_uhd_daemon.py [--bitstream-dir DIR] [--bitstream X.bit]
 
-The same daemon serves a ZCU208 (zcu208_v49_<N>ch_qsfp*.bit, N = 1, 2; built,
-NOT board-tested): --board ZCU208, or $UHD_BOARD, or nothing when the
-bitstream directory holds only ZCU208 builds (boards.py). UHD still sees
-type=zcu216 (the protocol); discovery reports product=zcu208.
+The same daemon serves an RFSoC 4x2 (rfsoc4x2_v49_<N>ch_qsfp*.bit, N = 1, 2):
+--board RFSoC4x2, or $UHD_BOARD, or nothing when the bitstream directory holds
+only RFSoC 4x2 builds (boards.py). UHD still sees type=zcu216 (the protocol);
+discovery reports product=rfsoc4x2.
 
 Addresses (PROTOCOL.md §1, board_config.py): the management address in every
 reply is the one the request arrived on (nothing configured); the FPGA's 100G
@@ -247,7 +247,7 @@ def build_argparser() -> argparse.ArgumentParser:
                    help="bitstream loaded at start (.hwh next to it) [<dir>/"
                         f"the board's default (ZCU216: zcu216_v49_1ch_qsfp_f2_fs2500.bit), "
                         f"else the highest-rate variant]")
-    p.add_argument("--board", default=None, choices=("ZCU216", "ZCU208"),
+    p.add_argument("--board", default=None, type=str.upper, choices=("ZCU216", "RFSOC4X2"),
                    help="board [$UHD_BOARD, else the board of --bitstream, else the "
                         "one whose v49 builds are in --bitstream-dir, else ZCU216]")
     p.add_argument("--no-load", action="store_true",

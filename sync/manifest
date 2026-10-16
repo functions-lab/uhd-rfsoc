@@ -6,7 +6,8 @@
 #                                              pull, reversed on push. Keep them few and specific.
 # Files not reached by a `map` (the top README/AGENTS, the board Makefiles, sync/) are local only.
 
-# ---- FPGA IP: the UHD data-plane cores, the CMAC wrapper, the ZCU208 I/Q joiners.
+# ---- FPGA IP: the UHD data-plane cores, the CMAC wrapper, the dual RF-ADC I/Q joiners
+# (SPEAR's ZCU208 ones; the RFSoC 4x2 design uses them).
 # Same relative layout as SPEAR's hw_design/{ip_design,ip}, so the packaging and
 # build scripts find each other unchanged.
 map hw_design/ip_design/uhd_ip                                fpga_ip/ip_design/uhd_ip
@@ -20,10 +21,8 @@ map hw_design/ZCU216/block_designs/zcu216_v49_qsfp/zcu216_v49_qsfp.tcl  fpga_boa
 map hw_design/ZCU216/block_designs/zcu216_v49_qsfp/zcu216_v49_qsfp.xdc  fpga_board/zcu216/block_designs/zcu216_uhd_v49/zcu216_uhd_v49.xdc
 map hw_design/ZCU216/scripts/v49_build.tcl                    fpga_board/zcu216/scripts/v49_build.tcl
 map hw_design/ZCU216/scripts/v49_ladder.sh                    fpga_board/zcu216/scripts/v49_ladder.sh
-map hw_design/ZCU208/block_designs/zcu208_v49_qsfp/zcu208_v49_qsfp.tcl  fpga_board/zcu208/block_designs/zcu208_uhd_v49/zcu208_uhd_v49.tcl
-map hw_design/ZCU208/block_designs/zcu208_v49_qsfp/zcu208_v49_qsfp.xdc  fpga_board/zcu208/block_designs/zcu208_uhd_v49/zcu208_uhd_v49.xdc
-map hw_design/ZCU208/scripts/v49_build.tcl                    fpga_board/zcu208/scripts/v49_build.tcl
-map hw_design/ZCU208/scripts/v49_ladder.sh                    fpga_board/zcu208/scripts/v49_ladder.sh
+# The RFSoC 4x2 (fpga_board/rfsoc4x2) is local: SPEAR has no design for it (its ZCU208
+# v49 port is not taken; the 4x2 design started from it).
 
 # ---- host: the UHD device module, its tools, benchmarks and flowgraphs (the PC side)
 map rfsoc_lib/uhd/host                                        host
@@ -52,15 +51,17 @@ map rfsoc_lib/xrfclk                                          rfsoc/rfsoc_lib/xr
 
 # ---- never taken: build output, tool logs, editor and Python droppings
 exclude build build-* *.log *.jou *.backup.* .Xil __pycache__ *.pyc results/*/
+# ---- the ZCU208 is not supported here: its clock files and oracle list stay in SPEAR.
+# Files only here inside mapped trees (xrfclk/RFSoC4x2/LMX2594_250.0_5000.0.txt,
+# host/benchmark/oracle_builds_rfsoc4x2.txt) are local: status / push ignore them.
+exclude ZCU208 oracle_builds_zcu208.txt
 
 # ---- rewrites: the board designs carry this repository's names (zcu2xx_uhd_v49; the
 # block design inside is still named zcu2xx_v49_<N>ch_qsfp, so bitstreams are
 # unchanged), and the flow finds the IP under fpga_ip/ instead of next to the
 # board directories. Rules must not overlap: push reverses them one by one.
 rewrite fpga_board/zcu216/*  "zcu216_v49_qsfp" "zcu216_uhd_v49"
-rewrite fpga_board/zcu208/*  "zcu208_v49_qsfp" "zcu208_uhd_v49"
 rewrite fpga_board/zcu216/scripts/v49_build.tcl "set hwd         [file normalize $zcu216/..]" "set hwd         [file normalize $zcu216/../../fpga_ip]"
-rewrite fpga_board/zcu208/scripts/v49_build.tcl "set hwd         [file normalize $zcu208/..]" "set hwd         [file normalize $zcu208/../../fpga_ip]"
 # host tools next to the benchmarks: SPEAR has them in ../host/tools
 rewrite host/benchmark/*.sh  "$HERE/../host/tools" "$HERE/../tools"
 # Python helpers that reach across the tree

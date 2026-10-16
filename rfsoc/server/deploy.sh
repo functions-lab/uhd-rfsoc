@@ -30,9 +30,9 @@
 #                   delete every other zcu216_v49_* .bit/.hwh on the board, then
 #                   compare the md5 of every copied file and check that the
 #                   LMX2594_250.0_<fs>.0.txt each build's fs needs is there
-#   BOARD=zcu208    deploy ZCU208 builds instead (zcu208_v49_*, the list
-#                   benchmark/oracle_builds_zcu208.txt, xrfclk/ZCU208); pass
-#                   the ZCU208's user@host. Default zcu216.
+#   BOARD=rfsoc4x2  deploy RFSoC 4x2 builds instead (rfsoc4x2_v49_*, the list
+#                   benchmark/oracle_builds_rfsoc4x2.txt, xrfclk/RFSoC4x2); pass
+#                   the board's user@host. Default zcu216.
 set -euo pipefail
 
 TARGET=${1:-xilinx@zcu216-0}
@@ -43,12 +43,11 @@ SSH="ssh -o BatchMode=yes -o ConnectTimeout=10"
 REPO=$(cd "$HERE/../../.." && pwd)
 SRV=$RDIR/rfsoc_lib/uhd/server
 P=$(echo "${BOARD:-zcu216}" | tr 'A-Z' 'a-z')            # bitstream prefix
-case $P in
-    zcu216) LIST=oracle_builds.txt ;;
-    zcu208) LIST=oracle_builds_zcu208.txt ;;
-    *) echo "BOARD=$P: zcu216 or zcu208" >&2; exit 2 ;;
+case $P in                                                  # CLKDIR: rfsoc_lib/xrfclk/<CLKDIR>
+    zcu216)   LIST=oracle_builds.txt;          CLKDIR=ZCU216 ;;
+    rfsoc4x2) LIST=oracle_builds_rfsoc4x2.txt; CLKDIR=RFSoC4x2 ;;
+    *) echo "BOARD=$P: zcu216 or rfsoc4x2" >&2; exit 2 ;;
 esac
-CLKDIR=$(echo "$P" | tr 'a-z' 'A-Z')                        # rfsoc_lib/xrfclk/<CLKDIR>
 $SSH "$TARGET" "mkdir -p '$SRV'"
 # zcu216_uhd.conf is the board's own settings (FPGA data IP/MAC) and the
 # bitstreams are deployed separately: excluded, so --delete keeps them

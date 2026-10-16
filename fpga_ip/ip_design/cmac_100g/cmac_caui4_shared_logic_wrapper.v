@@ -132,6 +132,12 @@ cmac_caui4_common_wrapper i_cmac_caui4_common_wrapper
     .qpll1outrefclk                       (qpll1outrefclk)
 );
 
+`ifdef CMAC_ONE_QUAD
+// one quad (CMAC_LANES qsfp128): no quad-129 common; its lock follows quad 128's
+assign qpll0lock[1]      = qpll0lock[0];
+assign qpll0outclk[1]    = 1'b0;
+assign qpll0outrefclk[1] = 1'b0;
+`else
 cmac_caui4_common_wrapper i_cmac_caui4_common_wrapper_q129
 (
     .refclk                               (gt_ref_clk),
@@ -151,6 +157,8 @@ cmac_caui4_common_wrapper i_cmac_caui4_common_wrapper_q129
     .qpll1outclk (),
     .qpll1outrefclk ()
 );
+
+`endif
 
 endmodule
 

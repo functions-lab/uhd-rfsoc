@@ -11,7 +11,7 @@ it by `sync/` (`sync/README.md`).
 
 | directory | what | runs on |
 |---|---|---|
-| `fpga_ip/` | the custom FPGA IP: UHD data-plane cores (`ip_design/uhd_ip`, packaged in `ip/uhd_ip`), the 100G CMAC wrapper (`ip_design/cmac_100g`), the ZCU208 dual-ADC I/Q joiners (`ip/iprepo`) | Vivado |
+| `fpga_ip/` | the custom FPGA IP: UHD data-plane cores (`ip_design/uhd_ip`, packaged in `ip/uhd_ip`), the 100G CMAC wrapper (`ip_design/cmac_100g`), the dual-ADC I/Q joiners of the RFSoC 4x2 (`ip/iprepo`) | Vivado |
 | `fpga_board/` | one directory per board: the block design (`block_designs/<board>_uhd_v49/`, one `.tcl` + `.xdc` for every channel count) and its build flow | Vivado |
 | `host/` | the UHD device module `libuhd_zcu216.so` (DPDK; stock UHD apps run it with `sudo`), benchmarks / test oracle, GNU Radio flowgraphs | PC |
 | `rfsoc/` | the board daemon (`server/`) and the `rfsoc_lib` modules it uses (RFDC, clocks, MTS) | board (PYNQ) |
@@ -32,9 +32,9 @@ PC builds and runs against -- the Ubuntu 24.04 packages `libuhd 4.6.0.0` and
 git submodule update --init --depth 1     # after cloning; reference sources, not needed to build host/
 ```
 
-Boards: ZCU216 (1, 2, 4, 8, 16 channels; tested on hardware), ZCU208 (1, 2
-channels; built, not yet tested on a board), RFSoC 4x2 (not ported:
-`fpga_board/rfsoc4x2/README.md`).
+Boards: ZCU216 (1, 2, 4, 8, 16 channels at fs 2500 MS/s; tested on zcu216-0)
+and RFSoC 4x2 (1, 2 channels at fs 5000 MS/s, up to 2500 MS/s per channel;
+`fpga_board/rfsoc4x2/README.md`, rfsoc4x2-0). The ZCU208 is not supported.
 
 ## Quick start (ZCU216)
 
@@ -93,7 +93,7 @@ measured results), `host/gnuradio/README.md` (GNU Radio).
 Each board holds a git checkout of this repository at
 `/home/xilinx/jupyter_notebooks/rfsoc-uhd`, kept on the PC's branch and
 commit: the ZCU216 `xilinx@zcu216-0` (git remote `zcu216`) and the RFSoC 4x2
-`xilinx@rfsoc4x2-0`, which runs the ZCU208 bitstreams (remote `rfsoc4x2`):
+`xilinx@rfsoc4x2-0` (remote `rfsoc4x2`):
 
 ```
 git remote add zcu216   xilinx@zcu216-0:/home/xilinx/jupyter_notebooks/rfsoc-uhd     # once
@@ -111,6 +111,6 @@ receive.denyCurrentBranch updateInstead`, then `sync/board.sh -b <remote> push`.
 
 Kept on the board only (not in git): the bitstreams in `rfsoc/server/`
 (`rfsoc/push_bitstreams.sh` copies them: `rfsoc/push_bitstreams.sh
-fpga_board/zcu208/build/v49_qsfp/bitstreams xilinx@rfsoc4x2-0` for the 4x2)
+fpga_board/rfsoc4x2/build/v49_qsfp/bitstreams xilinx@rfsoc4x2-0` for the 4x2)
 and the board's settings `rfsoc/server/zcu216_uhd.conf` (from
 `zcu216_uhd.conf.example`: `data_ip`, `name`).

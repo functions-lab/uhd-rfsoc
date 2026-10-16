@@ -1,9 +1,8 @@
-# v49_build.tcl (ZCU208) -- build zcu208_v49_<N>ch_qsfp (ZCU208 as a UHD device
-# over 100 GbE), N = 1, 2. This board's own copy of the ZCU216 flow
-# (hw_design/ZCU208/CLAUDE.md: nothing is shared between the two boards' flows).
-# `make v49 N=<N> F=<F>` / `make v49-ladder` in hw_design/ZCU208 call it; directly:
+# v49_build.tcl (RFSoC 4x2) -- build rfsoc4x2_v49_<N>ch_qsfp (the RFSoC 4x2 as a
+# UHD device over 100 GbE), N = 1, 2. `make v49 N=<N> F=<F>` / `make v49-ladder` /
+# `make v49-templates` in fpga_board/rfsoc4x2 call it; directly:
 #
-#   cd hw_design/ZCU208
+#   cd fpga_board/rfsoc4x2
 #   vivado -mode batch -nojournal -nolog -source scripts/v49_build.tcl \
 #          -tclargs <N> [bd|synth|bit|impl] [jobs] [factor] [fs]
 #
@@ -12,41 +11,48 @@
 #   bit    + implementation and bitstream (default)
 #   impl   continue an existing synthesized project to a bitstream
 #
-# Inputs (hw_design rule: a block-design directory holds only its .tcl and .xdc):
-#   block_designs/zcu208_uhd_v49/zcu208_uhd_v49.{tcl,xdc}   the design, every N
+# Inputs:
+#   block_designs/rfsoc4x2_uhd_v49/rfsoc4x2_uhd_v49.{tcl,xdc}  the design, every N
 #                                                   (self-contained: geometry, data plane, checks)
-#   ../ip/uhd_ip                                    packaged cores (`make package` in
-#                                                   ../ip_design/uhd_ip first)
-#   ../ip/iprepo/dual_rf_adc_iq_merger_1.0,
-#   ../ip/iprepo/dual_channel_rf_adc_iq_packer_1.0  the dual RF-ADC I/Q joiners (N = 1, 2)
-#   ../ip_design/cmac_100g                          CMAC + split-quad GT wrapper RTL
-# Output: build/v49_qsfp/bitstreams/zcu208_v49_<N>ch_qsfp_f<F>_fs<fs>.{bit,hwh}
+#   board_files/rfsoc4x2/1.0                        Real Digital's board files (RFSoC4x2-BSP):
+#                                                   board part realdigital.org:rfsoc4x2:part0:1.0,
+#                                                   whose preset configures the PS
+#   ../../fpga_ip/ip/uhd_ip                         packaged cores (`make v49-package` first)
+#   ../../fpga_ip/ip/iprepo/dual_rf_adc_iq_merger_1.0,
+#   ../../fpga_ip/ip/iprepo/dual_channel_rf_adc_iq_packer_1.0  the dual RF-ADC I/Q joiners
+#   ../../fpga_ip/ip_design/cmac_100g               CMAC + GT wrapper RTL, CMAC_LANES qsfp128
+#                                                   (the QSFP28: GTY quad 128, Si570 refclk)
+# Output: build/v49_qsfp/bitstreams/rfsoc4x2_v49_<N>ch_qsfp_f<F>_fs<fs>.{bit,hwh}
 #         (the deploy set; a build that misses timing goes to
 #         bitstreams_timing_fail/), with its timing and utilization reports.
 #         The Vivado project (build/v49_qsfp/<name>_proj) is deleted once the
 #         bitstream is out unless V49_KEEP_PROJ=1 is in the environment.
 #
-# factor = RFDC converter factor, a v49_geometry row of zcu208_uhd_v49.tcl
+# factor = RFDC converter factor, a v49_geometry row of rfsoc4x2_uhd_v49.tcl
 # (default: that N's first row); fs = converter sample rate in MS/s (default
 # 5000, the dual RF-ADC's maximum). The builds: normal family 1ch F2..40 and
-# 2ch F4..40, sc8max 2ch F2, all at fs 5000 (scripts/v49_ladder.sh). A build is
-# named ..._fs<fs> for fs != 2400 and needs
-# rfsoc_lib/xrfclk/ZCU208/LMX2594_250.0_<fs>.0.txt on the board.
+# 2ch F4..40, sc8max 2ch F2, all at fs 5000 (scripts/v49_ladder.sh); every one
+# is a run-time-rate template (PROTOCOL.md section 8), so 1ch F2 and 2ch F4
+# serve the whole normal family. A build is named ..._fs<fs> for fs != 2400
+# and needs rfsoc/rfsoc_lib/xrfclk/RFSoC4x2/LMX2594_250.0_<fs>.0.txt on the board.
 
 set scripts     [file dirname [file normalize [info script]]]
-set zcu208      [file normalize $scripts/..]
-set hwd         [file normalize $zcu208/../../fpga_ip]
+set board_dir   [file normalize $scripts/..]
+set hwd         [file normalize $board_dir/../../fpga_ip]
 if {$argc < 1} { error "usage: v49_build.tcl -tclargs <N> [bd|synth|bit|impl] [jobs] [factor] [fs]" }
 set V49_NCH     [lindex $argv 0]
-set here        $zcu208/block_designs/zcu208_uhd_v49
-set outdir      $zcu208/build/v49_qsfp
+set here        $board_dir/block_designs/rfsoc4x2_uhd_v49
+set outdir      $board_dir/build/v49_qsfp
+set xdc         $here/rfsoc4x2_uhd_v49.xdc
+# cmac_100g on the QSFP28 (create_cmac_ip.tcl)
+set CMAC_LANES  qsfp128
 if {![file exists $here]} { error "no design directory $here" }
 set V49_FS      [expr {$argc > 4 ? double([lindex $argv 4]) : 5000.0}]
 # the design's procs only (v49_geometry: the factor names the build)
 set V49_DEFINE_ONLY 1
-source $here/zcu208_uhd_v49.tcl
+source $here/rfsoc4x2_uhd_v49.tcl
 unset V49_DEFINE_ONLY
-set design_name zcu208_v49_${V49_NCH}ch_qsfp
+set design_name rfsoc4x2_v49_${V49_NCH}ch_qsfp
 set step        [expr {$argc > 1 ? [lindex $argv 1] : "bit"}]
 set jobs        [expr {$argc > 2 ? [lindex $argv 2] : 8}]
 set V49_FACTOR  [dict get [v49_geometry $V49_NCH [expr {$argc > 3 ? [lindex $argv 3] : ""}]] F]
@@ -65,12 +71,15 @@ if {[info exists ::env(V49_PROJ_FILE)] && $::env(V49_PROJ_FILE) ne ""} {
 }
 file mkdir $outdir
 cd $outdir
+# the board files are this directory's (Real Digital's, not in Vivado's store)
+set_param board.repoPaths [list $board_dir/board_files]
 
 # The RTL top = BD wrapper + cmac_100g (neither cmac_usplus nor
-# gtwizard_ultrascale may sit in the block design, see zcu208_uhd_v49.tcl). Every
+# gtwizard_ultrascale may sit in the block design, see rfsoc4x2_uhd_v49.tcl). Every
 # wrapper port passes through unchanged, except the CMAC-side ports the design
-# exports, which become nets on cmac_100g; the zSFP28 serial pins and the GT
-# refclk are new top ports, named as in the design XDC.
+# exports, which become nets on cmac_100g; the QSFP28 serial pins, the GT
+# refclk and the QSFP28 low-speed outputs (held constant) are new top ports,
+# named as in the design XDC.
 proc v49_gen_top {wrapper out} {
   set f [open $wrapper]; set src [read $f]; close $f
   if {![regexp {module\s+(\w+)\s*\(} $src -> wname]} { error "v49_gen_top: no module in $wrapper" }
@@ -101,13 +110,16 @@ proc v49_gen_top {wrapper out} {
   lappend decl "    input  wire \[3:0\] sfp_rxp" "    input  wire \[3:0\] sfp_rxn" \
                "    output wire \[3:0\] sfp_txp" "    output wire \[3:0\] sfp_txn" \
                "    input  wire sfp_refclk_p" "    input  wire sfp_refclk_n"
+  lappend decl "    output wire qsfp_resetl" "    output wire qsfp_lpmode" "    output wire qsfp_modsell"
   set L [list "// GENERATED by v49_build.tcl (v49_gen_top) from [file tail $wrapper] -- do not edit." \
-              "// ${design}_top = block design + cmac_100g (100GbE on the zSFP28 cages)." \
+              "// ${design}_top = block design + cmac_100g (100GbE on the QSFP28 cage)." \
               "`timescale 1ps/1ps" "module ${design}_top (" [join $decl ",\n"] ");"]
   foreach p $ports {
     lassign $p d w n
     if {$n in $have} { lappend L "  wire [expr {$w ne {} ? "$w " : {}}]$n;" }
   }
+  lappend L "  // QSFP28 module out of reset, full power, selected" \
+            "  assign qsfp_resetl  = 1'b1;" "  assign qsfp_lpmode  = 1'b0;" "  assign qsfp_modsell = 1'b0;"
   set conns {}
   foreach p $ports { lappend conns "    .[lindex $p 2]([lindex $p 2])" }
   lappend L "" "  $wname ${design}_i (" [join $conns ",\n"] "  );" "" "  cmac_100g cmac ("
@@ -138,7 +150,7 @@ proc v49_write_outputs {proj_name design_name variant} {
   file copy -force ./$proj_name/$proj_name.gen/sources_1/bd/$design_name/hw_handoff/${design_name}.hwh \
       ./$proj_name/bitstream/${design_name}${variant}.hwh
   # a timing-clean build's pair also lands in build/v49_qsfp/bitstreams (what
-  # rfsoc_lib/uhd/server/deploy.sh BIT_DIR= points at); one that missed
+  # rfsoc/push_bitstreams.sh copies); one that missed
   # timing goes to bitstreams_timing_fail instead, so it can never replace a
   # good one in the deploy set
   set wns [get_property STATS.WNS [get_runs impl_1]]
@@ -183,8 +195,8 @@ if {$step eq "impl"} {
   exit
 }
 
-create_project $proj_name ./$proj_name -force -part xczu48dr-fsvg1517-2-e
-set_property BOARD_PART xilinx.com:zcu208:part0:2.0 [current_project]
+create_project $proj_name ./$proj_name -force -part xczu48dr-ffvg1517-2-e
+set_property BOARD_PART realdigital.org:rfsoc4x2:part0:1.0 [current_project]
 set_property target_language Verilog [current_project]
 # ip/uhd_ip: the data-plane cores (sources, testbenches, packaging in
 # ip_design/uhd_ip); the two I/Q joiners from ip/iprepo -- the design's only
@@ -196,12 +208,12 @@ foreach vlnv {user.org:uhd:udp_streamer:1.0 user.org:uhd:udp_player:1.0
               user.org:uhd:axis_pkt_arb:1.0 user.org:uhd:ch_interleave:1.0
               user.org:uhd:tx_beamformer:1.0 user.org:uhd:rx_beamformer:1.0} {
   if {[llength [get_ipdefs -all $vlnv]] == 0} {
-    error "v49: IP $vlnv not in ip/uhd_ip -- run 'make package' in hw_design/ip_design/uhd_ip"
+    error "v49: IP $vlnv not in ip/uhd_ip -- run 'make v49-package' in fpga_board/rfsoc4x2"
   }
 }
 source $hwd/ip_design/cmac_100g/create_cmac_ip.tcl
-add_files -fileset constrs_1 -norecurse $here/zcu208_uhd_v49.xdc
-source $here/zcu208_uhd_v49.tcl
+add_files -fileset constrs_1 -norecurse $xdc
+source $here/rfsoc4x2_uhd_v49.tcl
 validate_bd_design
 save_bd_design
 if {$step eq "bd"} { exit }

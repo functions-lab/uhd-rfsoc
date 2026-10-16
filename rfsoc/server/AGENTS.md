@@ -39,7 +39,7 @@ tile reset (interpolation -> build factor); ADC tiles keep theirs.
 |---|---|
 | `zcu216_uhd_daemon.py` | entry point: TCP control server (49710), UDP discovery (49700) |
 | `protocol.py` | transport-free command parser/dispatcher, claim ownership, reply formats, §10 `otw=` options and the 100GbE rate cap (also vetting a rate change), §11 TX (`*_bf*`) and RX (`*_rbf*`) beamformer commands |
-| `boards.py` | the boards served (ZCU216, ZCU208): bitstream prefix, channel map (IP slices vs xrfdc blocks on a dual ADC tile), tiles RfdcTask leaves unpowered, default build; `detect_board` (`--board`, `$UHD_BOARD`, bitstream names) |
+| `boards.py` | the boards served (ZCU216, RFSoC 4x2): bitstream prefix, GT refclk source, channel map (IP slices vs xrfdc blocks on a dual ADC tile), tiles RfdcTask leaves unpowered, default build; `detect_board` (`--board`, `$UHD_BOARD`, bitstream names) |
 | `board_config.py` | the board's settings file `zcu216_uhd.conf` (FPGA data IP/MAC, name): search path, parsing, the eth0-derived default MAC |
 | `zcu216_uhd.conf.example` | template of that file (placeholders only; the real file is git-ignored) |
 | `backend.py` | `Backend` interface; the v49 build table (`V49_GEOMETRY`), link checks (`link_problem`, `default_rate`), FC interval policy, TX/RX beamformer state and `steering_weights` (rfsoc_lib `Beamformer`) |
@@ -56,10 +56,10 @@ tile reset (interpolation -> build factor); ADC tiles keep theirs.
 | `deploy.sh` | rsync to the board, no start |
 | `tests/client_check.py` | end-to-end protocol check against a running daemon on the board (discovery, claim, RX/TX streams, OTW formats, beamformer registers) |
 
-### ZCU208 (built, not board-tested)
+### RFSoC 4x2
 
-`HwBackend` names no board; `boards.py` does. A ZCU208 (`zcu208_v49_<N>ch_qsfp`,
-N = 1, 2, fs 5000) differs in three ways the code handles from the `Board`
+`HwBackend` names no board; `boards.py` does. An RFSoC 4x2 (`rfsoc4x2_v49_<N>ch_qsfp`,
+N = 1, 2, fs 5000; design in fpga_board/rfsoc4x2) differs in four ways the code handles from the `Board`
 and the `.hwh` (`C_High_Speed_ADC`): its RF-ADC tiles are dual, so one ADC
 slice carries I or Q alone at Data_Width samples per clock (the fabric check
 and the beat use that); a channel's ADC is two IP slices but ONE xrfdc block
@@ -67,9 +67,11 @@ and the beat use that); a channel's ADC is two IP slices but ONE xrfdc block
 RfdcTask, so the readback lists their blocks without reading them. `rx_chans`
 and `tx_chans` are therefore different lists. rfdc.py reads the global
 `ZCU216_CONFIG` on every board, so `HwBackend` copies the board's clock limits
-(`ZCU208_MIN_MAX_CONFIG`) and NEW_CONFIG into it. Discovery reports
-`product=zcu208` (type stays `zcu216`, the protocol). What a first board run
-must confirm: `hw_design/ZCU208/CLAUDE.md` "v49".
+(`RFSOC4X2_MIN_MAX_CONFIG`: a bypassed ADC tile takes up to 5000 MHz) and
+NEW_CONFIG into it. And its 100G refclk is a Si570 running from power-up
+(`Board.gt_refclk` "si570"): the 8A34001 programming of the ZCU216 is
+skipped. Discovery reports `product=rfsoc4x2` (type stays `zcu216`, the
+protocol).
 
 ## Addresses (PROTOCOL.md §1)
 

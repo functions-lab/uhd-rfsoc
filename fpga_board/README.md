@@ -3,8 +3,7 @@
 | board | design | channels | status |
 |---|---|---|---|
 | `zcu216/` | `block_designs/zcu216_uhd_v49/` | 1, 2, 4, 8, 16 | built and tested on zcu216-0 (`host/benchmark/results/README.md`) |
-| `zcu208/` | `block_designs/zcu208_uhd_v49/` | 1, 2 | built, timing-clean; not yet run on a board |
-| `rfsoc4x2/` | -- | -- | not ported (`rfsoc4x2/README.md`) |
+| `rfsoc4x2/` | `block_designs/rfsoc4x2_uhd_v49/` | 1, 2 (fs 5000) | RFSoC 4x2, rfsoc4x2-0 (`rfsoc4x2/README.md`) |
 
 Each board's design is ONE self-contained block design (`.tcl` + `.xdc`) for
 every channel count, factor and sample rate; the build names it
@@ -18,6 +17,7 @@ make -C zcu216 v49-package                       # ../fpga_ip/ip_design/uhd_ip -
 make -C zcu216 v49 N=4 F=3 FS=2250 [STEP=bd]     # one build
 make -C zcu216 v49-ladder [MAXPAR=3] [JOBS=8]    # every build the board's oracle list has
 make -C zcu216 v49-templates                     # one per channel count: run-time rate
+make -C rfsoc4x2 v49-templates                   # the RFSoC 4x2's two (1ch F2, 2ch F4 at fs 5000)
 ```
 
 Every build is a run-time-rate template (`PROTOCOL.md` §8): its converter

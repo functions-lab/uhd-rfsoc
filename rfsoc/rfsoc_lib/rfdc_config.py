@@ -123,7 +123,9 @@ RFSOC4X2_MIN_MAX_CONFIG = {
     "RefClockNoPLLDacMin": 500.0,
     "RefClockNoPLLDacMax": 10000.0,
     "RefClockNoPLLAdcMin": 500.0,
-    "RefClockNoPLLAdcMax": 4000.0,
+    # dual-tile RF-ADC (ZU48DR): 5 GS/s, so a bypassed tile takes up to
+    # 5000 MHz (the quad-tile ZU49DR's limit is 2500)
+    "RefClockNoPLLAdcMax": 5000.0,
 }
 
 RFSOC4X2_DEFAULT_CONFIG = {

@@ -700,8 +700,14 @@ cmac_caui4_gt_wrapper i_cmac_caui4_gt_wrapper
     .rxctrl0_out                          (rxctrl0_out),
     .rxctrl1_out                          (rxctrl1_out),
 
+`ifdef CMAC_ONE_QUAD
+    // one quad (CMAC_LANES qsfp128): all four channels on quad 128's QPLL0
+    .qpll0clk_in                          ({4{qpll0outclk_out[0]}}),
+    .qpll0refclk_in                       ({4{qpll0outrefclk_out[0]}}),
+`else
     .qpll0clk_in                          ({{2{qpll0outclk_out[1]}},{2{qpll0outclk_out[0]}}}),
     .qpll0refclk_in                       ({{2{qpll0outrefclk_out[1]}},{2{qpll0outrefclk_out[0]}}}),
+`endif
     .qpll1clk_in                          (4'b0),
     .qpll1refclk_in                       (4'b0),
     .gtwiz_reset_qpll0lock_in             (gtwiz_reset_qpll0lock_in),

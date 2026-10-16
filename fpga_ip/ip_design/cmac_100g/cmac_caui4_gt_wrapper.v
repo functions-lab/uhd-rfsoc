@@ -432,6 +432,10 @@ module cmac_caui4_gt_wrapper
   assign drpclk_in[3]        = gt_drpclk;
 
 
+`ifdef CMAC_ONE_QUAD
+  assign gtwiz_reset_qpll0reset_out[1] = 1'b0;
+`endif
+
  cmac_caui4_gt i_cmac_caui4_gt
   (
    .drpaddr_in(drpaddr_in),
@@ -447,8 +451,14 @@ module cmac_caui4_gt_wrapper
    .gtpowergood_out(gtpowergood_out),
    .gtwiz_reset_all_in(gtwiz_reset_all_in),
    .gtwiz_reset_clk_freerun_in(gtwiz_reset_clk_freerun_in),
+`ifdef CMAC_ONE_QUAD
+   // one quad (CMAC_LANES qsfp128): the IP has one QPLL0 lock / reset
+   .gtwiz_reset_qpll0lock_in(gtwiz_reset_qpll0lock_in[0]),
+   .gtwiz_reset_qpll0reset_out(gtwiz_reset_qpll0reset_out[0]),
+`else
    .gtwiz_reset_qpll0lock_in(gtwiz_reset_qpll0lock_in),
    .gtwiz_reset_qpll0reset_out(gtwiz_reset_qpll0reset_out),
+`endif
    .gtwiz_reset_rx_cdr_stable_out(gtwiz_reset_rx_cdr_stable_out),
    .gtwiz_reset_rx_datapath_in(gtwiz_reset_rx_datapath_in),
    .gtwiz_reset_rx_done_out(gtwiz_reset_rx_done_out),
