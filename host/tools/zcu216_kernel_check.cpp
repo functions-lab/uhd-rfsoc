@@ -68,10 +68,11 @@ void fill_int(std::vector<uint8_t>& b, std::mt19937& g)
 template <class F>
 void fill_flt(std::vector<uint8_t>& b, std::mt19937& g)
 {
-    std::uniform_real_distribution<F> u(F(-1.1), F(1.1));
+    // from integers only (no std::uniform_real_distribution: its multiply-add
+    // is fused into an FMA on aarch64, so the inputs would differ per machine)
     for (size_t i = 0; i + sizeof(F) <= b.size(); i += sizeof(F)) {
         const uint32_t r = g();
-        F v              = u(g);
+        F v              = F(int32_t(g())) / F(1951806509); // about -1.1 .. 1.1
         switch (r % 16) {
             case 0: v = std::numeric_limits<F>::quiet_NaN(); break;
             case 1: v = std::numeric_limits<F>::infinity(); break;
@@ -138,7 +139,7 @@ int main(int argc, char** argv)
     std::printf("zcu216_kernel_check: SIMD %s, %s\n", simd_name(), cpu_has_simd() ? "used" : "NOT available (scalar only)");
     int fails = 0;
     for (int dir = 0; dir < 2; dir++) {
-        uint64_t digest = 1469598103934665603ull;
+        uint64_t digest = 1469598103934665603ull, in_digest = digest;
         size_t cases = 0, simd_cases = 0;
         int dfail = 0;
         for (otw_t o : otws)
@@ -154,6 +155,7 @@ int main(int argc, char** argv)
                                     rx_kernel ks(o, c, N, ch, true), kc(o, c, N, ch, false);
                                     std::vector<uint8_t> pay(wire_bytes(o, (s0 + n) * N) + 64);
                                     fill_wire(o, pay, g);
+                                    in_digest = fnv(in_digest, pay.data(), pay.size());
                                     const size_t ob = cpu_bytes(c) * n;
                                     std::vector<std::vector<uint8_t>> a(ch.size(), std::vector<uint8_t>(ob)), b = a;
                                     std::vector<void*> pa, pb;
@@ -177,6 +179,7 @@ int main(int argc, char** argv)
                                     std::vector<const void*> pi;
                                     for (auto& v : in) {
                                         fill_cpu(c, v, g);
+                                        in_digest = fnv(in_digest, v.data(), v.size());
                                         pi.push_back(v.data());
                                     }
                                     const size_t wb = wire_bytes(o, (s0 + n) * N) + 64;
@@ -195,8 +198,9 @@ int main(int argc, char** argv)
                             } catch (const std::exception&) { // a pair the module does not support
                             }
                         }
-        std::printf("%s: %zu cases (%zu SIMD), %d mismatch(es), digest %016llx\n", dir == 0 ? "RX" : "TX", cases,
-            simd_cases, dfail, (unsigned long long)digest);
+        std::printf("%s: %zu cases (%zu SIMD), %d mismatch(es), inputs %016llx -> outputs %016llx\n",
+            dir == 0 ? "RX" : "TX", cases, simd_cases, dfail, (unsigned long long)in_digest,
+            (unsigned long long)digest);
         fails += dfail;
     }
     return fails;

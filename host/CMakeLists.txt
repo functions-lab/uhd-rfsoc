@@ -125,7 +125,7 @@ if(ZCU216_BUILD_BENCH)
     target_include_directories(zcu216_kernel_check BEFORE PRIVATE "${_uhd_inc_shim}" lib)
     target_include_directories(zcu216_kernel_check PRIVATE ${Boost_INCLUDE_DIRS})
     target_link_libraries(zcu216_kernel_check PRIVATE ${UHD_LIBRARIES})
-    target_compile_options(zcu216_kernel_check PRIVATE -Wall -Wextra -Wno-unused-parameter)
+    target_compile_options(zcu216_kernel_check PRIVATE -Wall -Wextra -Wno-unused-parameter -ffp-contract=off)
     # its NIC thread streams with AVX2 intrinsics directly (the module picks
     # AVX2 at run time): x86 only
     if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|i.86")
