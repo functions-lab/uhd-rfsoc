@@ -12,6 +12,7 @@ list.
 make v49-package                 # once: the UHD cores (../../fpga_ip/ip/uhd_ip)
 make v49-templates               # the two run-time-rate templates (1ch F2, 2ch F4)
 make v49 N=1 F=2 [STEP=bd]       # one build
+make v49 N=2 F=2                 # sc8max: 2 x 2500 MS/s, sc8 only (512-bit beat)
 ```
 
 Each bitstream is a run-time-rate template: the daemon retunes it to every

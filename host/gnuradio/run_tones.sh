@@ -9,7 +9,7 @@
 #   run_tones.sh rfsoc4x2 normal 2           # RFSoC 4x2 2T2R, 1250 MS/s per channel
 #   run_tones.sh rfsoc4x2 normal 1 -t 20e6   # tone 20 MHz above the RF centre (default 10 MHz)
 #   boards: zcu216 (default): normal (N = 1, 2, 4, 8, 16), sc8max (4, 8, 16);
-#           rfsoc4x2: normal (N = 1, 2)
+#           rfsoc4x2: normal (N = 1, 2), sc8max (2)
 #
 # Needs the board daemon serving (it loads the matching bitstream itself) and
 # a display (run it from the PC's desktop session; sudo -E keeps DISPLAY).

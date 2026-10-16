@@ -32,14 +32,15 @@ snippet that issues the timed RX command and fires each burst.
 | normal | 1 / 2 / 4 / 8 / 16 | `_f2_fs2500` / `_f2_fs2500` / `_f3_fs2250` / `_f6_fs2250` / `_f12_fs2250` | 1250 / 1250 / 750 / 375 / 187.5 MS/s | sc16 |
 | sc8max | 4 / 8 / 16 | `_f2_fs2500` / `_f3_fs2250` / `_f6_fs2250` | 1250 / 750 / 375 MS/s | sc8 |
 
-RFSoC 4x2 (`grc/rfsoc4x2_tones_normal_{1,2}ch.grc`, fs 5000: twice the
-ZCU216's per-channel rate at the same factor), run with
-`run_tones.sh rfsoc4x2 normal 1` / `... normal 2`. Their device args carry
+RFSoC 4x2 (`grc/rfsoc4x2_tones_normal_{1,2}ch.grc`, `grc/rfsoc4x2_tones_sc8max_2ch.grc`;
+fs 5000: twice the ZCU216's per-channel rate at the same factor), run with
+`run_tones.sh rfsoc4x2 normal 1` / `... normal 2` / `... sc8max 2`. Their device args carry
 `type=rfsoc4x2` (the module finds only RFSoC 4x2 boards with it) and run with plain sudo, nothing ZCU216 in them:
 
 | family | N | build | per-channel rate | wire |
 |---|---|---|---|---|
 | normal | 1 / 2 | `rfsoc4x2_v49_1ch_qsfp_f2_fs5000` / `rfsoc4x2_v49_2ch_qsfp_f4_fs5000` | 2500 / 1250 MS/s | sc16 |
+| sc8max | 2 | `rfsoc4x2_v49_2ch_qsfp_f2_fs5000` | 2500 MS/s | sc8 |
 
 Each flowgraph opens at its family's maximum rate. The normal family has a
 bitstream per RFDC factor below that (`benchmark/oracle_builds.txt`): set
