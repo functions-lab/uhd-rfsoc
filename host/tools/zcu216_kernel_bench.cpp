@@ -1,7 +1,7 @@
 //
 // zcu216_kernel_bench -- throughput of the uhd_zcu216 sample kernels, the
 // per-sample work of recv() / send(): the fused channel (de-)interleave and
-// format conversion, SIMD (SSE / NEON) against scalar against UHD 4.6's own converter, one
+// format conversion, SIMD (AVX-512 / NEON) against scalar against UHD 4.6's own converter, one
 // thread on a cache-resident 512 KB payload (64 packets of 2048 sc16 slots,
 // packet by packet like recv()), and the worker pool on a 64-packet call.
 // GS/s of wire slots. No device, no root.

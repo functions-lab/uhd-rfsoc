@@ -3,18 +3,18 @@
 //
 #include "zcu216_kernels.hpp"
 #include <uhd/exception.hpp>
-// One SIMD implementation, 128-bit SSE (up to SSE4.1): native on x86 (picked at
-// run time, cpu_has_simd), NEON on aarch64 through sse2neon (host/sse2neon).
-// The scalar loops give the same bits (ZCU216_NO_SIMD=1).
+// Two SIMD implementations of the same kernels: AVX-512 (F + BW) on x86,
+// picked at run time (cpu_has_simd), and NEON on aarch64. The scalar loops
+// give the same bits (ZCU216_NO_SIMD=1, or an x86 CPU without AVX-512).
 #if defined(__x86_64__) || defined(__i386__)
 #    define ZCU216_X86 1
 #    include <immintrin.h>
-#    define Z_SIMD __attribute__((target("sse4.1")))
-#elif defined(__aarch64__) || defined(__ARM_NEON)
-#    include "sse2neon.h"
+#    define Z_SIMD __attribute__((target("avx512f,avx512bw")))
+#elif defined(__aarch64__)
+#    include <arm_neon.h>
 #    define Z_SIMD
 #else
-#    error "uhd_zcu216 kernels: x86 (SSE4.1) or aarch64 (NEON via sse2neon) only"
+#    error "uhd_zcu216 kernels: x86 (AVX-512) or aarch64 (NEON) only"
 #endif
 #include <algorithm>
 #include <climits>
@@ -80,7 +80,7 @@ bool cpu_has_simd()
             return false;
 #if ZCU216_X86
         __builtin_cpu_init();
-        return __builtin_cpu_supports("sse4.1") != 0;
+        return __builtin_cpu_supports("avx512f") != 0 and __builtin_cpu_supports("avx512bw") != 0;
 #else
         return true; // AdvSIMD (NEON) is part of every aarch64 CPU
 #endif
@@ -91,9 +91,9 @@ bool cpu_has_simd()
 const char* simd_name()
 {
 #if ZCU216_X86
-    return "SSE4.1";
+    return "AVX-512";
 #else
-    return "NEON (sse2neon)";
+    return "NEON";
 #endif
 }
 
@@ -292,21 +292,89 @@ void sc12_unpack(const uint8_t* pay, size_t slot0, size_t n, int16_t* out)
     }
 }
 
-//! sc12 group shuffles (one group = 4 slots = 12 bytes per 128-bit register).
-//! A group is the 96-bit big-endian number I0 Q0 I1 Q1 I2 Q2 I3 Q3; with
-//! u_k = I_k << 12 | Q_k (24 bits, one 32-bit lane per slot) its bytes in
-//! memory (three LE words) are u1[23:16] u0[7:0] u0[15:8] u0[23:16]
-//! u2[15:8] u2[23:16] u1[7:0] u1[15:8] u3[7:0] u3[15:8] u3[23:16] u2[7:0].
-Z_SIMD inline __m128i sc12_unshuf()
+// ---------------------------------------------------------------------------
+// SIMD primitives, one set per architecture. A register V holds kL
+// consecutive 32-bit slots (one complex int16 sample each, I low):
+//   x86      AVX-512 (F + BW): kL = 16
+//   aarch64  NEON:             kL = 4
+// unzip(a, b): even / odd slots of the 2 kL slots a|b; zip: the inverse.
+// The conversions keep the x86 rules bit for bit (cvtps2dq round to even,
+// NaN or out of range -> INT32_MIN; saturating narrowing): NEON's own
+// conversion saturates, so it gets the integer-indefinite fix-up.
+// ---------------------------------------------------------------------------
+#if ZCU216_X86
+using V             = __m512i;
+using VF            = __m512;
+constexpr int kL    = 16;
+Z_SIMD inline VF vf_set1(float f)
 {
-    return _mm_setr_epi8(1, 2, 3, -1, 6, 7, 0, -1, 11, 4, 5, -1, 8, 9, 10, -1);
+    return _mm512_set1_ps(f);
 }
-Z_SIMD inline __m128i sc12_shuf()
+Z_SIMD inline V vzero()
 {
-    return _mm_setr_epi8(6, 0, 1, 2, 9, 10, 4, 5, 12, 13, 14, 8, -1, -1, -1, -1);
+    return _mm512_setzero_si512();
+}
+Z_SIMD inline void unzip(V a, V b, V& e, V& o)
+{
+    const V ie = _mm512_setr_epi32(0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30);
+    const V io = _mm512_setr_epi32(1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31);
+    e = _mm512_permutex2var_epi32(a, ie, b);
+    o = _mm512_permutex2var_epi32(a, io, b);
+}
+Z_SIMD inline void zip(V a, V b, V& lo, V& hi)
+{
+    const V il = _mm512_setr_epi32(0, 16, 1, 17, 2, 18, 3, 19, 4, 20, 5, 21, 6, 22, 7, 23);
+    const V ih = _mm512_setr_epi32(8, 24, 9, 25, 10, 26, 11, 27, 12, 28, 13, 29, 14, 30, 15, 31);
+    lo = _mm512_permutex2var_epi32(a, il, b);
+    hi = _mm512_permutex2var_epi32(a, ih, b);
+}
+//! kL slots, sc16 wire: 4 bytes each
+Z_SIMD inline V ld_slots16(const uint8_t* p)
+{
+    return _mm512_loadu_si512(p);
+}
+//! kL slots, sc8 wire (2 bytes each) widened to int16 pairs
+Z_SIMD inline V ld_slots8(const uint8_t* p)
+{
+    return _mm512_cvtepi8_epi16(_mm256_loadu_si256(reinterpret_cast<const __m256i*>(p)));
+}
+Z_SIMD inline void st_slots16(uint8_t* p, V v)
+{
+    _mm512_storeu_si512(p, v);
+}
+//! int16 pairs -> int8 pairs, saturated: kL slots, 2 bytes each
+Z_SIMD inline void st_slots8(uint8_t* p, V v)
+{
+    _mm256_storeu_si256(reinterpret_cast<__m256i*>(p), _mm512_cvtsepi16_epi8(v));
+}
+Z_SIMD inline V shl16(V v, int s)
+{
+    return _mm512_slli_epi16(v, unsigned(s));
+}
+//! kL samples int16 -> 2 kL floats x k
+Z_SIMD inline void st_f32(uint8_t* o, V v, VF k)
+{
+    const V lo = _mm512_cvtepi16_epi32(_mm512_castsi512_si256(v));
+    const V hi = _mm512_cvtepi16_epi32(_mm512_extracti64x4_epi64(v, 1));
+    _mm512_storeu_ps(reinterpret_cast<float*>(o), _mm512_mul_ps(_mm512_cvtepi32_ps(lo), k));
+    _mm512_storeu_ps(reinterpret_cast<float*>(o + 64), _mm512_mul_ps(_mm512_cvtepi32_ps(hi), k));
+}
+//! kL fc32 samples x k -> int16 pairs: cvtps2dq (round to even, NaN / out of
+//! range -> INT32_MIN), saturated to int16
+Z_SIMD inline V ld_f32_scaled(const uint8_t* in, float scale)
+{
+    const VF k = _mm512_set1_ps(scale);
+    const V a  = _mm512_cvtps_epi32(_mm512_mul_ps(_mm512_loadu_ps(reinterpret_cast<const float*>(in)), k));
+    const V b  = _mm512_cvtps_epi32(_mm512_mul_ps(_mm512_loadu_ps(reinterpret_cast<const float*>(in + 64)), k));
+    return _mm512_inserti64x4(_mm512_castsi256_si512(_mm512_cvtsepi32_epi16(a)), _mm512_cvtsepi32_epi16(b), 1);
+}
+//! sc16 -> sc8 values: round half up, (x + 128) >> 8 with a saturating add
+Z_SIMD inline V round_sc8(V v)
+{
+    return _mm512_srai_epi16(_mm512_adds_epi16(v, _mm512_set1_epi16(128)), 8);
 }
 
-//! sc12_unpack, SIMD: one group (4 slots) per step
+//! sc12_unpack, SIMD: four groups (16 slots, 48 bytes) per step
 Z_SIMD void sc12_unpack_simd(const uint8_t* pay, size_t slot0, size_t n, int16_t* out)
 {
     size_t s         = slot0;
@@ -317,14 +385,134 @@ Z_SIMD void sc12_unpack_simd(const uint8_t* pay, size_t slot0, size_t n, int16_t
         out += 2 * (a - s);
         s = a;
     }
-    const __m128i sh = sc12_unshuf(), m12 = _mm_set1_epi32(0xFFF);
+    // each 128-bit lane gets one group's 3 words, then the per-lane byte
+    // shuffle of UHD's sc12_item32_le order (see sc12 in dec_int)
+    const V gidx = _mm512_setr_epi32(0, 1, 2, 0, 3, 4, 5, 0, 6, 7, 8, 0, 9, 10, 11, 0);
+    const V sh   = _mm512_broadcast_i32x4(_mm_setr_epi8(1, 2, 3, -1, 6, 7, 0, -1, 11, 4, 5, -1, 8, 9, 10, -1));
+    const V m12  = _mm512_set1_epi32(0xFFF);
+    for (; s + 16 <= end; s += 16) {
+        const V v = _mm512_permutexvar_epi32(gidx, _mm512_maskz_loadu_epi32(0x0FFF, pay + 3 * s));
+        const V u = _mm512_shuffle_epi8(v, sh);
+        const V x = _mm512_or_si512(_mm512_and_si512(_mm512_srli_epi32(u, 12), m12),
+            _mm512_slli_epi32(_mm512_and_si512(u, m12), 16));
+        _mm512_storeu_si512(out, _mm512_srai_epi16(_mm512_slli_epi16(x, 4), 4));
+        out += 32;
+    }
+    if (s < end)
+        sc12_unpack(pay, s, end - s, out);
+}
+
+//! pack_sc12, SIMD: four groups per step
+Z_SIMD void pack_sc12_simd(const uint32_t* in, uint8_t* out, size_t n)
+{
+    const V sh   = _mm512_broadcast_i32x4(_mm_setr_epi8(6, 0, 1, 2, 9, 10, 4, 5, 12, 13, 14, 8, -1, -1, -1, -1));
+    const V cidx = _mm512_setr_epi32(0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13, 14, 0, 0, 0, 0);
+    const V m12 = _mm512_set1_epi16(0xFFF), eight = _mm512_set1_epi16(8);
+    const V mul = _mm512_set1_epi32((1 << 16) | 4096); // per slot: I * 4096 + Q * 1
+    size_t k    = 0;
+    for (; k + 16 <= n; k += 16) {
+        const V v = _mm512_loadu_si512(in + k);
+        // round half up, saturated: (32767 + 8) saturates to 32767 -> 2047
+        const V q = _mm512_and_si512(_mm512_srai_epi16(_mm512_adds_epi16(v, eight), 4), m12);
+        const V b = _mm512_permutexvar_epi32(cidx, _mm512_shuffle_epi8(_mm512_madd_epi16(q, mul), sh));
+        _mm512_mask_storeu_epi32(out, 0x0FFF, b);
+        out += 48;
+    }
+    pack_sc12(in + k, out, n - k);
+}
+#else // aarch64: NEON
+using V             = uint32x4_t;
+using VF            = float32x4_t;
+constexpr int kL    = 4;
+inline VF vf_set1(float f)
+{
+    return vdupq_n_f32(f);
+}
+inline V vzero()
+{
+    return vdupq_n_u32(0);
+}
+inline void unzip(V a, V b, V& e, V& o)
+{
+    e = vuzp1q_u32(a, b);
+    o = vuzp2q_u32(a, b);
+}
+inline void zip(V a, V b, V& lo, V& hi)
+{
+    lo = vzip1q_u32(a, b);
+    hi = vzip2q_u32(a, b);
+}
+inline int16x8_t s16(V v)
+{
+    return vreinterpretq_s16_u32(v);
+}
+inline V u32(int16x8_t v)
+{
+    return vreinterpretq_u32_s16(v);
+}
+inline V ld_slots16(const uint8_t* p)
+{
+    return vreinterpretq_u32_u8(vld1q_u8(p));
+}
+inline V ld_slots8(const uint8_t* p)
+{
+    return u32(vmovl_s8(vld1_s8(reinterpret_cast<const int8_t*>(p))));
+}
+inline void st_slots16(uint8_t* p, V v)
+{
+    vst1q_u8(p, vreinterpretq_u8_u32(v));
+}
+inline void st_slots8(uint8_t* p, V v)
+{
+    vst1_s8(reinterpret_cast<int8_t*>(p), vqmovn_s16(s16(v)));
+}
+inline V shl16(V v, int s)
+{
+    return u32(vshlq_s16(s16(v), vdupq_n_s16(int16_t(s))));
+}
+inline void st_f32(uint8_t* o, V v, VF k)
+{
+    const int16x8_t x = s16(v);
+    vst1q_f32(reinterpret_cast<float*>(o), vmulq_f32(vcvtq_f32_s32(vmovl_s16(vget_low_s16(x))), k));
+    vst1q_f32(reinterpret_cast<float*>(o + 16), vmulq_f32(vcvtq_f32_s32(vmovl_high_s16(x)), k));
+}
+//! cvtps2dq: round to nearest even; NaN or out of range -> INT32_MIN
+inline int32x4_t cvt_ps_x86(float32x4_t f)
+{
+    const uint32x4_t in = vandq_u32(vcgeq_f32(f, vdupq_n_f32(-2147483648.0f)), vcltq_f32(f, vdupq_n_f32(2147483648.0f)));
+    return vbslq_s32(in, vcvtnq_s32_f32(f), vdupq_n_s32(INT32_MIN));
+}
+inline V ld_f32_scaled(const uint8_t* in, float scale)
+{
+    const float32x4_t k = vdupq_n_f32(scale);
+    const int32x4_t a   = cvt_ps_x86(vmulq_f32(vld1q_f32(reinterpret_cast<const float*>(in)), k));
+    const int32x4_t b   = cvt_ps_x86(vmulq_f32(vld1q_f32(reinterpret_cast<const float*>(in + 16)), k));
+    return u32(vcombine_s16(vqmovn_s32(a), vqmovn_s32(b)));
+}
+inline V round_sc8(V v)
+{
+    return u32(vshrq_n_s16(vqaddq_s16(s16(v), vdupq_n_s16(128)), 8));
+}
+
+//! sc12_unpack, SIMD: one group (4 slots, 12 bytes) per step
+void sc12_unpack_simd(const uint8_t* pay, size_t slot0, size_t n, int16_t* out)
+{
+    size_t s         = slot0;
+    const size_t end = slot0 + n;
+    const size_t a   = std::min(end, (slot0 + 3) & ~size_t(3));
+    if (a > s) { // head inside a group
+        sc12_unpack(pay, s, a - s, out);
+        out += 2 * (a - s);
+        s = a;
+    }
+    static const uint8_t shb[16] = {1, 2, 3, 255, 6, 7, 0, 255, 11, 4, 5, 255, 8, 9, 10, 255};
+    const uint8x16_t sh          = vld1q_u8(shb);
+    const uint32x4_t m12         = vdupq_n_u32(0xFFF);
     // each step reads 16 bytes for 12: keep one more group behind it
     for (; s + 8 <= end; s += 4) {
-        const __m128i v = _mm_loadu_si128(reinterpret_cast<const __m128i*>(pay + 3 * s));
-        const __m128i u = _mm_shuffle_epi8(v, sh);
-        const __m128i x = _mm_or_si128(_mm_and_si128(_mm_srli_epi32(u, 12), m12),
-            _mm_slli_epi32(_mm_and_si128(u, m12), 16));
-        _mm_storeu_si128(reinterpret_cast<__m128i*>(out), _mm_srai_epi16(_mm_slli_epi16(x, 4), 4));
+        const uint32x4_t u = vreinterpretq_u32_u8(vqtbl1q_u8(vld1q_u8(pay + 3 * s), sh));
+        const uint32x4_t x = vorrq_u32(vandq_u32(vshrq_n_u32(u, 12), m12), vshlq_n_u32(vandq_u32(u, m12), 16));
+        vst1q_s16(out, vshrq_n_s16(vshlq_n_s16(vreinterpretq_s16_u32(x), 4), 4));
         out += 8;
     }
     if (s < end)
@@ -332,21 +520,77 @@ Z_SIMD void sc12_unpack_simd(const uint8_t* pay, size_t slot0, size_t n, int16_t
 }
 
 //! pack_sc12, SIMD: one group per step
-Z_SIMD void pack_sc12_simd(const uint32_t* in, uint8_t* out, size_t n)
+void pack_sc12_simd(const uint32_t* in, uint8_t* out, size_t n)
 {
-    const __m128i sh = sc12_shuf(), m12 = _mm_set1_epi16(0xFFF), eight = _mm_set1_epi16(8);
-    const __m128i mul = _mm_set1_epi32((1 << 16) | 4096); // per slot: I * 4096 + Q * 1
-    size_t k = 0;
+    static const uint8_t shb[16] = {6, 0, 1, 2, 9, 10, 4, 5, 12, 13, 14, 8, 255, 255, 255, 255};
+    const uint8x16_t sh          = vld1q_u8(shb);
+    size_t k                     = 0;
     // each step writes 16 bytes for 12: keep one more group behind it
     for (; k + 8 <= n; k += 4) {
-        const __m128i v = _mm_loadu_si128(reinterpret_cast<const __m128i*>(in + k));
+        const int16x8_t v = vreinterpretq_s16_u32(vld1q_u32(in + k));
         // round half up, saturated: (32767 + 8) saturates to 32767 -> 2047
-        const __m128i q = _mm_and_si128(_mm_srai_epi16(_mm_adds_epi16(v, eight), 4), m12);
-        _mm_storeu_si128(reinterpret_cast<__m128i*>(out), _mm_shuffle_epi8(_mm_madd_epi16(q, mul), sh));
+        const uint32x4_t q = vreinterpretq_u32_s16(vandq_s16(vshrq_n_s16(vqaddq_s16(v, vdupq_n_s16(8)), 4), vdupq_n_s16(0xFFF)));
+        // per slot I * 4096 + Q (both 12 bits, I in the low half)
+        const uint32x4_t u = vorrq_u32(vshlq_n_u32(vandq_u32(q, vdupq_n_u32(0xFFFF)), 12), vshrq_n_u32(q, 16));
+        vst1q_u8(out, vqtbl1q_u8(vreinterpretq_u8_u32(u), sh));
         out += 12;
     }
     pack_sc12(in + k, out, n - k);
 }
+#endif
+
+// RX loads: kL slots -> kL sc16 slots in one register
+struct ld_sc16
+{
+    Z_SIMD static inline V ld(const uint8_t* pay, size_t slot)
+    {
+        return ld_slots16(pay + 4 * slot);
+    }
+};
+struct ld_sc8
+{
+    Z_SIMD static inline V ld(const uint8_t* pay, size_t slot)
+    {
+        return ld_slots8(pay + 2 * slot);
+    }
+};
+// RX stores: kL sc16 slots -> kL CPU samples
+struct st_sc16
+{
+    Z_SIMD static inline void st(uint8_t* o, V v, VF)
+    {
+        st_slots16(o, v);
+    }
+};
+struct st_sc16_x256 // sc8 wire -> sc16: v * 256
+{
+    Z_SIMD static inline void st(uint8_t* o, V v, VF)
+    {
+        st_slots16(o, shl16(v, 8));
+    }
+};
+struct st_sc8 // sc8 wire -> sc8 CPU: the int8 values ld_sc8 widened, narrowed back (exact)
+{
+    Z_SIMD static inline void st(uint8_t* o, V v, VF)
+    {
+        st_slots8(o, v);
+    }
+};
+struct st_sc16_x16 // sc12 values -> sc16: v * 16
+{
+    Z_SIMD static inline void st(uint8_t* o, V v, VF)
+    {
+        st_slots16(o, shl16(v, 4));
+    }
+};
+struct st_fc32
+{
+    Z_SIMD static inline void st(uint8_t* o, V v, VF k)
+    {
+        st_f32(o, v, k);
+    }
+};
+
 
 //! N = 1, cpu item == wire item: a copy
 void rx_copy(const rx_kernel& k, const uint8_t* pay, size_t s0, size_t n, void* const* outs, size_t o0)
@@ -355,141 +599,41 @@ void rx_copy(const rx_kernel& k, const uint8_t* pay, size_t s0, size_t n, void* 
 }
 
 // ---------------------------------------------------------------------------
-// SIMD: 4 x 32-bit transposes. RX: r[] = N registers of 4 consecutive slots
-// (4 samples x N channels, sample-major) -> r[c] = 4 samples of channel c.
-// TX: the inverse (the same transposes).
+// SIMD de-interleave. RX: r[] = N registers of kL consecutive slots (kL
+// samples x N channels, sample-major) -> r[c] = kL samples of channel c:
+// log2 N unzip stages (the even slots of the stream are the even channels,
+// interleaved N/2 ways; recurse). TX: the inverse, zip stages.
 // ---------------------------------------------------------------------------
-Z_SIMD inline void tr4(__m128i& a, __m128i& b, __m128i& c, __m128i& d)
-{
-    const __m128i t0 = _mm_unpacklo_epi32(a, b), t1 = _mm_unpackhi_epi32(a, b);
-    const __m128i t2 = _mm_unpacklo_epi32(c, d), t3 = _mm_unpackhi_epi32(c, d);
-    a = _mm_unpacklo_epi64(t0, t2);
-    b = _mm_unpackhi_epi64(t0, t2);
-    c = _mm_unpacklo_epi64(t1, t3);
-    d = _mm_unpackhi_epi64(t1, t3);
-}
-
-//! N >= 4: sample s, channels 4q..4q+3 are r[s * N/4 + q]; one 4 x 4 transpose
-//! per q turns those four registers into channels 4q..4q+3 (4 samples each)
 template <int N>
-Z_SIMD inline void tr_groups(const __m128i* in, __m128i* out)
+Z_SIMD inline void deint(V* r)
 {
-    constexpr int G = N / 4;
-    for (int q = 0; q < G; q++) {
-        __m128i a = in[q], b = in[G + q], c = in[2 * G + q], d = in[3 * G + q];
-        tr4(a, b, c, d);
-        out[4 * q] = a, out[4 * q + 1] = b, out[4 * q + 2] = c, out[4 * q + 3] = d;
-    }
-}
-
-template <int N>
-Z_SIMD inline void deint(__m128i* r)
-{
-    if constexpr (N == 2) {
-        // r0 = s0c0 s0c1 s1c0 s1c1, r1 = s2c0 s2c1 s3c0 s3c1
-        const __m128i a = _mm_unpacklo_epi32(r[0], r[1]); // s0c0 s2c0 s0c1 s2c1
-        const __m128i b = _mm_unpackhi_epi32(r[0], r[1]); // s1c0 s3c0 s1c1 s3c1
-        r[0] = _mm_unpacklo_epi32(a, b);
-        r[1] = _mm_unpackhi_epi32(a, b);
-    } else if constexpr (N >= 4) {
-        __m128i t[N];
-        tr_groups<N>(r, t);
-        for (int c = 0; c < N; c++)
-            r[c] = t[c];
-    }
-}
-
-template <int N>
-Z_SIMD inline void inter(__m128i* c)
-{
-    if constexpr (N == 2) {
-        const __m128i a = _mm_unpacklo_epi32(c[0], c[1]); // s0c0 s0c1 s1c0 s1c1
-        const __m128i b = _mm_unpackhi_epi32(c[0], c[1]); // s2c0 s2c1 s3c0 s3c1
-        c[0] = a;
-        c[1] = b;
-    } else if constexpr (N >= 4) {
-        // channel 4q+i -> transpose back: sample s, group q at s * N/4 + q
-        constexpr int G = N / 4;
-        __m128i t[N];
-        for (int q = 0; q < G; q++) {
-            __m128i a = c[4 * q], b = c[4 * q + 1], d0 = c[4 * q + 2], d1 = c[4 * q + 3];
-            tr4(a, b, d0, d1);
-            t[q] = a, t[G + q] = b, t[2 * G + q] = d0, t[3 * G + q] = d1;
+    if constexpr (N >= 2) {
+        V e[N / 2], o[N / 2];
+        for (int j = 0; j < N / 2; j++)
+            unzip(r[2 * j], r[2 * j + 1], e[j], o[j]);
+        deint<N / 2>(e);
+        deint<N / 2>(o);
+        for (int k = 0; k < N / 2; k++) {
+            r[2 * k]     = e[k];
+            r[2 * k + 1] = o[k];
         }
-        for (int i = 0; i < N; i++)
-            c[i] = t[i];
     }
 }
-
-// RX loads: 4 slots -> 4 sc16 slots in one register
-struct ld_sc16
-{
-    Z_SIMD static inline __m128i ld(const uint8_t* pay, size_t slot)
-    {
-        return _mm_loadu_si128(reinterpret_cast<const __m128i*>(pay + 4 * slot));
-    }
-};
-struct ld_sc8
-{
-    Z_SIMD static inline __m128i ld(const uint8_t* pay, size_t slot)
-    {
-        return _mm_cvtepi8_epi16(_mm_loadl_epi64(reinterpret_cast<const __m128i*>(pay + 2 * slot)));
-    }
-};
-// RX stores: 4 sc16 slots -> 4 CPU samples
-struct st_sc16
-{
-    Z_SIMD static inline void st(uint8_t* o, __m128i v, __m128)
-    {
-        _mm_storeu_si128(reinterpret_cast<__m128i*>(o), v);
-    }
-};
-struct st_sc16_x256 // sc8 wire -> sc16: v * 256
-{
-    Z_SIMD static inline void st(uint8_t* o, __m128i v, __m128)
-    {
-        _mm_storeu_si128(reinterpret_cast<__m128i*>(o), _mm_slli_epi16(v, 8));
-    }
-};
-struct st_sc8 // sc8 wire -> sc8 CPU: the int8 values ld_sc8 widened, narrowed back (exact)
-{
-    Z_SIMD static inline void st(uint8_t* o, __m128i v, __m128)
-    {
-        _mm_storel_epi64(reinterpret_cast<__m128i*>(o), _mm_packs_epi16(v, v));
-    }
-};
-struct st_sc16_x16 // sc12 values -> sc16: v * 16
-{
-    Z_SIMD static inline void st(uint8_t* o, __m128i v, __m128)
-    {
-        _mm_storeu_si128(reinterpret_cast<__m128i*>(o), _mm_slli_epi16(v, 4));
-    }
-};
-struct st_fc32
-{
-    Z_SIMD static inline void st(uint8_t* o, __m128i v, __m128 k)
-    {
-        const __m128i lo = _mm_cvtepi16_epi32(v);
-        const __m128i hi = _mm_cvtepi16_epi32(_mm_srli_si128(v, 8));
-        _mm_storeu_ps(reinterpret_cast<float*>(o), _mm_mul_ps(_mm_cvtepi32_ps(lo), k));
-        _mm_storeu_ps(reinterpret_cast<float*>(o + 16), _mm_mul_ps(_mm_cvtepi32_ps(hi), k));
-    }
-};
 
 template <int N, otw_t O, cpu_t C, class L, class S>
 Z_SIMD void rx_simd(const rx_kernel& k, const uint8_t* pay, size_t s0, size_t n, void* const* outs, size_t o0)
 {
     const size_t cpb = k.cpb, M = k.M;
-    const __m128 kf  = _mm_set1_ps(k.kf);
+    const VF kf      = vf_set1(k.kf);
     uint8_t* o[16];
     for (size_t j = 0; j < M; j++)
         o[j] = static_cast<uint8_t*>(outs[j]) + o0 * cpb;
     size_t s = 0;
-    for (; s + 4 <= n; s += 4) {
+    for (; s + kL <= n; s += kL) {
         const size_t base = (s0 + s) * N;
-        __m128i r[N];
+        V r[N];
         for (int i = 0; i < N; i++)
-            r[i] = L::ld(pay, base + 4 * size_t(i));
+            r[i] = L::ld(pay, base + size_t(kL) * size_t(i));
         deint<N>(r);
         for (size_t j = 0; j < M; j++)
             S::st(o[j] + s * cpb, r[k.ch[j]], kf);
@@ -668,22 +812,35 @@ void tx_sc12(const tx_kernel& k, const void* const* ins, size_t i0, size_t n, ui
     }
 }
 
-// TX loads: 4 CPU samples -> 4 sc16 slots
+template <int N>
+Z_SIMD inline void inter(V* c)
+{
+    if constexpr (N >= 2) {
+        V e[N / 2], o[N / 2];
+        for (int k = 0; k < N / 2; k++) {
+            e[k] = c[2 * k];
+            o[k] = c[2 * k + 1];
+        }
+        inter<N / 2>(e);
+        inter<N / 2>(o);
+        for (int j = 0; j < N / 2; j++)
+            zip(e[j], o[j], c[2 * j], c[2 * j + 1]);
+    }
+}
+
+// TX loads: kL CPU samples -> kL sc16 slots
 struct tl_sc16
 {
-    Z_SIMD static inline __m128i ld(const uint8_t* in)
+    Z_SIMD static inline V ld(const uint8_t* in)
     {
-        return _mm_loadu_si128(reinterpret_cast<const __m128i*>(in));
+        return ld_slots16(in);
     }
 };
 struct tl_fc32
 {
-    Z_SIMD static inline __m128i ld(const uint8_t* in)
+    Z_SIMD static inline V ld(const uint8_t* in)
     {
-        const __m128 k = _mm_set1_ps(32767.0f);
-        const __m128 a = _mm_loadu_ps(reinterpret_cast<const float*>(in));
-        const __m128 b = _mm_loadu_ps(reinterpret_cast<const float*>(in + 16));
-        return _mm_packs_epi32(_mm_cvtps_epi32(_mm_mul_ps(a, k)), _mm_cvtps_epi32(_mm_mul_ps(b, k)));
+        return ld_f32_scaled(in, 32767.0f);
     }
 };
 
@@ -695,46 +852,42 @@ Z_SIMD void tx_simd(const tx_kernel& k, const void* const* ins, size_t i0, size_
     for (size_t j = 0; j < k.M; j++)
         in[j] = static_cast<const uint8_t*>(ins[j]) + i0 * cpb;
     size_t s = 0;
-    for (; s + 4 <= n; s += 4) {
-        __m128i c[N];
+    for (; s + kL <= n; s += kL) {
+        V c[N];
         for (int ch = 0; ch < N; ch++) {
             const int j = k.jmap[ch];
-            c[ch]       = j >= 0 ? L::ld(in[j] + s * cpb) : _mm_setzero_si128();
+            c[ch]       = j >= 0 ? L::ld(in[j] + s * cpb) : vzero();
         }
         inter<N>(c);
         uint8_t* w = pay + 4 * (s0 + s) * N;
         for (int i = 0; i < N; i++)
-            _mm_storeu_si128(reinterpret_cast<__m128i*>(w + 16 * size_t(i)), c[i]);
+            st_slots16(w + 4 * size_t(kL) * size_t(i), c[i]);
     }
     if (s < n)
         tx_scalar<C, otw_t::sc16>(k, ins, i0 + s, n - s, pay, s0 + s);
 }
 
-// TX loads for sc8: 4 CPU samples -> 4 slots of int16 pairs holding the int8
-// value (saturated to int8 by the final pack)
+// TX loads for sc8: kL CPU samples -> kL slots of int16 pairs holding the int8
+// value (saturated to int8 by the final narrowing)
 struct tl_fc32_sc8
 {
-    Z_SIMD static inline __m128i ld(const uint8_t* in)
+    Z_SIMD static inline V ld(const uint8_t* in)
     {
-        const __m128 k = _mm_set1_ps(128.0f);
-        const __m128 a = _mm_loadu_ps(reinterpret_cast<const float*>(in));
-        const __m128 b = _mm_loadu_ps(reinterpret_cast<const float*>(in + 16));
-        return _mm_packs_epi32(_mm_cvtps_epi32(_mm_mul_ps(a, k)), _mm_cvtps_epi32(_mm_mul_ps(b, k)));
+        return ld_f32_scaled(in, 128.0f);
     }
 };
-struct tl_sc8_sc8 // sc8 CPU -> sc8 wire: widened here, the final pack restores them exactly
+struct tl_sc8_sc8 // sc8 CPU -> sc8 wire: widened here, narrowed back exactly
 {
-    Z_SIMD static inline __m128i ld(const uint8_t* in)
+    Z_SIMD static inline V ld(const uint8_t* in)
     {
-        return _mm_cvtepi8_epi16(_mm_loadl_epi64(reinterpret_cast<const __m128i*>(in)));
+        return ld_slots8(in);
     }
 };
 struct tl_sc16_sc8 // round half up: (x + 128) >> 8; 32767 + 128 saturates to 127
 {
-    Z_SIMD static inline __m128i ld(const uint8_t* in)
+    Z_SIMD static inline V ld(const uint8_t* in)
     {
-        const __m128i v = _mm_loadu_si128(reinterpret_cast<const __m128i*>(in));
-        return _mm_srai_epi16(_mm_adds_epi16(v, _mm_set1_epi16(128)), 8);
+        return round_sc8(ld_slots16(in));
     }
 };
 
@@ -746,20 +899,16 @@ Z_SIMD void tx_simd_sc8(const tx_kernel& k, const void* const* ins, size_t i0, s
     for (size_t j = 0; j < k.M; j++)
         in[j] = static_cast<const uint8_t*>(ins[j]) + i0 * cpb;
     size_t s = 0;
-    for (; s + 4 <= n; s += 4) {
-        __m128i c[N];
+    for (; s + kL <= n; s += kL) {
+        V c[N];
         for (int ch = 0; ch < N; ch++) {
             const int j = k.jmap[ch];
-            c[ch]       = j >= 0 ? L::ld(in[j] + s * cpb) : _mm_setzero_si128();
+            c[ch]       = j >= 0 ? L::ld(in[j] + s * cpb) : vzero();
         }
         inter<N>(c);
         uint8_t* w = pay + 2 * (s0 + s) * N;
-        if constexpr (N == 1) {
-            _mm_storel_epi64(reinterpret_cast<__m128i*>(w), _mm_packs_epi16(c[0], c[0]));
-        } else {
-            for (int i = 0; i < N; i += 2) // rows i, i+1 = 8 consecutive slots
-                _mm_storeu_si128(reinterpret_cast<__m128i*>(w + 8 * size_t(i)), _mm_packs_epi16(c[i], c[i + 1]));
-        }
+        for (int i = 0; i < N; i++)
+            st_slots8(w + 2 * size_t(kL) * size_t(i), c[i]);
     }
     if (s < n)
         tx_scalar<C, otw_t::sc8>(k, ins, i0 + s, n - s, pay, s0 + s);

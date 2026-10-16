@@ -1,6 +1,6 @@
 //
-// zcu216_kernel_check -- the SIMD sample kernels (SSE on x86, NEON through
-// sse2neon on aarch64) against the scalar ones, bit for bit: every RX and TX
+// zcu216_kernel_check -- the SIMD sample kernels (AVX-512 on x86, NEON on
+// aarch64) against the scalar ones, bit for bit: every RX and TX
 // format pair, N = 1, 2, 4, 8, 16, several channel subsets, unaligned starts
 // and lengths, random data with the edge cases (-32768, rounding ties, NaN,
 // +-inf, +-huge). Prints one line per direction and a digest of every output

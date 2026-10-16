@@ -43,18 +43,9 @@ find_package(Threads REQUIRED)
 # UHD's public headers pull in Boost (ref_vector, equality_comparable, ...)
 find_package(Boost REQUIRED)
 
-# The sample kernels are one 128-bit SSE implementation (lib/zcu216_kernels.cpp):
-# native on x86, NEON on aarch64 through sse2neon (submodule host/sse2neon,
-# DLTcollab/sse2neon, a single header).
-set(_sse2neon_inc "")
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64")
-    set(_sse2neon_inc "${CMAKE_CURRENT_SOURCE_DIR}/sse2neon")
-    if(NOT EXISTS "${_sse2neon_inc}/sse2neon.h")
-        message(FATAL_ERROR "aarch64 build needs sse2neon: git submodule update --init --depth 1 host/sse2neon")
-    endif()
-    include_directories(BEFORE "${_sse2neon_inc}")
-    message(STATUS "uhd_zcu216: aarch64, SIMD kernels through sse2neon (${_sse2neon_inc})")
-endif()
+# The sample kernels (lib/zcu216_kernels.cpp) have two SIMD implementations:
+# AVX-512 on x86 (runtime-dispatched; scalar on a CPU without it) and NEON on
+# aarch64.
 
 add_library(uhd_zcu216 MODULE
     lib/zcu216_util.cpp

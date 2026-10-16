@@ -5,14 +5,14 @@
 //
 // Every kernel addresses whole slots (sc12 too: its 4-slot groups are
 // unpacked per slot), so a call may start and end on any sample. The SIMD
-// variants -- one 128-bit SSE implementation (up to SSE4.1): native on x86
-// (runtime-dispatched, __builtin_cpu_supports), NEON on aarch64 through
-// sse2neon (host/sse2neon) -- cover the hot paths:
+// variants -- AVX-512 (F + BW) on x86 (runtime-dispatched,
+// __builtin_cpu_supports; the scalar loops on a CPU without it) and NEON on
+// aarch64, the same algorithm in both -- cover the hot paths:
 //
 //   RX  wire sc16 | sc8  ->  cpu sc16 | fc32,  N = 1, 2, 4, 8, 16, any channel subset
 //   TX  cpu sc16 | fc32  ->  wire sc16 (and sc12 via sc16), N = 1, 2, 4, 8, 16
 //
-// (4 samples of all N channels are loaded, transposed in registers and the
+// (16 (AVX-512) or 4 (NEON) samples of all N channels are loaded, de-interleaved in registers and the
 // requested channels stored), everything else runs the scalar loops. Both
 // produce exactly what UHD 4.6's converters produce (each was checked
 // against uhd::convert with random data when it was written):
@@ -52,10 +52,10 @@ enum class cpu_t : int { fc32, fc64, sc16, sc8 };
 cpu_t cpu_lookup(const std::string& name);
 size_t cpu_bytes(cpu_t c);
 const char* cpu_name(cpu_t c);
-//! the SIMD kernels run on this CPU (x86: SSE4.1; aarch64: always, NEON);
-//! false with ZCU216_NO_SIMD=1
+//! the SIMD kernels run on this CPU (x86: AVX-512 F + BW; aarch64: always,
+//! NEON); false with ZCU216_NO_SIMD=1
 bool cpu_has_simd();
-//! "SSE4.1" (x86) or "NEON (sse2neon)" (aarch64)
+//! "AVX-512" (x86) or "NEON" (aarch64)
 const char* simd_name();
 
 //! RX: wire slots (N channels interleaved) -> one CPU buffer per requested channel
