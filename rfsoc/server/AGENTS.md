@@ -122,15 +122,15 @@ The builds (`fpga_board/zcu216/scripts/v49_ladder.sh`; the full list, with
 the wire formats each carries, is `host/benchmark/oracle_builds.txt`; names
 `zcu216_v49_<N>ch_qsfp_f<F>[_fs<fs>]`, `_fs` when fs != 2400):
 
-| family | N | fs (MS/s) | factors F (one build each) | per-channel rate | beat | wire formats |
+| family | N | fs (MS/s) | factors F | per-channel rate | beat | wire formats |
 |---|---|---|---|---|---|---|
 | normal | 1 | 2500 | 2 3 4 5 6 8 10 12 16 20 24 40 | 1250 .. 62.5 MS/s | 128 b | sc16 sc12 sc8 fc32 |
 | normal | 2 | 2500 | 2 3 4 5 6 8 10 12 16 20 24 40 | 1250 .. 62.5 | 256 b | sc16 sc12 sc8; fc32 from F4 |
 | normal | 4 | 2250 | 3 4 5 6 8 10 12 16 20 24 40 | 750 .. 56.25 | 512 b | sc16 sc12 sc8 |
 | normal | 8 | 2250 | 6 8 10 12 16 20 24 40 | 375 .. 56.25 | 512 b | sc16 sc12 sc8 |
 | normal | 16 | 2250 | 12 16 20 24 40 | 187.5 .. 56.25 | 512 b | sc16 sc12 sc8 |
-| sc8max | 4 | 2500 | 2 | 1250 | 512 b | **sc8 only** |
-| sc8max | 8 / 16 | 2250 | 3 / 6 | 750 / 375 | 1024 b | **sc8 only** |
+| sc8max | 4 | 2500 | template F2, run-time 2 .. 40 | 1250 .. 62.5 | 512 b | sc8 at F2, sc12 sc8 at F3, sc16 from F4 |
+| sc8max | 8 / 16 | 2250 | template F3 / F6, run-time 3 4 5 / 6 8 10 (below: the normal build) | 750 .. 450 / 375 .. 225 | 1024 b | **sc8 only** |
 | 245m76 | 1 / 2 / 4 | 2457.6 | template F2, run-time 2 .. 40 | 1228.8 .. 61.44 | 128 / 256 / 512 b | 4ch: sc8 at F2, sc12 sc8 at F3, sc16 from F4 |
 | 245m76 | 8 / 16 | 2457.6 | template F4 / F8, run-time .. 40 | 614.4 / 307.2 .. 61.44 | 512 b | sc8 at the top, sc16 from 307.2 / 153.6 |
 
@@ -268,7 +268,9 @@ Tests:
   `-(f mod fs)` (rfsoc_lib real→I/Q convention, `config_adc_nco`), the driver
   folds and handles even-zone inversion. Reported value = f rounded to the
   48-bit NCO step. RX and TX range 0–fs/2 (first Nyquist zone only: 0–1250 MHz
-  at fs 2500, 0–1125 MHz at 2250); a request outside is clamped. With `dsp=` (§3b) the NCO is
+  at fs 2500, 0–1125 MHz at 2250, 0–1228.8 MHz at 2457.6; RFSoC 4x2 0–2500
+  MHz at 5000, 0–2457.6 MHz at 4915.2), of the loaded build, so a rate
+  change to the other clock family moves it; a request outside is clamped. With `dsp=` (§3b) the NCO is
   rf − dsp (RX) / rf + dsp (TX), clamped the same way. After every NCO change
   (and after the bring-up's) the NCO phases are reset per §3d.
 * `get_rx_lo_locked <ch>`: the tile of channel ch, judged like the bring-up
