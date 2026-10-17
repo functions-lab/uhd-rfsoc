@@ -57,6 +57,7 @@ from typing import Dict, List, Optional, Tuple
 from backend import (Backend, BackendError, default_fc_interval, DSA_MAX_DB,
                      DSA_STEP_DB, bool_sensor,
                      coerce_nco, default_rate, find_lib_root, gain_for_vop_ua,
+                     link_problem,
                      nyquist_plan, read_sysmon_temp, v49_tick_step,
                      vop_ua_for_gain)
 from boards import Board, board_of_bitstream, get_board
@@ -236,6 +237,24 @@ def clk_wiz_lib():
     return m
 
 
+def clocks_lib():
+    """rfsoc_lib.clocks (no pynq needed for clock_plan), as clk_wiz_lib."""
+    try:
+        import rfsoc_lib.clocks as m
+    except ImportError:
+        root = find_lib_root(os.path.dirname(os.path.abspath(__file__)))
+        if root and root not in sys.path:
+            sys.path.insert(0, root)
+        import rfsoc_lib.clocks as m
+    return m
+
+
+def xrfclk_dir(board: Board) -> Optional[str]:
+    """rfsoc_lib/xrfclk/<board>: the board's LMK04828 / LMX2594 register files."""
+    root = find_lib_root(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(root, "rfsoc_lib", "xrfclk", board.name) if root else None
+
+
 def _overlay_cores(ol) -> Dict[str, Dict[str, str]]:
     """HWH_CORES parameters from a loaded overlay's ip_dict (no .hwh file at
     hand): keys ending in /<core>."""
@@ -413,6 +432,11 @@ class Variant:
         cw = cores.get(MTS_CW, {})
         dyn = str(cw.get("USE_DYN_RECONFIG", "")).lower() in ("true", "1")
         self.retune_fin = float(cw["PRIM_IN_FREQ"]) if dyn and "PRIM_IN_FREQ" in cw else None
+        # the MTS PL clock the build's converter clock is made from (its
+        # clocking wizard's input): with Refclk_Freq it names the clock plan
+        # the board's LMK04828 + LMX2594 must run (rfsoc_lib.clocks.clock_plan;
+        # 300 MHz in the 250 MHz family, 122.88 in the 245.76 MHz one)
+        self.pl_clk_mhz = float(cw.get("PRIM_IN_FREQ", 300.0))
         self.built_factor = self.factor
         self.spc = next(iter(spc))
 
@@ -499,9 +523,17 @@ def load_variant(bitstream: str, nch: Optional[int] = None,
     if bad:
         raise ValueError(f"{os.path.basename(hwh)}: " + "; ".join(bad))
     try:
-        return Variant(bitstream, geo, nch, cores, board)
+        v = Variant(bitstream, geo, nch, cores, board)
     except (ValueError, RuntimeError) as e:
         raise ValueError(f"{os.path.basename(hwh)}: {e}")
+    # the board must have the register files of the build's clock plan
+    d = xrfclk_dir(v.board)
+    if d and os.path.isdir(d):
+        try:
+            clocks_lib().clock_plan(d, lmx_out=geo.refclk, pl_clk=v.pl_clk_mhz)
+        except (FileNotFoundError, ValueError) as e:
+            raise ValueError(f"{os.path.basename(bitstream)}: {e}")
+    return v
 
 
 def scan_bitstreams(directory: str, extra: Tuple[str, ...] = (),
@@ -510,8 +542,12 @@ def scan_bitstreams(directory: str, extra: Tuple[str, ...] = (),
     `directory` with a usable .hwh next
     to it (plus `extra` bitstreams, which win the (N, rate) they share),
     sorted by channel count, then highest rate first. Unusable files are
-    logged and skipped. Each build keeps its own tick rate."""
+    logged and skipped. Each build keeps its own tick rate. Two builds of one
+    (N, rate) -- an sc8max template retuned to a normal template's rate --
+    resolve to the one that carries more wire formats there (the normal
+    one: an sc8max 1024-bit beat carries sc8 only), else the first."""
     paths = [os.path.abspath(p) for p in extra]
+    extras = set(paths)
     board = board or get_board(None)
     for p in sorted(glob.glob(os.path.join(directory, board.bitstream_glob))):
         if board.name_channels(p) is None:
@@ -519,6 +555,10 @@ def scan_bitstreams(directory: str, extra: Tuple[str, ...] = (),
         if os.path.abspath(p) not in paths:
             paths.append(os.path.abspath(p))
     by_key: Dict[Tuple[int, float], Variant] = {}
+
+    def nfmt(v: Variant) -> int:
+        return sum(link_problem(f, v.nch, v.rate, v.beat_bits, d) is None
+                   for f in vrt.OTW_FORMATS for d in ("rx", "tx"))
     for p in paths:
         try:
             v0 = load_variant(p, board=board)
@@ -527,9 +567,16 @@ def scan_bitstreams(directory: str, extra: Tuple[str, ...] = (),
             continue
         # a retunable build is one variant per run-time factor (§8)
         for v in [v0] + [v0.at_factor(f) for f in v0.run_factors() if f != v0.factor]:
-            if v.key in by_key:
-                log.warning("bitstream variant skipped: %s F=%d gives %d ch x %.17g S/s "
-                            "like %s", v.name, v.factor, v.nch, v.rate, by_key[v.key].name)
+            old = by_key.get(v.key)
+            if old is not None:
+                if old.bitstream not in extras and nfmt(v) > nfmt(old):
+                    log.info("%s F=%d replaces %s F=%d for %d ch x %.17g S/s (more "
+                             "wire formats)", v.name, v.factor, old.name, old.factor,
+                             v.nch, v.rate)
+                    by_key[v.key] = v
+                else:
+                    log.warning("bitstream variant skipped: %s F=%d gives %d ch x %.17g "
+                                "S/s like %s", v.name, v.factor, v.nch, v.rate, old.name)
                 continue
             by_key[v.key] = v
     return sorted(by_key.values(), key=lambda v: (v.nch, -v.rate))
@@ -721,6 +768,9 @@ class HwBackend(Backend):
         _z, _p, tx_fold = nyquist_plan(tx_freqs[0], self.dac_rate)
         NEW_CONFIG = {
             "RefClockForPLL": self.geo.refclk,
+            # with RefClockForPLL, the LMK04828 + LMX2594 clock plan RfdcTask
+            # programs (rfsoc_lib.clocks.clock_plan)
+            "MTSPLClockFreq": self.variant.pl_clk_mhz,
             "DACSampleRate": self.dac_rate / 1e6,
             "DACInterpolationRate": self.tx_interp,
             "DACNCO": tx_fold / 1e6,
@@ -751,6 +801,10 @@ class HwBackend(Backend):
         self.my = self.rfdc_t.my_rfdc
         if errors:
             raise RuntimeError(f"RfdcTask.run() raised: {errors[0]!r}")
+        self.clock_files = getattr(self.rfdc_t, "clock_files", None)
+        if self.clock_files:
+            pr(f"[c] clocks: {' + '.join(self.clock_files)} (PL clock "
+               f"{self.variant.pl_clk_mhz:g} MHz, converters {self.geo.refclk:g} MHz)")
         # the compiled fabric word counts, held across run-time factor changes
         self._fab_words = self._read_fab_words()
         # MTS before any sample is trusted (fpga_board/zcu216/AGENTS.md): the

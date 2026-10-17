@@ -15,7 +15,11 @@
   per clock. Fabric = fs / F / S; ADC Data_Width = S, DAC Data_Width = 2S. The
   ZCU216 formula is wrong here by 2x. fs = 5000 on every build: the LMX2594
   feeds the tiles at fs directly (tile PLLs bypassed;
-  `rfsoc/rfsoc_lib/xrfclk/RFSoC4x2/LMX2594_250.0_5000.0.txt`).
+  `rfsoc/rfsoc_lib/xrfclk/RFSoC4x2/LMX2594_250.0_5000.0.txt`). The 245.76 MHz
+  family (`block_designs/rfsoc4x2_uhd_v49_245m76/`, Protocol §8a) runs fs =
+  4915.2 (`LMX2594_245.76_4915.2.txt`) with PL_CLK 122.88 MHz and SYSREF
+  7.68 MHz; its templates are 1ch F2 and 2ch F2 (512-bit beat), both at a
+  307.2 MHz converter clock.
 - Channel map (the SMA ports PYNQ's base overlay uses): ch0 DAC s20 / ADC
   tile 2 (m20 I, m21 Q); ch1 DAC s00 / ADC tile 0 (m02 I, m03 Q)
   (`v49_channel_slices`; `rfsoc/server/boards.py`).

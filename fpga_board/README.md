@@ -3,12 +3,17 @@
 | directory | design | channels | board |
 |---|---|---|---|
 | `zcu216/` | `block_designs/zcu216_uhd_v49/` | 1, 2, 4, 8, 16 (fs 2500 / 2250) | Xilinx ZCU216 (`zcu216/README.md`) |
+| | `block_designs/zcu216_uhd_v49_245m76/` | 1, 2, 4, 8, 16 (fs 2457.6) | |
 | `rfsoc4x2/` | `block_designs/rfsoc4x2_uhd_v49/` | 1, 2 (fs 5000) | Real Digital RFSoC 4x2 (`rfsoc4x2/README.md`) |
+| | `block_designs/rfsoc4x2_uhd_v49_245m76/` | 1, 2 (fs 4915.2) | |
 
-Each board's design is ONE self-contained block design (`.tcl` + `.xdc`) for
-every channel count, factor and sample rate; the build names it
+Each design is ONE self-contained block design (`.tcl` + `.xdc`) for every
+channel count, factor and sample rate of its clock family: the 250 MHz one
+(LMX2594 from 250 MHz, PL clock 300 MHz) or the 245.76 MHz one (LMX2594 from
+245.76 MHz, PL clock 122.88 MHz); `FS=` picks it. The build names it
 `<board>_v49_<N>ch_qsfp` and the bitstreams
-`<board>_v49_<N>ch_qsfp_f<F>[_fs<fs>].{bit,hwh}`. Its only IP outside Vivado's
+`<board>_v49_<N>ch_qsfp_f<F>[_fs<fs>].{bit,hwh}` (the decimal point of fs as
+`p`: `_fs2457p6`). Its only IP outside Vivado's
 catalog is in `../fpga_ip/ip` (the build's IP repository path names exactly
 what it needs).
 
@@ -18,6 +23,8 @@ make -C zcu216 v49 N=4 F=3 FS=2250 [STEP=bd]     # one build
 make -C zcu216 v49-ladder [MAXPAR=3] [JOBS=8]    # every build of host/benchmark/oracle_builds.txt
 make -C zcu216 v49-templates                     # one per channel count: run-time rate
 make -C rfsoc4x2 v49-templates                   # the RFSoC 4x2's two (1ch F2, 2ch F4 at fs 5000)
+make -C zcu216 v49-templates-245m76              # 245.76 MHz family: 1/2/4ch F2, 8ch F4, 16ch F8 at fs 2457.6
+make -C rfsoc4x2 v49-templates-245m76            # 245.76 MHz family: 1ch F2, 2ch F2 at fs 4915.2
 ```
 
 Every build is a run-time-rate template (Protocol §8): its converter

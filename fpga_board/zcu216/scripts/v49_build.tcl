@@ -12,12 +12,17 @@
 #   impl   continue an existing synthesized project to a bitstream
 #
 # Inputs (a block-design directory holds only its .tcl and .xdc):
-#   block_designs/zcu216_uhd_v49/zcu216_uhd_v49.{tcl,xdc}   the design, every N
-#                                                   (self-contained: geometry, data plane, checks)
+#   block_designs/<bd>/<bd>.{tcl,xdc}               the design, every N (self-contained:
+#                                                   geometry, data plane, checks), one per
+#                                                   clock family, chosen by fs (below):
+#     zcu216_uhd_v49          250 MHz family: LMX2594 from 250 MHz, PL_CLK 300 MHz, SYSREF 10 MHz
+#     zcu216_uhd_v49_245m76   245.76 MHz family: LMX2594 from 245.76 MHz, PL_CLK 122.88 MHz,
+#                             SYSREF 7.68 MHz
 #   ../../fpga_ip/ip/uhd_ip                         packaged cores (`make v49-package` first);
 #                                                   the only non-Xilinx IP the design uses
 #   ../../fpga_ip/ip_design/cmac_100g               CMAC + split-quad GT wrapper RTL
 # Output: build/v49_qsfp/bitstreams/zcu216_v49_<N>ch_qsfp_f<F>[_fs<fs>].{bit,hwh}
+#         (fs with its decimal point as p: _fs2457p6)
 #         (the deploy set; a build that misses timing goes to
 #         bitstreams_timing_fail/), with its timing and utilization reports.
 #         The Vivado project (build/v49_qsfp/<name>_proj) is deleted once the
@@ -30,27 +35,44 @@
 # every factor from the max-rate one down to 40; sc8max: 4ch F2 fs 2500, 8ch F3
 # and 16ch F6 fs 2250, sc8 only) are listed
 # in host/benchmark/oracle_builds.txt; `make v49-ladder` builds them.
-# A build at fs != 2400 is named ..._fs<fs> and needs
-# rfsoc/rfsoc_lib/xrfclk/ZCU216/LMX2594_250.0_<fs>.0.txt on the board.
+# A build at fs != 2400 is named ..._fs<fs>. The design is the one whose LMX2594
+# reference has a register file for fs in rfsoc/rfsoc_lib/xrfclk/ZCU216/ (the
+# board needs the same file): LMX2594_250.0_<fs>.0.txt -> zcu216_uhd_v49 (fs
+# 2250, 2400, 2500), LMX2594_245.76_<fs>.txt -> zcu216_uhd_v49_245m76 (2457.6).
 
 set scripts     [file dirname [file normalize [info script]]]
 set zcu216      [file normalize $scripts/..]
 set hwd         [file normalize $zcu216/../../fpga_ip]
 if {$argc < 1} { error "usage: v49_build.tcl -tclargs <N> [bd|synth|bit|impl] [jobs] [factor] [fs]" }
 set V49_NCH     [lindex $argv 0]
-set here        $zcu216/block_designs/zcu216_uhd_v49
 set outdir      $zcu216/build/v49_qsfp
 set V49_FS      [expr {$argc > 4 ? double([lindex $argv 4]) : 2400.0}]
+# the clock family of fs: the LMX2594 register file that makes it
+proc v49_bd_of_fs {fs xrfclk} {
+  set hits {}
+  foreach {ref bd} {250.0 zcu216_uhd_v49 245.76 zcu216_uhd_v49_245m76} {
+    set pre LMX2594_${ref}_
+    foreach f [glob -nocomplain -directory $xrfclk ${pre}*.txt] {
+      set out [string range [file rootname [file tail $f]] [string length $pre] end]
+      if {[string is double -strict $out] && abs($out - $fs) < 1e-6} { lappend hits $bd }
+    }
+  }
+  if {[llength $hits] != 1} { error "v49: fs $fs MS/s: [llength $hits] LMX2594 register files make it in $xrfclk ($hits); expected one" }
+  return [lindex $hits 0]
+}
+set bd          [v49_bd_of_fs $V49_FS [file normalize $zcu216/../../rfsoc/rfsoc_lib/xrfclk/ZCU216]]
+set here        $zcu216/block_designs/$bd
+puts "V49_BD $bd (fs $V49_FS MS/s)"
 # the design's procs only (v49_geometry: the factor names the build)
 set V49_DEFINE_ONLY 1
-source $here/zcu216_uhd_v49.tcl
+source $here/$bd.tcl
 unset V49_DEFINE_ONLY
 set design_name zcu216_v49_${V49_NCH}ch_qsfp
 set step        [expr {$argc > 1 ? [lindex $argv 1] : "bit"}]
 set jobs        [expr {$argc > 2 ? [lindex $argv 2] : 8}]
 set V49_FACTOR  [dict get [v49_geometry $V49_NCH [expr {$argc > 3 ? [lindex $argv 3] : ""}]] F]
 set variant     "_f$V49_FACTOR"
-if {$V49_FS != 2400.0} { append variant "_fs[format %g $V49_FS]" }
+if {$V49_FS != 2400.0} { append variant "_fs[string map {. p} [format %g $V49_FS]]" }
 set proj_name   ${design_name}${variant}_proj
 # V49_PROJ_TAG=<t>: a separate project (<name>_proj_<t>), so the same build can
 # run several implementation strategies at once; outputs keep the build's name
@@ -200,8 +222,8 @@ foreach vlnv {user.org:uhd:udp_streamer:1.0 user.org:uhd:udp_player:1.0
   }
 }
 source $hwd/ip_design/cmac_100g/create_cmac_ip.tcl
-add_files -fileset constrs_1 -norecurse $here/zcu216_uhd_v49.xdc
-source $here/zcu216_uhd_v49.tcl
+add_files -fileset constrs_1 -norecurse $here/$bd.xdc
+source $here/$bd.tcl
 validate_bd_design
 save_bd_design
 if {$step eq "bd"} { exit }

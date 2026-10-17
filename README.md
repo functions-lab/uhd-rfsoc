@@ -12,7 +12,7 @@ and RX at once.
 
 | side | what |
 |---|---|
-| board | a **ZCU216** (1, 2, 4, 8 or 16 channels, fs 2500 / 2250 MS/s) or a **Real Digital RFSoC 4x2** (1 or 2 channels, fs 5000 MS/s), running PYNQ 3.x, with a QSFP28 100G cable to the host |
+| board | a **ZCU216** (1, 2, 4, 8 or 16 channels, fs 2500 / 2250 or 2457.6 MS/s) or a **Real Digital RFSoC 4x2** (1 or 2 channels, fs 5000 or 4915.2 MS/s), running PYNQ 3.x, with a QSFP28 100G cable to the host |
 | host | Linux, x86_64 (AVX-512 used when present) or aarch64 (NEON), a 100G NVIDIA/Mellanox ConnectX NIC (ConnectX-5/6/7, mlx5), Ubuntu 24.04 packages `libuhd-dev` 4.6, `uhd-host`, `python3-uhd`, `dpdk` / `libdpdk-dev` 23.11, `rdma-core`; optionally `gnuradio` 3.10 |
 | FPGA builds (optional) | Vivado 2021.1; prebuilt bitstreams are attached to each [release](https://github.com/WeiCheng14159/rfsoc-uhd/releases) |
 
@@ -28,7 +28,7 @@ reference (`host/uhd` at v4.6.0.0, `host/gnuradio/gnuradio` at v3.10.9.2:
 | `host/` | the UHD device module `libuhd_zcu216.so` (DPDK data plane), its wrapper and tools, hardware tests (`host/benchmark/`), GNU Radio flowgraphs (`host/gnuradio/`) | host PC |
 | `rfsoc/` | the board daemon (`server/`) and the `rfsoc_lib` modules it uses (RFDC, clocks, MTS) | board (PYNQ) |
 | `run_daemon.sh` | start / stop the daemon on the board | board |
-| `fpga_board/` | per board: the block design (`block_designs/<board>_uhd_v49/`, one `.tcl` + `.xdc` for every channel count) and its build flow | Vivado |
+| `fpga_board/` | per board: the block designs (`block_designs/<board>_uhd_v49/` and, for the 245.76 MHz clock family, `<board>_uhd_v49_245m76/`; each one `.tcl` + `.xdc` for every channel count) and their build flow | Vivado |
 | `fpga_ip/` | the custom FPGA IP: UHD data-plane cores, the 100G CMAC wrapper, the RFSoC 4x2 dual-ADC I/Q joiners | Vivado |
 
 ## Bitstreams
@@ -53,6 +53,34 @@ stream would not fit the link.
 | | `rfsoc4x2_v49_2ch_qsfp_f4_fs5000.bit` | 2 | 1250 |
 | | `rfsoc4x2_v49_2ch_qsfp_f2_fs5000.bit` | 2 | 2500 (sc8max) |
 
+A second clock family puts the converters on a 245.76 MHz reference: fs
+2457.6 MS/s on the ZCU216 and 4915.2 MS/s on the RFSoC 4x2, i.e. per-channel
+rates 1228.8, 819.2, 614.4, 491.52, 409.6, 307.2, 245.76, 204.8, 153.6,
+122.88 ... MS/s. One template per channel count serves every factor; its
+top rates carry only `otw=sc8` (and `sc12`) where sc16 would not fit the
+link, the lower ones every format.
+
+| board | file | channels | rates, MS/s per channel (sc16 from) |
+|---|---|---|---|
+| ZCU216 | `zcu216_v49_1ch_qsfp_f2_fs2457p6.bit` | 1 | 1228.8 .. 61.44 (all) |
+| | `zcu216_v49_2ch_qsfp_f2_fs2457p6.bit` | 2 | 1228.8 .. 61.44 (all) |
+| | `zcu216_v49_4ch_qsfp_f2_fs2457p6.bit` | 4 | 1228.8 .. 61.44 (614.4) |
+| | `zcu216_v49_8ch_qsfp_f4_fs2457p6.bit` | 8 | 614.4 .. 61.44 (307.2) |
+| | `zcu216_v49_16ch_qsfp_f8_fs2457p6.bit` | 16 | 307.2 .. 61.44 (153.6) |
+| RFSoC 4x2 | `rfsoc4x2_v49_1ch_qsfp_f2_fs4915p2.bit` | 1 | 2457.6 .. 122.88 (all) |
+| | `rfsoc4x2_v49_2ch_qsfp_f2_fs4915p2.bit` | 2 | 2457.6 .. 122.88 (1228.8) |
+
+Install the builds of both families side by side: the daemon offers every
+rate of every installed build, and an application picks one through UHD
+(`set_rx_rate` / `set_tx_rate`, or `--rate`): the highest offered rate at or
+below the request. A rate of the other family reloads the bitstream and
+reprograms the board's clock chips (10-20 s); a rate of the loaded build
+retunes in place (~1 s). At the top rates the FPGA delivers every packet in
+every format, but full-duplex `sc12` near the link limit (4-16 channels,
+3.3-3.9 GS/s aggregate) is more than an x86 host converting to sc16
+keeps up with (RX loss at the NIC); `sc8` there, and `sc16` from the rate
+where it fits, run clean.
+
 Download them (with their `.hwh`) from the release, or build them:
 
 ```sh
@@ -61,6 +89,8 @@ make -C fpga_board/zcu216 v49-package          # package the custom cores (once)
 make -C fpga_board/zcu216 v49-templates        # the five ZCU216 templates
 make -C fpga_board/zcu216 v49 N=8 F=3 FS=2250  # one build, e.g. the 8ch sc8max
 make -C fpga_board/rfsoc4x2 v49-templates      # the two RFSoC 4x2 templates
+make -C fpga_board/zcu216 v49-templates-245m76    # the 245.76 MHz family (fs 2457.6)
+make -C fpga_board/rfsoc4x2 v49-templates-245m76  # the 245.76 MHz family (fs 4915.2)
 # -> fpga_board/<board>/build/v49_qsfp/bitstreams/
 ```
 

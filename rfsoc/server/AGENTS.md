@@ -131,6 +131,8 @@ the wire formats each carries, is `host/benchmark/oracle_builds.txt`; names
 | normal | 16 | 2250 | 12 16 20 24 40 | 187.5 .. 56.25 | 512 b | sc16 sc12 sc8 |
 | sc8max | 4 | 2500 | 2 | 1250 | 512 b | **sc8 only** |
 | sc8max | 8 / 16 | 2250 | 3 / 6 | 750 / 375 | 1024 b | **sc8 only** |
+| 245m76 | 1 / 2 / 4 | 2457.6 | template F2, run-time 2 .. 40 | 1228.8 .. 61.44 | 128 / 256 / 512 b | 4ch: sc8 at F2, sc12 sc8 at F3, sc16 from F4 |
+| 245m76 | 8 / 16 | 2457.6 | template F4 / F8, run-time .. 40 | 614.4 / 307.2 .. 61.44 | 512 b | sc8 at the top, sc16 from 307.2 / 153.6 |
 
 The normal family's top factor is the highest rate whose sc16 stream fits
 the link (97 % of it at 4-16 channels); sc8max doubles the per-channel rate in
@@ -139,9 +141,13 @@ sc8 at 8 and 16 channels (6.0 GS/s, the same 96 Gb/s) and reaches the ADC's
 payload rate (`backend.link_problem`); RX fc32 is never offered on a
 512-bit-beat build (udp_streamer would need two FIFO words per clock), and a
 1024-bit-beat build carries sc8 only (one sc8 wire word per clock). The
-converters' LMX2594 is programmed from the `.hwh` reference clock:
-`rfsoc_lib/xrfclk/ZCU216/LMX2594_250.0_<fs>.0.txt` must exist for every fs
-(2250 and 2500 are in the repository).
+board's clock chips are programmed per build (Protocol §8a): the `.hwh`
+reference clock (= fs) and the MTS clocking wizard's input (300 or 122.88
+MHz) pick the LMK04828 + LMX2594 register files in `rfsoc_lib/xrfclk/<board>/`
+(`rfsoc_lib.clocks.clock_plan`, called by `RfdcTask.set_external_clocks`;
+the scan skips a build without exactly one matching pair). A build of the
+other clock family is a reload; `RfdcTask.relock_pl_mmcm` resets the MTS
+clocking wizard when the new PL clock left it unlocked.
 
 The one loaded at start is `--bitstream`, else `<dir>/zcu216_v49_1ch_qsfp.bit`
 (not part of the ladder), else the highest-rate build with the fewest channels

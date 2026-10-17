@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # bench_strict.sh -- one strict UHD benchmark_rate run against the ZCU216, as one
 # result line. "Strict" means every error threshold is 0, so benchmark_rate's own
-# exit status is the verdict (without the thresholds it exits 0 whatever happens).
+# exit status is the verdict (without the thresholds it exits 0 whatever happens),
+# and every direction run must have moved >= 99 % of the nominal sample count:
+# benchmark_rate exits 0 on a stream that only timed out (no link: rx 0 %).
 #
 #   benchmark/bench_strict.sh <rx|tx|rxtx> <rate per channel> [nchan] [cpu] [otw]
 #   benchmark/bench_strict.sh rx 1.2e9                 # 1ch RX sc16 -> fc32 host
@@ -41,13 +43,16 @@ PCT=$(python3 - "$DIR" "$RATE" "$NCH" "$DUR" "${RX:-0}" "${TX:-0}" <<'EOF'
 import sys
 d, rate, n, dur, rx, tx = sys.argv[1], float(sys.argv[2]), int(sys.argv[3]), float(sys.argv[4]), int(sys.argv[5]), int(sys.argv[6])
 nom = rate * n * dur
-out = []
-if d in ("rx", "rxtx"): out.append("rx %.1f%%" % (100 * rx / nom))
-if d in ("tx", "rxtx"): out.append("tx %.1f%%" % (100 * tx / nom))
-print(", ".join(out))
+out, short = [], 0
+if d in ("rx", "rxtx"):
+    out.append("rx %.1f%%" % (100 * rx / nom)); short |= rx < 0.99 * nom
+if d in ("tx", "rxtx"):
+    out.append("tx %.1f%%" % (100 * tx / nom)); short |= tx < 0.99 * nom
+print(", ".join(out) + (" SHORT" if short else ""))
 EOF
 )
 V=FAIL; [ $rc -eq 0 ] && V=PASS
+case $PCT in *SHORT) V="FAIL(< 99 % of the nominal samples)"; [ $rc -eq 0 ] && rc=1 ;; esac
 grep -q "Num received samples" "$F" || grep -q "Num transmitted samples" "$F" || V="FAIL(no result, see $F)"
 echo "$V $DIR ${NCH}x${RATE} cpu=$CPU otw=$OTW${DEV_ARGS:+ [$DEV_ARGS]}  rx=${RX:--} drop=$(num 'Num dropped samples:') ovr=$(num 'Num overruns detected:') seq=$(num 'Num sequence errors (Rx):') tx=${TX:--} undr=$(num 'Num underruns detected:') late=$(num 'Num late commands:')  ($PCT)"
 exit $rc

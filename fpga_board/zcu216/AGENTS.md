@@ -1,7 +1,12 @@
 # AGENTS.md — fpga_board/zcu216
 
-- Design: `block_designs/zcu216_uhd_v49/zcu216_uhd_v49.tcl` (+ `.xdc`), one for
-  N = 1, 2, 4, 8, 16; block design name `zcu216_v49_<N>ch_qsfp`. Only Xilinx
+- Designs: `block_designs/zcu216_uhd_v49/zcu216_uhd_v49.tcl` (+ `.xdc`; 250 MHz
+  clock family, fs 2250 / 2400 / 2500) and
+  `block_designs/zcu216_uhd_v49_245m76/zcu216_uhd_v49_245m76.tcl` (+ `.xdc`;
+  245.76 MHz family, fs 2457.6: PL_CLK 122.88 MHz, SYSREF 7.68 MHz, Protocol
+  §8a), each one for N = 1, 2, 4, 8, 16; block design name
+  `zcu216_v49_<N>ch_qsfp`. The 245.76 MHz templates are 1/2/4ch F2, 8ch F4
+  and 16ch F8, all at a 307.2 MHz converter clock. Only Xilinx
   IP + `../../fpga_ip/ip/uhd_ip` (ip_repo_paths is exactly that).
 - `v49_geometry` (in the design tcl) is the single N -> factor / Data_Width /
   beat / fabric-clock table; the factor is a block-design parameter on EVERY

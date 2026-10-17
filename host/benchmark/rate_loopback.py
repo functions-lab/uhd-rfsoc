@@ -35,9 +35,17 @@ ap.add_argument("--offset", type=int, default=4096, help="TX start inside the ca
 ap.add_argument("--lead", type=float, default=0.3, help="s from now to T0")
 ap.add_argument("--ampl", type=float, default=0.5)
 ap.add_argument("--min-db", type=float, default=20.0, help="pass: pulse peak over the median")
+ap.add_argument("--otw", help="wire format of both streams (default: the otw= of --args, "
+                "else sc16); a rate only sc8 / sc12 carry needs it (Protocol §10)")
 a = ap.parse_args()
 assert a.offset % 16 == 0
 c = a.chan
+# the device arg otw= declares the format with the rate request, so the
+# daemon picks a build that carries it (Protocol §3, §8)
+kv = dict(x.split("=", 1) for x in a.args.split(",") if "=" in x)
+otw = a.otw or kv.get("otw", "sc16")
+if kv.get("otw") != otw:
+    a.args = ",".join([x for x in a.args.split(",") if not x.startswith("otw=")] + [f"otw={otw}"])
 
 usrp = uhd.usrp.MultiUSRP(a.args)
 usrp.set_rx_rate(a.rate, c)
@@ -50,9 +58,9 @@ tps = tick / rate                      # ticks per sample
 usrp.set_time_now(T.TimeSpec(0.0))
 time.sleep(0.1)
 
-sa = uhd.usrp.StreamArgs("fc32", "sc16"); sa.channels = [c]
+sa = uhd.usrp.StreamArgs("fc32", otw); sa.channels = [c]
 rx = usrp.get_rx_stream(sa)
-sa = uhd.usrp.StreamArgs("fc32", "sc16"); sa.channels = [c]
+sa = uhd.usrp.StreamArgs("fc32", otw); sa.channels = [c]
 tx = usrp.get_tx_stream(sa)
 
 rng = np.random.default_rng(12345)

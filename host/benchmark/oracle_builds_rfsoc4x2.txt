@@ -32,3 +32,30 @@ normal    2  250000000      rfsoc4x2_v49_2ch_qsfp_f20_fs5000  sc16,sc12,sc8,fc32
 normal    2  208333333.3    rfsoc4x2_v49_2ch_qsfp_f24_fs5000  sc16,sc12,sc8,fc32 no
 normal    2  125000000      rfsoc4x2_v49_2ch_qsfp_f40_fs5000  sc16,sc12,sc8,fc32 no
 sc8max    2  2500000000     rfsoc4x2_v49_2ch_qsfp_f2_fs5000   sc8                no
+# family 245m76: the 245.76 MHz clock family (fs 4915.2 MS/s), one
+# run-time-rate template per channel count serving every factor: each row is
+# a rate of that template. 2ch carries sc8 only at 2 x 2457.6 MS/s.
+245m76    1  2457600000    rfsoc4x2_v49_1ch_qsfp_f2_fs4915p2    sc16,sc12,sc8       no
+245m76    1  1638400000    rfsoc4x2_v49_1ch_qsfp_f2_fs4915p2    sc16,sc12,sc8       no
+245m76    1  1228800000    rfsoc4x2_v49_1ch_qsfp_f2_fs4915p2    sc16,sc12,sc8,fc32  no
+245m76    1  983040000     rfsoc4x2_v49_1ch_qsfp_f2_fs4915p2    sc16,sc12,sc8,fc32  no
+245m76    1  819200000     rfsoc4x2_v49_1ch_qsfp_f2_fs4915p2    sc16,sc12,sc8,fc32  no
+245m76    1  614400000     rfsoc4x2_v49_1ch_qsfp_f2_fs4915p2    sc16,sc12,sc8,fc32  no
+245m76    1  491520000     rfsoc4x2_v49_1ch_qsfp_f2_fs4915p2    sc16,sc12,sc8,fc32  no
+245m76    1  409600000     rfsoc4x2_v49_1ch_qsfp_f2_fs4915p2    sc16,sc12,sc8,fc32  no
+245m76    1  307200000     rfsoc4x2_v49_1ch_qsfp_f2_fs4915p2    sc16,sc12,sc8,fc32  no
+245m76    1  245760000     rfsoc4x2_v49_1ch_qsfp_f2_fs4915p2    sc16,sc12,sc8,fc32  no
+245m76    1  204800000     rfsoc4x2_v49_1ch_qsfp_f2_fs4915p2    sc16,sc12,sc8,fc32  no
+245m76    1  122880000     rfsoc4x2_v49_1ch_qsfp_f2_fs4915p2    sc16,sc12,sc8,fc32  no
+245m76    2  2457600000    rfsoc4x2_v49_2ch_qsfp_f2_fs4915p2    sc8                 no
+245m76    2  1638400000    rfsoc4x2_v49_2ch_qsfp_f2_fs4915p2    sc12,sc8            no
+245m76    2  1228800000    rfsoc4x2_v49_2ch_qsfp_f2_fs4915p2    sc16,sc12,sc8       no
+245m76    2  983040000     rfsoc4x2_v49_2ch_qsfp_f2_fs4915p2    sc16,sc12,sc8       no
+245m76    2  819200000     rfsoc4x2_v49_2ch_qsfp_f2_fs4915p2    sc16,sc12,sc8       no
+245m76    2  614400000     rfsoc4x2_v49_2ch_qsfp_f2_fs4915p2    sc16,sc12,sc8       no
+245m76    2  491520000     rfsoc4x2_v49_2ch_qsfp_f2_fs4915p2    sc16,sc12,sc8       no
+245m76    2  409600000     rfsoc4x2_v49_2ch_qsfp_f2_fs4915p2    sc16,sc12,sc8       no
+245m76    2  307200000     rfsoc4x2_v49_2ch_qsfp_f2_fs4915p2    sc16,sc12,sc8       no
+245m76    2  245760000     rfsoc4x2_v49_2ch_qsfp_f2_fs4915p2    sc16,sc12,sc8       no
+245m76    2  204800000     rfsoc4x2_v49_2ch_qsfp_f2_fs4915p2    sc16,sc12,sc8       no
+245m76    2  122880000     rfsoc4x2_v49_2ch_qsfp_f2_fs4915p2    sc16,sc12,sc8       no

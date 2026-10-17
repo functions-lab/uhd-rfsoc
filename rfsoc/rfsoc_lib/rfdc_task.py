@@ -1,8 +1,9 @@
-from rfsoc_lib.clocks import LMK04828ClkConfig, LMX2594ClkConfig, find_and_program_clocks
+from rfsoc_lib.clocks import clock_plan, program_clocks
 from rfsoc_lib.overlay_task import OverlayTask
 from rfsoc_lib.rfdc import MyRFdc
 from rfsoc_lib.mts import MyMTS
 import os
+import time
 import logging
 from rfsoc_lib.rfdc_config import ZCU216_CONFIG
 
@@ -39,20 +40,23 @@ class RfdcTask(OverlayTask):
         if self.board not in ("ZCU216", "RFSoC4x2"):
             raise RuntimeError(f"RFSoC board {self.board} unsupported.")
 
-        lmk_config = LMK04828ClkConfig(
-            chip="LMK04828", freq_in=10.0, freq_out=250.0,
-            mts_pl_clk_freq=300.0, mts_pl_sysref_freq=10.0)
-        lmx_config = LMX2594ClkConfig(
-            chip="LMX2594", freq_in=250.0,
-            freq_out=ZCU216_CONFIG['RefClockForPLL'])
-
+        # The clock plan is the build's: the LMX2594 makes the tiles'
+        # reference (RefClockForPLL = the .hwh Refclk_Freq, fs with the tile
+        # PLLs bypassed) and the LMK04828 the MTS PL clock the build's
+        # MTS_clk_wiz expects (MTSPLClockFreq, its PRIM_IN_FREQ; 300 MHz
+        # unless the caller says otherwise). That picks the 250 MHz family
+        # (PL_CLK 300, SYSREF 10) or the 245.76 MHz one (122.88, 7.68).
         config_dir = os.getcwd()
         for sub_dir in ["rfsoc_lib", "xrfclk", self.board]:
             config_dir = os.path.join(config_dir, sub_dir)
+        lmk_config, lmx_config = clock_plan(
+            config_dir, lmx_out=ZCU216_CONFIG['RefClockForPLL'],
+            pl_clk=ZCU216_CONFIG.get('MTSPLClockFreq', 300.0))
+        self.clock_files = (lmk_config.file, lmx_config.file)
+        logging.info(f"clock plan: {lmk_config.file} + {lmx_config.file}")
 
         # Program clocks
-        _lmk_prop, _lmx_prop = find_and_program_clocks(
-            lmk_config, lmx_config, config_dir)
+        _lmk_prop, _lmx_prop = program_clocks(lmk_config, lmx_config)
         # Debug clock properties
         if self.debug_mode:
             for prop in [_lmk_prop, _lmx_prop]:
@@ -63,6 +67,33 @@ class RfdcTask(OverlayTask):
                         f"{prop['chip']} mts_pl_clk_freq {prop['mts_pl_clk_freq']} MHz mts_pl_sysref_freq {prop['mts_pl_sysref_freq']} MHz ")
                 except:
                     pass
+
+    def relock_pl_mmcm(self, timeout=1.0):
+        """Reset the MTS clocking wizard if its MMCM is not locked after the
+        clocks were programmed: a build of the other clock family (PL_CLK
+        300 vs 122.88 MHz) leaves it unlocked until the LMK04828 runs at
+        its frequency, and an MMCM does not recover from a changed input by
+        itself. The reset restores the build's setting, which is the one
+        wanted here."""
+        # a plain MMIO from ip_dict: the overlay's driver attribute would
+        # need an asyncio loop in this (task) thread
+        from pynq import MMIO
+        key = next((k for k in self.ol.ip_dict if k.endswith("MTS_clk_wiz")), None)
+        if key is None:
+            return
+        ip = self.ol.ip_dict[key]
+        cw = MMIO(ip["phys_addr"], ip["addr_range"])
+        if cw.read(0x4) & 1:
+            return
+        cw.write(0x0, 0xA)
+        t0 = time.monotonic()
+        while not cw.read(0x4) & 1:
+            if time.monotonic() - t0 > timeout:
+                raise RuntimeError("MTS clocking wizard did not lock after "
+                                   "the clock plan was programmed")
+            time.sleep(0.005)
+        logging.info(f"MTS clocking wizard relocked after reset "
+                     f"({1e3 * (time.monotonic() - t0):.0f} ms)")
 
     def set_nco(self):
         # Set all DACs to their respective DACNCO
@@ -111,6 +142,7 @@ class RfdcTask(OverlayTask):
         # LMX disturbs the reference under whatever is already running, so the
         # tiles have to be brought back up against the clock this run just set.
         self.set_external_clocks()
+        self.relock_pl_mmcm()
         self.my_rfdc.init()
         # Config DAC/ADC to target samping rate and interp/decim factor
         self.my_rfdc.setup()

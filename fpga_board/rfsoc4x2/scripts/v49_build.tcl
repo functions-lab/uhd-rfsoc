@@ -12,8 +12,12 @@
 #   impl   continue an existing synthesized project to a bitstream
 #
 # Inputs:
-#   block_designs/rfsoc4x2_uhd_v49/rfsoc4x2_uhd_v49.{tcl,xdc}  the design, every N
-#                                                   (self-contained: geometry, data plane, checks)
+#   block_designs/<bd>/<bd>.{tcl,xdc}               the design, every N (self-contained:
+#                                                   geometry, data plane, checks), one per
+#                                                   clock family, chosen by fs (below):
+#     rfsoc4x2_uhd_v49          250 MHz family: LMX2594 from 250 MHz, PL_CLK 300 MHz, SYSREF 10 MHz
+#     rfsoc4x2_uhd_v49_245m76   245.76 MHz family: LMX2594 from 245.76 MHz, PL_CLK 122.88 MHz,
+#                               SYSREF 7.68 MHz
 #   board_files/rfsoc4x2/1.0                        Real Digital's board files (RFSoC4x2-BSP):
 #                                                   board part realdigital.org:rfsoc4x2:part0:1.0,
 #                                                   whose preset configures the PS
@@ -23,6 +27,7 @@
 #   ../../fpga_ip/ip_design/cmac_100g               CMAC + GT wrapper RTL, CMAC_LANES qsfp128
 #                                                   (the QSFP28: GTY quad 128, Si570 refclk)
 # Output: build/v49_qsfp/bitstreams/rfsoc4x2_v49_<N>ch_qsfp_f<F>_fs<fs>.{bit,hwh}
+#         (fs with its decimal point as p: _fs4915p2)
 #         (the deploy set; a build that misses timing goes to
 #         bitstreams_timing_fail/), with its timing and utilization reports.
 #         The Vivado project (build/v49_qsfp/<name>_proj) is deleted once the
@@ -33,31 +38,50 @@
 # 5000, the dual RF-ADC's maximum). The builds: normal family 1ch F2..40 and
 # 2ch F4..40, sc8max 2ch F2, all at fs 5000 (scripts/v49_ladder.sh); every one
 # is a run-time-rate template (Protocol §8), so 1ch F2 and 2ch F4
-# serve the whole normal family. A build is named ..._fs<fs> for fs != 2400
-# and needs rfsoc/rfsoc_lib/xrfclk/RFSoC4x2/LMX2594_250.0_<fs>.0.txt on the board.
+# serve the whole normal family; the 245.76 MHz family (fs 4915.2) has one
+# template per channel count, 1ch F2 and 2ch F2. A build is named
+# ..._fs<fs> for fs != 2400. The design is the one whose LMX2594 reference
+# has a register file for fs in rfsoc/rfsoc_lib/xrfclk/RFSoC4x2/ (the board
+# needs the same file): LMX2594_250.0_<fs>.0.txt -> rfsoc4x2_uhd_v49 (5000),
+# LMX2594_245.76_<fs>.txt -> rfsoc4x2_uhd_v49_245m76 (4915.2).
 
 set scripts     [file dirname [file normalize [info script]]]
 set board_dir   [file normalize $scripts/..]
 set hwd         [file normalize $board_dir/../../fpga_ip]
 if {$argc < 1} { error "usage: v49_build.tcl -tclargs <N> [bd|synth|bit|impl] [jobs] [factor] [fs]" }
 set V49_NCH     [lindex $argv 0]
-set here        $board_dir/block_designs/rfsoc4x2_uhd_v49
 set outdir      $board_dir/build/v49_qsfp
-set xdc         $here/rfsoc4x2_uhd_v49.xdc
 # cmac_100g on the QSFP28 (create_cmac_ip.tcl)
 set CMAC_LANES  qsfp128
-if {![file exists $here]} { error "no design directory $here" }
 set V49_FS      [expr {$argc > 4 ? double([lindex $argv 4]) : 5000.0}]
+# the clock family of fs: the LMX2594 register file that makes it
+proc v49_bd_of_fs {fs xrfclk} {
+  set hits {}
+  foreach {ref bd} {250.0 rfsoc4x2_uhd_v49 245.76 rfsoc4x2_uhd_v49_245m76} {
+    set pre LMX2594_${ref}_
+    foreach f [glob -nocomplain -directory $xrfclk ${pre}*.txt] {
+      set out [string range [file rootname [file tail $f]] [string length $pre] end]
+      if {[string is double -strict $out] && abs($out - $fs) < 1e-6} { lappend hits $bd }
+    }
+  }
+  if {[llength $hits] != 1} { error "v49: fs $fs MS/s: [llength $hits] LMX2594 register files make it in $xrfclk ($hits); expected one" }
+  return [lindex $hits 0]
+}
+set bd          [v49_bd_of_fs $V49_FS [file normalize $board_dir/../../rfsoc/rfsoc_lib/xrfclk/RFSoC4x2]]
+set here        $board_dir/block_designs/$bd
+set xdc         $here/$bd.xdc
+if {![file exists $here]} { error "no design directory $here" }
+puts "V49_BD $bd (fs $V49_FS MS/s)"
 # the design's procs only (v49_geometry: the factor names the build)
 set V49_DEFINE_ONLY 1
-source $here/rfsoc4x2_uhd_v49.tcl
+source $here/$bd.tcl
 unset V49_DEFINE_ONLY
 set design_name rfsoc4x2_v49_${V49_NCH}ch_qsfp
 set step        [expr {$argc > 1 ? [lindex $argv 1] : "bit"}]
 set jobs        [expr {$argc > 2 ? [lindex $argv 2] : 8}]
 set V49_FACTOR  [dict get [v49_geometry $V49_NCH [expr {$argc > 3 ? [lindex $argv 3] : ""}]] F]
 set variant     "_f$V49_FACTOR"
-if {$V49_FS != 2400.0} { append variant "_fs[format %g $V49_FS]" }
+if {$V49_FS != 2400.0} { append variant "_fs[string map {. p} [format %g $V49_FS]]" }
 set proj_name   ${design_name}${variant}_proj
 # V49_PROJ_TAG=<t>: a separate project (<name>_proj_<t>), so the same build can
 # run several implementation strategies at once; outputs keep the build's name
@@ -213,7 +237,7 @@ foreach vlnv {user.org:uhd:udp_streamer:1.0 user.org:uhd:udp_player:1.0
 }
 source $hwd/ip_design/cmac_100g/create_cmac_ip.tcl
 add_files -fileset constrs_1 -norecurse $xdc
-source $here/rfsoc4x2_uhd_v49.tcl
+source $here/$bd.tcl
 validate_bd_design
 save_bd_design
 if {$step eq "bd"} { exit }

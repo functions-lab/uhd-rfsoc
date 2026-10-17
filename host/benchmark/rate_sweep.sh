@@ -8,7 +8,8 @@
 # A rate <asked>:<expected> checks a request between two rates is met from
 # below: the highest rate at or below it is served (Protocol §8).
 #
-# Environment: ADDR [discovery], DEV_ARGS (e.g. channels=N), CHAN (0), LOG
+# Environment: ADDR [discovery], DEV_ARGS (e.g. channels=N; otw=sc8 for rates
+# only sc8 carries, e.g. a 245.76 MHz template's top rates), CHAN (0), LOG
 # (/tmp/zcu216_rate_sweep). The daemon must run with the template loaded; its
 # log shows each retune and its MTS result ("RATE CHANGE", "MTS LOCKED",
 # "converter clock measured"). Prints one PASS|FAIL line per rate, then a total.

@@ -111,7 +111,9 @@ while read -r FAM N RATE BIT FMTS BF <&3; do
     # tx_warmup=0 traded one host-side failure for another at 96 Gb/s duplex).
     BL=$LAYOUT
     A="type=zcu216,addr=$ADDR,channels=$N,$BL"
-    WIRE=sc16; [ "$FMTS" = sc8 ] && WIRE=sc8
+    # the over-the-air check's wire format: sc16 where the build carries it,
+    # else sc8 (an sc8-only rate, or a 245m76 template's sc8 / sc12 top rates)
+    case ",$FMTS," in *,sc16,*) WIRE=sc16 ;; *) WIRE=sc8 ;; esac
     log ""
     log "######## $FAM ${N}ch $BIT ($N x $RATE, wire $FMTS)"
     if ! load_build "$BIT"; then
