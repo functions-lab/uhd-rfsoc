@@ -1015,11 +1015,15 @@ void zcu216_device::_build_chan(bool rx, size_t ch)
     _tree->create<bool>(fe / "use_lo_offset").set(false);
     _tree->create<bool>(fe / "enabled").set(true);
 
-    const auto fr = ctrl->call_tokens("get_" + dir + "_freq_range " + c);
-    if (fr.size() < 2)
-        throw uhd::runtime_error("ZCU216: bad get_" + dir + "_freq_range reply");
-    const meta_range_t frange(parse_double(fr[0], "freq start"), parse_double(fr[1], "freq stop"));
-    _tree->create<meta_range_t>(fe / "freq/range").set(frange);
+    // 0 .. fs/2 of the loaded build, re-read by set_rate() (a rate of the
+    // other clock family changes fs, Protocol §8a); UHD's tune helper clips
+    // the RF part to it
+    if (ch == 0)
+        _st->refresh_freq_ranges();
+    auto& fstart = rx ? _st->rx_freq_start : _st->tx_freq_start;
+    auto& fstop  = rx ? _st->rx_freq_stop : _st->tx_freq_stop;
+    auto frange  = [&fstart, &fstop] { return meta_range_t(fstart.load(), fstop.load()); };
+    _tree->create<meta_range_t>(fe / "freq/range").set_publisher(frange);
     cache.freq = ctrl->call_double("get_" + dir + "_freq " + c);
     try {
         cache.dsp = ctrl->call_double("get_" + dir + "_dsp_freq " + c);
@@ -1060,7 +1064,7 @@ void zcu216_device::_build_chan(bool rx, size_t ch)
             .set(false);
     }
     _tree->create<double>(fe / "los/NCO/freq/value").set_coercer(set_rf).set_publisher(get_rf);
-    _tree->create<meta_range_t>(fe / "los/NCO/freq/range").set(frange);
+    _tree->create<meta_range_t>(fe / "los/NCO/freq/range").set_publisher(frange);
 
     // Bandwidth: the (complex) sample rate, fs / the decimation or
     // interpolation factor in force -- the RFDC Gen3 filters' -3 dB width is

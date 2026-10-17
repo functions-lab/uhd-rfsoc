@@ -506,6 +506,13 @@ waiting.
   or -lo_off (TX), and `get_rx_freq()` = f, the frequency the converter mixes
   to; `dsp_freq_policy` MANUAL / AUTO / NONE behave as on a USRP. A plain tune
   has DSP part 0 (one NCO write; the DSP node skips an unchanged value).
+* **Frequency range.** The frontend's `freq/range` and `los/NCO/freq/range`
+  are the daemon's `get_*_freq_range` (0..fs/2 of the loaded build), cached
+  in `dev_state` and re-read by `set_rate()` after every rate change: a rate
+  of the other clock family (Protocol §8a) changes fs, e.g. 0..1125 ->
+  0..1228.8 MHz on a 4-channel ZCU216 going from 750 to 614.4 MS/s.
+  `multi_usrp::get_*_freq_range()` is UHD's overall range, the frontend's
+  widened by the DSP part (±rate/2); the NCO centre still stops at fs/2.
 * **LOs.** Each frontend has `los/all` and `los/NCO` (`source` `internal` only,
   `export` false): `get_rx_lo_names()` = `all, NCO`, `get_rx_lo_freq("NCO")` =
   the RF part, `set_rx_lo_freq("NCO", f)` tunes it. The frontend also has the

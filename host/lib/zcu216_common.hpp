@@ -179,6 +179,12 @@ struct dev_state
     double set_rate(bool rx, size_t ch, double rate);
     //! re-read the (common) RX and TX rate into every channel's cache
     void refresh_rates();
+    //! Protocol §3: the tuning range of the loaded build, 0 .. fs/2 (the same
+    //! for every channel). A rate change can load a build of another fs (the
+    //! other clock family, §8a), so set_rate() re-reads it.
+    std::atomic<double> rx_freq_start{0.0}, rx_freq_stop{0.0};
+    std::atomic<double> tx_freq_start{0.0}, tx_freq_stop{0.0};
+    void refresh_freq_ranges();
 
     double get_rx_rate(size_t ch) const
     {

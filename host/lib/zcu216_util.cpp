@@ -494,6 +494,21 @@ void dev_state::refresh_rates()
     }
 }
 
+void dev_state::refresh_freq_ranges()
+{
+    auto one = [this](const std::string& dir, std::atomic<double>& start, std::atomic<double>& stop) {
+        const auto fr = ctrl->call_tokens("get_" + dir + "_freq_range 0");
+        if (fr.size() < 2)
+            throw uhd::runtime_error("ZCU216: bad get_" + dir + "_freq_range reply");
+        start.store(parse_double(fr[0], "freq start"));
+        stop.store(parse_double(fr[1], "freq stop"));
+    };
+    if (not rx_rate.empty())
+        one("rx", rx_freq_start, rx_freq_stop);
+    if (not tx_rate.empty())
+        one("tx", tx_freq_start, tx_freq_stop);
+}
+
 void dev_state::set_cur_otw(const std::string& f)
 {
     std::lock_guard<std::mutex> l(_info_mutex);
@@ -571,6 +586,7 @@ double dev_state::set_rate(bool rx, size_t ch, double rate)
         try {
             refresh_rates();
             refresh_info();
+            refresh_freq_ranges();
         } catch (...) {
         }
         throw;
@@ -582,6 +598,7 @@ double dev_state::set_rate(bool rx, size_t ch, double rate)
     if (new_rx != old_rx or new_tx != old_tx or tick_rate.load() != old_tick) {
         fpga_generation++;
         refresh_info(); // the new build's beat, formats, tick rate
+        refresh_freq_ranges(); // and its fs: 0 .. fs/2
         const double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
         ZLOG_INFO("Rate changed to " << actual / 1e6 << " MS/s per channel (tick rate "
                                      << tick_rate.load() / 1e6 << " MHz, " << beat_slots()
