@@ -150,6 +150,7 @@ constexpr size_t kEthIpUdp     = 14 + 20 + 8;
 constexpr unsigned kTxRingSize = 1024; // TX lcore ring (power of two)
 constexpr uint32_t kHoldMark   = 0x5A484F4Cu; // mbuf hash.usr: an untimed burst starts here
 constexpr size_t kMaxPrefill   = 256;         // packets the TX lcore holds at most
+constexpr size_t kGateFifo     = 4096;        // credit-gate FIFO (power of two, > kMaxHostQueuePkts + kTxRingSize)
 constexpr uint16_t kStatusRxd  = 256;  // descriptors of the TX status queue
 constexpr uint16_t kStatusBurst = 16;
 
@@ -1264,6 +1265,25 @@ public:
     std::atomic<uint64_t> prefill_tsc{0};
     uint64_t prefills = 0, prefill_timeouts = 0;
 
+    // credit gate (set_credit), read by the TX lcore; gate_gen bumps on every
+    // set_credit so the lcore restarts its released count
+    std::atomic<const std::atomic<uint64_t>*> gate_consumed{nullptr};
+    std::atomic<uint64_t> gate_buf_words{0}, gate_max_pkts{0}, gate_gen{0};
+    std::atomic<uint32_t> gate_hdr{16}, gate_word{64};
+    // gate statistics (TX lcore only; printed at close)
+    uint64_t gate_holds = 0, gate_hold_cycles = 0, gate_max_queued = 0;
+
+    void set_credit(const std::atomic<uint64_t>* consumed, uint64_t buf_words, size_t max_pkts,
+        size_t hdr_bytes, size_t word_bytes) override
+    {
+        gate_buf_words.store(buf_words, std::memory_order_relaxed);
+        gate_max_pkts.store(max_pkts, std::memory_order_relaxed);
+        gate_hdr.store(uint32_t(hdr_bytes), std::memory_order_relaxed);
+        gate_word.store(uint32_t(std::max<size_t>(1, word_bytes)), std::memory_order_relaxed);
+        gate_consumed.store(consumed, std::memory_order_release);
+        gate_gen.fetch_add(1, std::memory_order_acq_rel);
+    }
+
     void set_prefill(size_t pkts, double us) override
     {
         prefill_pkts.store(std::min(pkts, kMaxPrefill), std::memory_order_relaxed);
@@ -1408,6 +1428,12 @@ public:
                                      << (prefills ? "; " + std::to_string(prefills) + " untimed-burst prefill(s), "
                                                         + std::to_string(prefill_timeouts) + " released by timeout"
                                                   : "")
+                                     << (gate_holds ? "; credit gate: " + std::to_string(gate_holds)
+                                                          + " holds, " + std::to_string(double(gate_hold_cycles)
+                                                              / double(rte_get_tsc_hz()) * 1e3)
+                                                          + " ms held in all, up to "
+                                                          + std::to_string(gate_max_queued) + " pkts queued"
+                                                    : "")
                                      << "; port: " << st.opackets - st0.opackets << " opackets, "
                                      << st.oerrors - st0.oerrors << " oerrors");
     }
@@ -1441,6 +1467,72 @@ int tx_main(void* arg)
         }
         s->pkts.fetch_add(sent, std::memory_order_relaxed);
     };
+    // credit gate: packets in order, released to the NIC while the FPGA has
+    // room (set_credit); without a gate they go out at once
+    std::vector<rte_mbuf*> fifo(kGateFifo);
+    std::vector<uint64_t> ends(kGateFifo); // released words at the end of each in-flight packet
+    size_t fh = 0, ft = 0;                 // fifo head (next to send), tail (next free)
+    size_t eh = 0, et = 0;                 // ends head / tail
+    uint64_t released = 0, gen_seen = s->gate_gen.load(std::memory_order_acquire);
+    uint64_t hold_t0  = 0;
+    bool held_for_credit = false;
+    auto queue = [&](rte_mbuf** v, unsigned n) {
+        for (unsigned i = 0; i < n; i++)
+            fifo[(ft++) & (kGateFifo - 1)] = v[i];
+        s->gate_max_queued = std::max<uint64_t>(s->gate_max_queued, ft - fh);
+    };
+    // send what the credit allows; true if packets wait for credit
+    auto drain = [&]() -> bool {
+        const auto* cons_p = s->gate_consumed.load(std::memory_order_acquire);
+        const uint64_t g   = s->gate_gen.load(std::memory_order_acquire);
+        if (g != gen_seen) { // new baseline (stream_setup_tx)
+            gen_seen = g;
+            released = 0;
+            eh = et = 0;
+        }
+        while (fh != ft) {
+            unsigned k = 0;
+            rte_mbuf* out[kTxBurst];
+            if (not cons_p) {
+                while (fh != ft and k < kTxBurst)
+                    out[k++] = fifo[(fh++) & (kGateFifo - 1)];
+            } else {
+                const uint64_t cons  = cons_p->load(std::memory_order_acquire);
+                const uint64_t bw    = s->gate_buf_words.load(std::memory_order_relaxed);
+                const uint64_t mp    = s->gate_max_pkts.load(std::memory_order_relaxed);
+                const uint32_t hb    = s->gate_hdr.load(std::memory_order_relaxed);
+                const uint32_t wb    = s->gate_word.load(std::memory_order_relaxed);
+                while (eh != et and ends[eh & (kGateFifo - 1)] <= cons)
+                    eh++;
+                while (fh != ft and k < kTxBurst) {
+                    rte_mbuf* m        = fifo[fh & (kGateFifo - 1)];
+                    const uint32_t pay = m->data_len > kEthIpUdp + hb ? uint32_t(m->data_len - kEthIpUdp - hb) : 0;
+                    const uint64_t w   = pay / wb;
+                    const uint64_t inflight = released > cons ? released - cons : 0;
+                    if (inflight + w > bw or (et - eh) + 1 > mp or (et - eh) + 1 > kGateFifo)
+                        break;
+                    released += w;
+                    ends[(et++) & (kGateFifo - 1)] = released;
+                    out[k++] = m;
+                    fh++;
+                }
+            }
+            if (k == 0) {
+                if (not held_for_credit) {
+                    held_for_credit = true;
+                    hold_t0         = rte_get_tsc_cycles();
+                    s->gate_holds++;
+                }
+                return true;
+            }
+            if (held_for_credit) {
+                held_for_credit = false;
+                s->gate_hold_cycles += rte_get_tsc_cycles() - hold_t0;
+            }
+            xmit(out, k);
+        }
+        return false;
+    };
     // untimed-burst prefill: packets held from a marked one on
     rte_mbuf* held[kMaxPrefill];
     unsigned nheld        = 0;
@@ -1466,8 +1558,10 @@ int tx_main(void* arg)
                 any = true;
             }
         }
-        const unsigned n =
-            rte_ring_sc_dequeue_burst(s->ring, reinterpret_cast<void**>(mb), kTxBurst, nullptr);
+        // only take from the ring while the gate FIFO has room for a burst
+        const unsigned n = (ft - fh) + kTxBurst + kMaxPrefill <= kGateFifo
+            ? rte_ring_sc_dequeue_burst(s->ring, reinterpret_cast<void**>(mb), kTxBurst, nullptr)
+            : 0u;
         if (n) {
             any        = true;
             unsigned i = 0;
@@ -1477,7 +1571,7 @@ int tx_main(void* arg)
                 while (i < n and mb[i]->hash.usr != kHoldMark)
                     i++;
                 if (i)
-                    xmit(mb, i);
+                    queue(mb, i);
                 if (i < n) {
                     holding  = true;
                     hold_end = rte_get_tsc_cycles() + s->prefill_tsc.load(std::memory_order_relaxed);
@@ -1487,13 +1581,13 @@ int tx_main(void* arg)
             if (holding) {
                 for (; i < n; i++) {
                     if (nheld == kMaxPrefill) {
-                        xmit(held, nheld);
+                        queue(held, nheld);
                         nheld = 0;
                     }
                     held[nheld++] = mb[i];
                 }
             } else if (i < n) {
-                xmit(mb + i, n - i);
+                queue(mb + i, n - i);
             }
         }
         if (holding) {
@@ -1502,11 +1596,20 @@ int tx_main(void* arg)
                 or s->abort.load(std::memory_order_relaxed)) {
                 if (timeout and nheld < prefill)
                     s->prefill_timeouts++;
-                xmit(held, nheld);
+                queue(held, nheld);
                 nheld   = 0;
                 holding = false;
             }
             any = true;
+        }
+        if (fh != ft) {
+            if (s->abort.load(std::memory_order_relaxed)) {
+                while (fh != ft)
+                    rte_pktmbuf_free(fifo[(fh++) & (kGateFifo - 1)]);
+            } else {
+                drain();
+                any = true; // waiting for credit: keep polling the status queue
+            }
         }
         if (any) {
             last_active = rte_get_tsc_cycles();

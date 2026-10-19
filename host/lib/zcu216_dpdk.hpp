@@ -18,6 +18,7 @@
 // This header does not include DPDK (only zcu216_dpdk.cpp sees its flags).
 //
 #pragma once
+#include <atomic>
 
 #include "zcu216_common.hpp"
 #include <memory>
@@ -189,6 +190,20 @@ public:
     //! prefill once it knows the rate and the FPGA credit); takes effect at
     //! the next untimed burst
     virtual void set_prefill(size_t pkts, double us) = 0;
+    //! Credit gate on the TX lcore (Protocol §6 flow control): from now on
+    //! the lcore releases a queued packet to the NIC only while the FPGA has
+    //! room for it -- in-flight words (released - *consumed) <= buf_words and
+    //! in-flight packets <= max_pkts -- and holds the rest, in order. So
+    //! send() may queue up to the host queue beyond the FPGA's credit without
+    //! the application thread waiting for the FPGA. A packet's words are
+    //! (UDP payload - hdr_bytes) / word_bytes. *consumed counts words retired
+    //! since the baseline (stream_setup_tx); this call is that baseline:
+    //! the lcore's released count restarts at 0. consumed == nullptr: off.
+    virtual void set_credit(const std::atomic<uint64_t>* consumed, uint64_t buf_words,
+        size_t max_pkts, size_t hdr_bytes, size_t word_bytes) = 0;
+    //! packets the lcore may hold beyond the FPGA credit (its FIFO, < the
+    //! spare mbufs of the TX pool)
+    static constexpr size_t kMaxHostQueuePkts = 2048;
 };
 std::unique_ptr<tx_session> start_tx(const port_sptr& p,
     const tx_endpoint& ep,

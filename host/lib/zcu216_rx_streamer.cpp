@@ -198,11 +198,13 @@ rx_streamer_impl::rx_streamer_impl(
         while (c.ports.size() > np_r)
             c.ports.pop_back();
         _spp = spp_r;
-        // 32 packets per buffer at every N: one packet is 1.7 us at 1.2 GS/s,
-        // a call per packet the Python bindings cannot make (benchmark_rate.py
-        // received 7.7 %), and one packet is below par_min_slots for the
-        // worker pool (otw fc32 at N = 1: 51.9 % -> 100.0 % measured)
-        _buf_pkts = size_t(std::max(1LL, std::min(64LL, parse_ll(arg("spb_pkts", "32"), "spb_pkts"))));
+        // auto: ~250 us of samples per buffer, 32 packets at the high rates:
+        // one packet is 1.7 us at 1.2 GS/s, a call per packet the Python
+        // bindings cannot make (benchmark_rate.py received 7.7 %), and one
+        // packet is below par_min_slots for the worker pool (otw fc32 at N = 1:
+        // 51.9 % -> 100.0 % measured). At low rates fewer packets: a split-8
+        // gNB's RX block (= this size) must stay well below its 1 ms RX->TX lead.
+        _buf_pkts = buf_pkts_from_arg(arg("spb_pkts", "auto"), _st->get_rx_rate(0), _nchan, _spp);
         // ring memory
         const size_t slot_size = std::max<size_t>(
             ((kHdrBytes + _spp * B + 63) / 64) * 64 + 64, (_st->mtu + 63) / 64 * 64);
@@ -210,6 +212,7 @@ rx_streamer_impl::rx_streamer_impl(
         // port's pool was sized for num_recv_frames of them per queue
         const bool zc = _st->args.get("rx_zero_copy", "1") != "0";
         _overflow_hyst = arg("rx_overflow_hyst", "1") != "0";
+        _rx_stats      = std::getenv("ZCU216_RX_STATS") != nullptr or std::getenv("ZCU216_TX_STATS") != nullptr;
         {
             const double f = parse_double(arg("rx_overflow_resume", "0.0625"), "rx_overflow_resume");
             if (not(f >= 0.0 and f <= 1.0))
@@ -297,6 +300,16 @@ void rx_streamer_impl::shutdown()
         ZLOG_INFO("RX conversion: " << _conv_par << " calls split across the pool ("
                                     << _st->pool->desc() << " + the application thread), "
                                     << _conv_inline << " in the application thread alone");
+    if (_rx_stats and _recv_calls) {
+        std::sort(_gaps.begin(), _gaps.end(), [](const rx_gap& a, const rx_gap& b) { return a.at_ms < b.at_ms; });
+        std::string g;
+        for (const auto& x : _gaps)
+            g += std::string(g.empty() ? "" : ", ") + (x.kind == 'g' ? "gap " : "call ")
+                 + std::to_string(int(x.dur_ms)) + " ms at " + std::to_string(x.at_ms / 1e3) + " s";
+        ZLOG_INFO("RX stats: the application did not call recv() for > 10 ms " << _gap10 << " times (> 50 ms "
+                  << _gap50 << ", > 100 ms " << _gap100 << "); recv() calls > 10 ms: " << _call10
+                  << (g.empty() ? std::string() : "; largest: " + g));
+    }
     if (_recv_calls) {
         const double tot = double(_ns_recv) / 1e9;
         auto pct = [&](uint64_t ns) { return tot > 0 ? 100.0 * double(ns) / double(_ns_recv) : 0.0; };
@@ -306,6 +319,27 @@ void rx_streamer_impl::shutdown()
                                      << " %, waiting for data " << pct(_ns_wait) << " %, planning (serial) "
                                      << pct(plan) << " %");
     }
+}
+
+void rx_streamer_impl::_note_gap(char kind, double at_ms, double dur_ms)
+{
+    if (kind == 'g') {
+        _gap10++;
+        if (dur_ms > 50.0)
+            _gap50++;
+        if (dur_ms > 100.0)
+            _gap100++;
+    } else {
+        _call10++;
+    }
+    if (_gaps.size() < kGapKeep) {
+        _gaps.push_back({at_ms, dur_ms, kind});
+        return;
+    }
+    auto mn = std::min_element(_gaps.begin(), _gaps.end(),
+        [](const rx_gap& a, const rx_gap& b) { return a.dur_ms < b.dur_ms; });
+    if (dur_ms > mn->dur_ms)
+        *mn = {at_ms, dur_ms, kind};
 }
 
 // ---------------------------------------------------------------------------
@@ -750,14 +784,31 @@ size_t rx_streamer_impl::recv(const buffs_type& buffs,
     if (nsamps == 0)
         return 0;
     const auto t_call = clk::now();
+    if (_rx_stats) {
+        if (_recv_calls == 0)
+            _first_call = t_call;
+        if (_have_exit) {
+            const double g = std::chrono::duration<double, std::milli>(t_call - _last_exit).count();
+            if (g > 10.0)
+                _note_gap('g', std::chrono::duration<double, std::milli>(_last_exit - _first_call).count(), g);
+        }
+    }
     struct call_acc_t
     {
         rx_streamer_impl* self;
         clk::time_point t0;
         ~call_acc_t()
         {
-            self->_ns_recv += uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(clk::now() - t0).count());
+            const auto t1 = clk::now();
+            self->_ns_recv += uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count());
             self->_recv_calls++;
+            if (self->_rx_stats) {
+                self->_last_exit = t1;
+                self->_have_exit = true;
+                const double d   = std::chrono::duration<double, std::milli>(t1 - t0).count();
+                if (d > 10.0)
+                    self->_note_gap('c', std::chrono::duration<double, std::milli>(t0 - self->_first_call).count(), d);
+            }
         }
     } call_acc{this, t_call};
     const double tick = _st->tick_rate;

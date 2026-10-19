@@ -60,7 +60,7 @@ public:
 #endif
     //! samples PER CHANNEL in one packet (spp slots / N)
     //! samples per channel in one application buffer: _buf_pkts packets
-    //! (device/stream arg spb_pkts=, default 32), so a
+    //! (device/stream arg spb_pkts=, default auto: ~250 us, 1..32), so a
     //! buffer is never only a fraction of a packet per channel.
     //! UHD apps size their buffers and calls by this; one packet per call at
     //! N = 8 or 16 meant a recv()/send() every 0.85 us.
@@ -123,8 +123,21 @@ private:
             std::chrono::steady_clock::time_point t;
             uint32_t code;
             uint64_t tsf, consumed, sent;
+            //! the burst in progress (sender's view): its start TSF (0 =
+            //! untimed) and the samples per channel sent for it so far
+            uint64_t burst_tsf, burst_samps;
         };
-        std::vector<event> events; // capacity reserved, never grown on the lcore
+        //! a ring of the most recent kEvKeep events (the lcore overwrites the
+        //! oldest; ev_total counts them all), so the events of a long run's
+        //! end are kept, not only its start-up
+        static constexpr size_t kEvKeep = 256;
+        std::vector<event> events; // size kEvKeep when on, never grown on the lcore
+        uint64_t ev_total = 0;
+        //! lead of every timed burst start: its TSF minus the FPGA time when
+        //! send() handed its first packet over (estimated from the last status
+        //! packet, _fpga_now); how far ahead of the FPGA the application runs
+        uint64_t lead_n = 0, lead_hist[8] = {};
+        double lead_min_us = 1e300, lead_max_us = -1e300, lead_sum_us = 0;
         //! slow episodes of the sending thread (> kSlowUs): a gap between two
         //! send() calls ('g', the application's time) or one long send() call
         //! ('s': packing, credit wait, the rest = handing packets to the TX
@@ -137,7 +150,15 @@ private:
             char kind;
             uint32_t dur_us, build_us, wait_us;
         };
-        std::vector<slow> slows; // capacity reserved, never grown
+        std::vector<slow> slows; // ring of kSlowKeep, never grown (slow_total counts all)
+        static constexpr size_t kSlowKeep = 65536;
+        uint64_t slow_total = 0;
+        void add_slow(const slow& w)
+        {
+            if (slows.empty())
+                return;
+            slows[slow_total++ % slows.size()] = w;
+        }
         std::chrono::steady_clock::time_point last_eob;
         bool have_eob = false;
     } _stats;
@@ -150,6 +171,16 @@ private:
     void _on_status(const uint8_t* pay, uint32_t len);
     void _fc_lock();
     void _fc_unlock();
+    //! FPGA time from the last status packet (Protocol §7 words 2-3: its TSF
+    //! when it was sent), written by the TX lcore under a sequence counter,
+    //! extrapolated by the host clock at the tick rate. false before the first
+    //! status packet. A few us of network latency and the clocks' ppm: good
+    //! enough for leads (ms) and for deciding what is already late.
+    //! the current burst for the TX stats events (sender writes, lcore reads)
+    std::atomic<uint64_t> _bst_tsf{0}, _bst_samps{0};
+    std::atomic<uint32_t> _st_seq{0};
+    std::atomic<uint64_t> _st_tsf{0}, _st_ns{0};
+    bool _fpga_now(uint64_t& ticks) const;
 
     //! stream_setup_tx; returns after taking the new baseline
     void _setup_tx();
@@ -186,6 +217,12 @@ private:
     size_t _spp = kTxMaxSpp; // slots per packet
     size_t _buf_pkts = 1;    // packets per get_max_num_samps()
     size_t _max_pkts = 2040; // Protocol §6: FPGA packet slots
+    //! host queue beyond the FPGA credit (tx_host_queue_us): the TX lcore's
+    //! credit gate holds these, so send() returns instead of waiting for the
+    //! FPGA to play out (dpdk::tx_session::set_credit)
+    double _hq_us = 20000;
+    uint64_t _hq_words = 0;
+    size_t _hq_pkts    = 0;
     //! untimed-burst prefill (_size_prefill): device args, and the packets held
     std::string _prefill_arg = "auto";
     double _prefill_lead_us = 200, _prefill_us = 1000;
@@ -214,6 +251,23 @@ private:
     // burst state (sender)
     bool _in_burst = false, _pending_sob = false, _pending_timed = false;
     uint64_t _pending_tsf = 0;
+    //! tx_realign (USRP semantics for timed bursts): a timed start that is
+    //! already late is trimmed to its first sample that can still play on
+    //! time (a USRP drops a late burst instead of playing it late), and after
+    //! an FPGA underflow/late inside a timed burst the burst is restarted on
+    //! its own time grid -- the FPGA would otherwise play every later sample
+    //! late, i.e. at the wrong time, until the application ends the burst.
+    bool _realign = true;
+    double _realign_margin_s = 300e-6;
+    bool _rb_timed = false;      //!< the burst in progress has a time grid
+    uint64_t _rb_tsf = 0;        //!< its start TSF (beat-aligned, lead zeros included)
+    uint64_t _rb_built = 0;      //!< samples per channel built into its packets
+    bool _have_resume = false;   //!< a timed start carried to the next call
+    uint64_t _resume_tsf = 0;
+    std::atomic<bool> _broken{false}; //!< TX lcore: underflow/late seen
+    uint64_t _realigns = 0, _late_starts = 0, _late_drop_samps = 0;
+    //! send one granule of zeros with EOB, outside the residual (which stays)
+    void _send_eob_granule(const buffs_type& buffs, std::chrono::steady_clock::time_point deadline);
     std::atomic<bool> _ack_since_eob{true};
     bool _warned_sob = false;
 

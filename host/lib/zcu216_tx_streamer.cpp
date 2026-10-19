@@ -89,10 +89,13 @@ tx_streamer_impl::tx_streamer_impl(
         std::min((_st->mtu - 28 - kHdrBytes) / B, kMaxPayloadBytes / B) / quantum * quantum;
     size_t spp = size_t(parse_ll(arg("tx_spp", std::to_string(max_spp)), "tx_spp"));
     _spp       = std::max(quantum, std::min(spp, max_spp)) / quantum * quantum;
-    _buf_pkts  = size_t(std::max(1LL, std::min(64LL,
-        parse_ll(arg("spb_pkts", "32"), "spb_pkts"))));
+    _buf_pkts  = buf_pkts_from_arg(arg("spb_pkts", "auto"), _st->get_tx_rate(0), _nchan, _spp);
     _drain_timeout = parse_double(arg("tx_drain_timeout", "2.0"), "tx_drain_timeout");
     _max_pkts      = size_t(std::max(1LL, parse_ll(arg("tx_max_pkts", "2040"), "tx_max_pkts")));
+    _hq_us         = std::max(0.0, parse_double(arg("tx_host_queue_us", "20000"), "tx_host_queue_us"));
+    _realign       = arg("tx_realign", "1") != "0";
+    _realign_margin_s =
+        std::max(0.0, parse_double(arg("tx_realign_margin_us", "300"), "tx_realign_margin_us")) * 1e-6;
     _spin_s        = std::max(0.0, parse_double(arg("tx_spin_us", "20"), "tx_spin_us")) * 1e-6;
     _yield_s       = std::max(_spin_s, parse_double(arg("tx_yield_us", "2000"), "tx_yield_us") * 1e-6);
     _keep_warm     = arg("tx_keep_warm", "1") != "0";
@@ -102,8 +105,8 @@ tx_streamer_impl::tx_streamer_impl(
         ZLOG_WARN("tx_ignore_credit=1: TX flow control DISABLED (measurement only; "
                   "the FPGA will drop what does not fit)");
     _stats.status_gap_us.reserve(_stats.on ? 1u << 22 : 0);
-    _stats.events.reserve(_stats.on ? 64 : 0);
-    _stats.slows.reserve(_stats.on ? 65536 : 0);
+    _stats.events.resize(_stats.on ? tx_stats::kEvKeep : 0);
+    _stats.slows.resize(_stats.on ? tx_stats::kSlowKeep : 0);
     const auto tx_port   = uint16_t(parse_ll(arg("tx_port", std::to_string(kTxPort)), "tx_port"));
     const auto recv_port = uint16_t(parse_ll(arg("recv_port", std::to_string(kRecvPortBase)), "recv_port"));
     const auto async_base = uint16_t(parse_ll(
@@ -196,7 +199,9 @@ tx_streamer_impl::tx_streamer_impl(
                            << " samples/channel), buffer " << c.buf_words << " words ("
                            << c.buf_words * kTxWordBytes / B << " slots), fc every "
                            << c.fc_interval << ", max " << _max_pkts
-                           << " pkts in flight, untimed bursts start with " << _prefill_pkts
+                           << " pkts in flight, host queue " << _hq_pkts << " pkts ("
+                           << (_hq_pkts ? _hq_us / 1e3 : 0.0) << " ms, released by the TX lcore as credit returns)"
+                           << ", untimed bursts start with " << _prefill_pkts
                            << " pkts held, async status " << ifc.ip << ":" << c.async_port
                            << " via DPDK, " << _kern->desc()
                            << (_st->txp() ? ", packed in parallel above "
@@ -291,6 +296,10 @@ void tx_streamer_impl::shutdown()
         _ev_cv.notify_all();
     }
     _dpdk_tx.reset(); // send what is still queued (bounded), stop the TX lcore, drop the flow
+    if (_realigns or _late_starts)
+        ZLOG_INFO("TX realign: " << _realigns << " timed burst(s) restarted on their time grid after an FPGA "
+                  "underflow/late, " << _late_starts << " late start(s) trimmed, " << _late_drop_samps
+                  << " samples/channel dropped as already late (tx_realign=0: play them late instead)");
     _print_stats();
     if (_st->txp() and (_flush_par or _flush_inline))
         ZLOG_INFO("TX packing: " << _flush_par << " batches split across the pool ("
@@ -335,11 +344,26 @@ void tx_streamer_impl::_print_stats()
         << pct(0) << " p50 " << pct(0.5) << " mean " << mean << " p99 " << pct(0.99) << " max "
         << pct(1.0) << "; fc_interval " << _w.fc_interval << " words = "
         << _w.fc_interval * slots_per_word / std::max(1.0, samps / wall) * 1e6 << " us at this rate");
-    if (_stats.events.size() > 8)
-        ZLOG_INFO("TX stats: " << _stats.events.size() << " events recorded (capacity "
-                  << _stats.events.capacity() << "), the first 8:");
-    for (size_t ei = 0; ei < std::min<size_t>(8, _stats.events.size()); ei++) {
-        const auto& e = _stats.events[ei];
+    ZLOG_INFO("TX stats: events from the FPGA: " << _w.underflows << " underflow, " << _w.late
+              << " late, " << _w.seq_errors << " sequence, " << _w.acks << " burst ACK");
+    if (_stats.lead_n) {
+        static const char* bins[8] = {"<0 (late)", "0-0.25", "0.25-0.5", "0.5-1", "1-2", "2-3", "3-4", ">=4"};
+        std::string h;
+        for (int b = 0; b < 8; b++)
+            if (_stats.lead_hist[b])
+                h += std::string(h.empty() ? "" : ", ") + bins[b] + " ms: " + std::to_string(_stats.lead_hist[b]);
+        ZLOG_INFO("TX stats: timed burst starts: " << _stats.lead_n << ", lead (start TSF - FPGA time at send) min "
+                  << _stats.lead_min_us / 1e3 << " ms, mean " << _stats.lead_sum_us / double(_stats.lead_n) / 1e3
+                  << " ms, max " << _stats.lead_max_us / 1e3 << " ms; " << h);
+    }
+    const size_t nev  = size_t(std::min<uint64_t>(_stats.ev_total, _stats.events.size()));
+    const size_t nshow = std::min<size_t>(12, nev);
+    if (nev)
+        ZLOG_INFO("TX stats: " << _stats.ev_total << " underflow/late/sequence events recorded, the last "
+                  << nshow << ":");
+    for (size_t k = 0; k < nshow; k++) {
+        const uint64_t idx = _stats.ev_total - nshow + k;
+        const auto& e      = _stats.events[idx % _stats.events.size()];
         const std::string since_eob =
             _stats.have_eob ? ", " + std::to_string(std::chrono::duration<double, std::micro>(
                                          e.t - _stats.last_eob).count()) + " us after the last EOB"
@@ -349,10 +373,23 @@ void tx_streamer_impl::_print_stats()
             << since_first << " us after the first send()"
             << since_eob << ", TSF " << e.tsf << ", consumed " << e.consumed << " of " << e.sent
             << " words sent");
+        if (e.burst_tsf) {
+            const double tr     = _st->tick_rate.load();
+            const double rate   = _st->get_tx_rate(0);
+            const double into   = double(int64_t(e.tsf - e.burst_tsf)) / tr * 1e3;
+            const double sentms = double(e.burst_samps) / rate * 1e3;
+            ZLOG_INFO("TX stats:   timed burst from TSF " << e.burst_tsf << ": the event is " << into
+                      << " ms into it, the host had sent " << sentms << " ms of samples for it ("
+                      << (sentms < into ? "LESS than the time played: the application fell behind"
+                                        : "more than played: the samples were there in time")
+                      << ")");
+        }
         // the sending thread's slow episodes in the 5 ms before the event
         std::string sl;
         size_t nsl = 0;
-        for (const auto& w : _stats.slows) {
+        const size_t nslow = size_t(std::min<uint64_t>(_stats.slow_total, _stats.slows.size()));
+        for (size_t j = 0; j < nslow; j++) {
+            const auto& w   = _stats.slows[j];
             const double ago = std::chrono::duration<double, std::micro>(e.t - w.t).count();
             if (ago < 0 or ago > 5000)
                 continue;
@@ -369,8 +406,9 @@ void tx_streamer_impl::_print_stats()
         ZLOG_INFO("TX stats:   slow episodes (> " << tx_stats::kSlowUs << " us) in the 5 ms before: "
                   << (nsl ? std::to_string(nsl) + ": " + sl + (nsl > 12 ? "; ..." : "") : std::string("none")));
     }
-    ZLOG_INFO("TX stats: " << _stats.slows.size() << " slow episodes (> " << tx_stats::kSlowUs
-              << " us) in the whole stream" << (_stats.slows.size() == _stats.slows.capacity() ? " (record full)" : ""));
+    ZLOG_INFO("TX stats: " << _stats.slow_total << " slow episodes (> " << tx_stats::kSlowUs
+              << " us) in the whole stream" << (_stats.slow_total > _stats.slows.size() ? " (the last "
+              + std::to_string(_stats.slows.size()) + " kept)" : ""));
 }
 
 // ---------------------------------------------------------------------------
@@ -412,6 +450,16 @@ void tx_streamer_impl::_on_status(const uint8_t* pay, uint32_t len)
     }
     const uint64_t tsf  = (uint64_t(w[2]) << 32) | w[3];
     const uint32_t code = w[4];
+    {
+        const uint32_t q = _st_seq.load(std::memory_order_relaxed);
+        _st_seq.store(q + 1, std::memory_order_relaxed); // odd: being written
+        std::atomic_thread_fence(std::memory_order_release);
+        _st_tsf.store(tsf, std::memory_order_relaxed);
+        _st_ns.store(uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                         clk::now().time_since_epoch()).count()),
+            std::memory_order_relaxed);
+        _st_seq.store(q + 2, std::memory_order_release);
+    }
     _fc_lock();
     if (not c->baseline_valid) { // before stream_setup_tx answered: not ours yet
         _fc_unlock();
@@ -427,12 +475,15 @@ void tx_streamer_impl::_on_status(const uint8_t* pay, uint32_t len)
         _ack_since_eob.store(true, std::memory_order_release);
     if (code == 0)
         return; // flow-control update only
-    if (_stats.on and code != uhd::async_metadata_t::EVENT_CODE_BURST_ACK
-        and _stats.events.size() < _stats.events.capacity())
-        _stats.events.push_back({clk::now(), code, tsf, c->consumed.load(), c->sent_words});
+    if (_stats.on and code != uhd::async_metadata_t::EVENT_CODE_BURST_ACK and not _stats.events.empty())
+        _stats.events[_stats.ev_total++ % _stats.events.size()] =
+            {clk::now(), code, tsf, c->consumed.load(), c->sent_words,
+                _bst_tsf.load(std::memory_order_relaxed), _bst_samps.load(std::memory_order_relaxed)};
     switch (code) {
         case uhd::async_metadata_t::EVENT_CODE_UNDERFLOW:
         case uhd::async_metadata_t::EVENT_CODE_UNDERFLOW_IN_PACKET:
+            if (_realign)
+                _broken.store(true, std::memory_order_release);
             c->underflows++;
             UHD_LOG_FASTPATH("U");
             break;
@@ -442,6 +493,8 @@ void tx_streamer_impl::_on_status(const uint8_t* pay, uint32_t len)
             UHD_LOG_FASTPATH("S");
             break;
         case uhd::async_metadata_t::EVENT_CODE_TIME_ERROR:
+            if (_realign)
+                _broken.store(true, std::memory_order_release);
             c->late++;
             UHD_LOG_FASTPATH("L");
             break;
@@ -481,6 +534,29 @@ void tx_streamer_impl::_on_status(const uint8_t* pay, uint32_t len)
     }
 }
 
+bool tx_streamer_impl::_fpga_now(uint64_t& ticks) const
+{
+    uint64_t tsf = 0, ns = 0;
+    for (int i = 0; i < 100; i++) {
+        const uint32_t q0 = _st_seq.load(std::memory_order_acquire);
+        if (q0 == 0)
+            return false; // no status packet yet
+        if (q0 & 1u)
+            continue;
+        tsf = _st_tsf.load(std::memory_order_relaxed);
+        ns  = _st_ns.load(std::memory_order_relaxed);
+        std::atomic_thread_fence(std::memory_order_acquire);
+        if (_st_seq.load(std::memory_order_relaxed) == q0) {
+            const int64_t now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                clk::now().time_since_epoch()).count();
+            const double el = std::max(0.0, double(now_ns - int64_t(ns)) * 1e-9);
+            ticks = tsf + uint64_t(el * _st->tick_rate.load());
+            return true;
+        }
+    }
+    return false;
+}
+
 void tx_streamer_impl::_setup_tx()
 {
     wire& c        = _w;
@@ -508,6 +584,24 @@ void tx_streamer_impl::_setup_tx()
     _fc_unlock();
     c.sent_words = 0;
     c.pkt_ends.clear();
+    // Host queue: what send() may queue beyond the FPGA's credit. The TX
+    // lcore's gate releases it as the FPGA frees room, so an application that
+    // runs ahead (srsUE sends each slot ~3 ms early from its worker chain)
+    // is not stopped in send() while the FPGA is full -- a stalled send()
+    // there stalled the application's RX too.
+    const size_t pkt_words = std::max<size_t>(1, _words(_spp / _nchan));
+    const double words_per_s =
+        _st->get_tx_rate(0) * double(_nchan) * double(_otw->slot_bytes) / double(kTxWordBytes);
+    _hq_pkts  = 0;
+    _hq_words = 0;
+    if (_hq_us > 0 and not _stats.ignore_credit) {
+        const double w = std::ceil(_hq_us * 1e-6 * words_per_s);
+        _hq_pkts  = std::min(dpdk::tx_session::kMaxHostQueuePkts, size_t(std::ceil(w / double(pkt_words))) + 1);
+        _hq_words = uint64_t(_hq_pkts) * pkt_words;
+    }
+    if (_dpdk_tx)
+        _dpdk_tx->set_credit(_stats.ignore_credit or _hq_pkts == 0 ? nullptr : &c.consumed, c.buf_words,
+            _max_pkts, kHdrBytes, kTxWordBytes);
     _size_prefill();
 }
 
@@ -592,7 +686,8 @@ bool tx_streamer_impl::_have_credit(size_t words)
     if (_stats.ignore_credit)
         return true;
     const uint64_t inflight = c.sent_words > cons ? c.sent_words - cons : 0;
-    return inflight + words <= c.buf_words and c.pkt_ends.size() + 1 <= _max_pkts;
+    // beyond the FPGA's credit the TX lcore's gate holds up to the host queue
+    return inflight + words <= c.buf_words + _hq_words and c.pkt_ends.size() + 1 <= _max_pkts + _hq_pkts;
 }
 
 bool tx_streamer_impl::_wait_credit(size_t words, clk::time_point deadline)
@@ -701,6 +796,9 @@ void tx_streamer_impl::_build(size_t bi,
     for (auto& r : _residual)
         r.clear();
     c.seq++;
+    _rb_built += n;
+    if (_stats.on)
+        _bst_samps.fetch_add(n, std::memory_order_relaxed);
     c.sent_words += bytes / kTxWordBytes;
     c.pkt_ends.push_back(c.sent_words);
     _batch_len[bi] = uint32_t(kHdrBytes + bytes);
@@ -762,6 +860,20 @@ void tx_streamer_impl::_flush()
     _hold_at = dpdk::tx_session::kNoHold;
 }
 
+void tx_streamer_impl::_send_eob_granule(const buffs_type& buffs, clk::time_point deadline)
+{
+    std::vector<std::vector<uint8_t>> keep;
+    keep.swap(_residual);
+    _residual.resize(keep.size());
+    if (_wait_credit(_words(_quantum), deadline)) {
+        _build(_batch_count, _quantum, _pending_sob, true, _pending_sob and _pending_timed, &buffs, 0, 0);
+        _batch_count++;
+        _flush();
+    }
+    _residual.swap(keep);
+    _pending_sob = false;
+}
+
 size_t tx_streamer_impl::send(const buffs_type& buffs,
     const size_t nsamps,
     const uhd::tx_metadata_t& md,
@@ -777,8 +889,8 @@ size_t tx_streamer_impl::send(const buffs_type& buffs,
             const auto gap = uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(
                 ts0 - _stats.last_exit).count());
             _stats.between_ns += gap;
-            if (gap > tx_stats::kSlowUs * 1000ull and _stats.slows.size() < _stats.slows.capacity())
-                _stats.slows.push_back({_stats.last_exit, 'g', uint32_t(gap / 1000), 0, 0});
+            if (gap > tx_stats::kSlowUs * 1000ull)
+                _stats.add_slow({_stats.last_exit, 'g', uint32_t(gap / 1000), 0, 0});
         }
     }
     struct exit_mark
@@ -795,8 +907,8 @@ size_t tx_streamer_impl::send(const buffs_type& buffs,
             const auto d = uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(
                 s.last_exit - t0).count());
             s.in_send_ns += d;
-            if (d > tx_stats::kSlowUs * 1000ull and s.slows.size() < s.slows.capacity())
-                s.slows.push_back({t0, 's', uint32_t(d / 1000), uint32_t((s.build_ns - build0) / 1000),
+            if (d > tx_stats::kSlowUs * 1000ull)
+                s.add_slow({t0, 's', uint32_t(d / 1000), uint32_t((s.build_ns - build0) / 1000),
                     uint32_t((s.wait_ns - wait0) / 1000)});
         }
     } mark{_stats, ts0, _stats.build_ns, _stats.wait_ns};
@@ -804,10 +916,36 @@ size_t tx_streamer_impl::send(const buffs_type& buffs,
     if (buffs.size() < _dev_chans.size() and nsamps > 0)
         throw uhd::value_error("ZCU216: send() needs one buffer per channel");
     const auto deadline = deadline_in(timeout);
-    const long long ticks =
+    long long ticks =
         md.has_time_spec ? std::max(0LL, md.time_spec.to_ticks(_st->tick_rate)) : 0;
+    bool timed_req         = md.has_time_spec;
     const size_t spp_samps = _spp / _nchan; // samples per channel in a full packet
+    size_t in_off0         = 0;             // samples of this call dropped as already late
+    const double rate_now  = _st->get_tx_rate(0);
+    const uint64_t tps_now = _st->ticks_per_sample(rate_now);
 
+    // tx_realign: the FPGA reported an underflow/late inside the timed burst
+    // in progress. Close its burst (one granule of zeros) and restart it at
+    // the time of the next sample not yet sent, so nothing plays off its time.
+    if (_realign and _broken.exchange(false, std::memory_order_acq_rel) and _in_burst and _rb_timed
+        and not _pending_sob and not md.start_of_burst) {
+        const uint64_t next = _rb_tsf + _rb_built * tps_now; // = the residual's first sample
+        _send_eob_granule(buffs, deadline);
+        _pending_sob   = true;
+        _pending_timed = false;
+        _ack_since_eob = false;
+        timed_req      = true;
+        ticks          = (long long)next;
+        _realigns++;
+        if (_realigns == 1)
+            ZLOG_INFO("TX: FPGA underflow/late inside a timed burst: restarting it on its time grid "
+                      "(tx_realign=1; reported once, counted at close)");
+    }
+
+    if (md.start_of_burst and _in_burst and _pending_sob
+        and (_residual.empty() or _residual[0].empty())) {
+        _in_burst = false; // nothing of it reached the FPGA (e.g. a late start carried over)
+    }
     if (md.start_of_burst and _in_burst) {
         if (not _warned_sob) {
             _warned_sob = true;
@@ -829,23 +967,92 @@ size_t tx_streamer_impl::send(const buffs_type& buffs,
         _pending_sob   = true;
         _pending_timed = false;
         _ack_since_eob = false;
+        _rb_timed      = false;
+        _rb_built      = 0;
+        _broken.store(false, std::memory_order_relaxed); // events of the previous burst
+        if (md.has_time_spec)
+            _have_resume = false;
+        if (_stats.on) {
+            _bst_tsf.store(0, std::memory_order_relaxed);
+            _bst_samps.store(0, std::memory_order_relaxed);
+        }
     }
-    if (_pending_sob and md.has_time_spec and not _pending_timed) {
+    if (_pending_sob and not timed_req and _have_resume) { // a late start carried over
+        timed_req = true;
+        ticks     = (long long)_resume_tsf;
+    }
+    _have_resume = false;
+    if (_pending_sob and timed_req and not _pending_timed and _realign) {
+        // A timed start the FPGA cannot meet would play late (at the wrong
+        // time). Drop the samples that are already late, start at the first
+        // one that is not.
+        uint64_t now_t = 0;
+        if (_fpga_now(now_t)) {
+            const uint64_t min_t =
+                now_t + uint64_t(_realign_margin_s * _st->tick_rate.load());
+            if (uint64_t(ticks) < min_t) {
+                uint64_t k     = (min_t - uint64_t(ticks) + tps_now - 1) / tps_now;
+                const size_t res = _residual.empty() ? 0 : _residual[0].size() / _bytes_per_cpu_item;
+                const size_t dr  = size_t(std::min<uint64_t>(k, res));
+                for (auto& r : _residual)
+                    r.erase(r.begin(), r.begin() + long(dr * _bytes_per_cpu_item));
+                k -= dr;
+                const size_t di = size_t(std::min<uint64_t>(k, nsamps));
+                in_off0         = di;
+                ticks += (long long)((dr + di) * tps_now);
+                _late_starts++;
+                _late_drop_samps += dr + di;
+                const size_t left_res = res - dr;
+                if (left_res == 0 and in_off0 == nsamps) {
+                    // nothing of this call is on time: start with the next call
+                    if (md.end_of_burst) {
+                        // the burst ends here without one sample on time: an
+                        // EOB (one granule of zeros, untimed) so the burst ACK comes
+                        _send_eob_granule(buffs, deadline);
+                        _in_burst = false;
+                    } else {
+                        _have_resume = true;
+                        _resume_tsf  = uint64_t(ticks);
+                    }
+                    return nsamps;
+                }
+            }
+        }
+    }
+    if (_pending_sob and timed_req and not _pending_timed) {
         // The FPGA starts a timed burst on the fabric beat containing its TSF
         // (Protocol §6, §9). Start at that beat and prepend the lead as
         // zeros, so the first user sample plays exactly at the requested time.
-        const double rate   = _st->get_tx_rate(0);
-        const uint64_t tps  = _st->ticks_per_sample(rate);
+        const double rate   = rate_now;
+        const uint64_t tps  = tps_now;
         const uint64_t beat = _st->beat_slots() * _st->ticks_per_slot(rate);
         const uint64_t lead = (uint64_t(ticks) % beat) / tps;
         _pending_timed      = true;
         _pending_tsf        = uint64_t(ticks) - lead * tps;
+        if (_stats.on)
+            _bst_tsf.store(_pending_tsf, std::memory_order_relaxed);
+        uint64_t now_t      = 0;
+        if (_stats.on and _fpga_now(now_t)) {
+            const double us = (double(int64_t(_pending_tsf - now_t))) / _st->tick_rate.load() * 1e6;
+            static const double edges[7] = {0, 250, 500, 1000, 2000, 3000, 4000};
+            size_t b = 0;
+            while (b < 7 and us >= edges[b])
+                b++;
+            _stats.lead_hist[b]++;
+            _stats.lead_n++;
+            _stats.lead_sum_us += us;
+            _stats.lead_min_us = std::min(_stats.lead_min_us, us);
+            _stats.lead_max_us = std::max(_stats.lead_max_us, us);
+        }
         for (auto& r : _residual)
             r.insert(r.begin(), size_t(lead) * _bytes_per_cpu_item, uint8_t(0));
+        _rb_timed = true;
+        _rb_tsf   = _pending_tsf;
+        _rb_built = 0;
     }
 
     const bool eob = md.end_of_burst;
-    size_t in_off  = 0;
+    size_t in_off  = in_off0;
     while (true) {
         // every requested channel's residual has the same length; with no
         // channel requested there is nothing to carry

@@ -220,6 +220,15 @@ and `find()` does not open the data plane.
   status delivery gaps reached a large fraction of what the FPGA buffer
   covers, and full-rate TX underflowed.) The TX lcore never sleeps while
   packets or status flow; after 50 ms of neither it naps 20 us per round.
+* **TX credit gate (host queue).** The TX lcore releases packets to the NIC
+  only while the FPGA has room for them (in-flight words <= `tx_buf_words`,
+  in-flight packets <= `tx_max_pkts`, counted from the consumed count it
+  extends itself) and holds the rest in order in a FIFO; `send()` may queue
+  up to `tx_host_queue_us` beyond the FPGA's credit. So the application's
+  thread does not wait in `send()` for the FPGA to play out: srsUE sends
+  each slot ~3 ms early from its in-order worker chain, and a `send()` held
+  for credit there held its RX too. The `DPDK TX closed` line reports the
+  gate's holds.
 * **Lifecycle.** The EAL is initialised once per process, at the first device
   `make()` (`rte_eal_init` cannot run twice). The port is configured
   (isolated, `nports` RX queues) and started in `make()` too, with no flow
@@ -340,7 +349,7 @@ and `find()` does not open the data plane.
 | `recv_port` | 49810 | RX UDP port base: ports `recv_port + k`, k < nports (one stream for all channels) |
 | `nports` | 2 | RX UDP ports = DPDK RX queues (<= 16), round-robin from the FPGA; queue k is polled by RX lcore k mod (number of RX cores). 2 carries the 3.0 GS/s sc16 maximum on one RX lcore (full-rate duplex, with the full-rate layout). |
 | `spp` | `info spp` (2048) | **slots** per RX packet (= samples at N = 1), multiple of 16 and N, limited by `mtu` |
-| `spb_pkts` | 32 | packets per application buffer: `get_max_num_samps()` = spb_pkts x spp / N (RX and TX), 1..64. At N = 1 a packet is 1.6 us at 1.25 GS/s: the Python bindings make ~50k calls/s, so benchmark_rate.py received 7.7 % at 1 packet per call, 28 % at 4, ~100 % at 32. UHD's rx_samples_to_udp sends each such buffer as one datagram: give it `spb_pkts=` so spb_pkts x spp / N x 8 bytes (fc32) stays under 65507 (3 at N = 1, 7 at N = 2, 15 at N = 4). At N > 1 one packet holds only spp / N samples per channel, so UHD apps that size their buffers by `get_max_num_samps()` would otherwise call `recv()`/`send()` for every fraction of a microsecond |
+| `spb_pkts` | auto | packets per application buffer: `get_max_num_samps()` = spb_pkts x spp / N (RX and TX), 1..64. `auto`: about 250 us of samples at the stream's rate, 1..32 packets (32 from ~262 MS/s of 1ch sc16 up, 7 at 61.44 MS/s, 15 at 122.88 MS/s). A fixed 32 was 1.07 ms at 61.44 MS/s: a split-8 gNB (OCUDU / srsRAN Project) reads RX in blocks of `get_max_num_samps()` and runs TX at most 1 ms ahead of the last RX block, so it underflowed ~68 times/s. At N = 1 a packet is 1.6 us at 1.25 GS/s: the Python bindings make ~50k calls/s, so benchmark_rate.py received 7.7 % at 1 packet per call, 28 % at 4, ~100 % at 32. UHD's rx_samples_to_udp sends each such buffer as one datagram: give it `spb_pkts=` so spb_pkts x spp / N x 8 bytes (fc32) stays under 65507 (3 at N = 1, 7 at N = 2, 15 at N = 4). At N > 1 one packet holds only spp / N samples per channel, so UHD apps that size their buffers by `get_max_num_samps()` would otherwise call `recv()`/`send()` for every fraction of a microsecond |
 | `pps_emulation` | 1 | there is no PPS input (sensor `pps_present` = false). 1: `set_time_next_pps(t)` makes the device time read t at its next whole second (a timed `set_time`, Protocol §3c) and returns at once, `get_time_last_pps()` is the last whole second, and time source `external` is accepted as the emulated PPS (it stays `internal`). 0: those calls throw `no PPS input` |
 | `num_recv_frames` | 4096 | packet slots per RX ring (one ring per port, 8.3 KB each) between the lcores and `recv()` |
 | `rx_zero_copy` | 1 | RX ring slots point into the lcores' mbufs (the port's pool gets `num_recv_frames` more mbufs per queue); 0 = the lcore copies each payload into the ring |
@@ -353,6 +362,9 @@ and `find()` does not open the data plane.
 | `async_port` | `recv_port+16` | TX status port (§7): steered into the DPDK status queue, read by the TX lcore |
 | `tx_spin_us`, `tx_yield_us` | 20, 2000 | credit wait in `send()`: spin (`pause`) this long, then `sched_yield` until `tx_yield_us`, then 20 us naps |
 | `tx_max_pkts` | 2040 | TX packets allowed in flight (FPGA packet slots, §6) |
+| `tx_host_queue_us` | 20000 | host queue beyond the FPGA's credit: `send()` may queue this much play-out (at most 2048 packets) more than the FPGA buffer holds; the TX lcore's credit gate releases it as the FPGA frees room ([Data plane](#data-plane-dpdk)), so an application that runs ahead is not held in `send()` while the FPGA is full. 0 = `send()` waits for FPGA credit itself (the behaviour before) |
+| `tx_realign` | 1 | USRP semantics for timed bursts: a timed start the FPGA can no longer meet (within `tx_realign_margin_us` of the FPGA time, estimated from the last status packet) drops its samples that are already late and starts at the first one that is not -- a USRP drops a late burst, the FPGA would play it late, i.e. at the wrong time; after an FPGA underflow or late event inside a timed burst, the burst is closed and restarted on its own time grid (the next sample at its intended time). Counted in the `TX realign:` line at streamer destruction. 0 = play late samples late (the behaviour before) |
+| `tx_realign_margin_us` | 300 | how far ahead of the estimated FPGA time a (re)started timed burst must begin |
 | `tx_prefill` | auto | packets the TX lcore holds before releasing an untimed burst back to back (an untimed burst plays from its first packet, so this is its starting lead). `auto`: `tx_prefill_lead_us` of play-out at the current rate and wire format, at least 32, at most 3/4 of the FPGA credit, 256 and `tx_max_pkts` - 1. A number fixes it, 0 turns it off. The fixed 32 used before were 27 us of 1ch fc32: every full-rate fc32 run underflowed once, right after them |
 | `tx_prefill_lead_us` | 200 | play-out the auto prefill aims for |
 | `tx_prefill_us` | 1000 | the hold is released after this long even if not full (counted as "released by timeout" in the DPDK TX close line) |
@@ -387,7 +399,7 @@ Environment variables:
 
 | variable | effect |
 |---|---|
-| `ZCU216_TX_STATS=1` | at TX streamer destruction, print where `send()`'s time went (packing, credit wait), the slow episodes, and the gaps between status packets as the TX lcore saw them |
+| `ZCU216_TX_STATS=1` | at TX streamer destruction, print where `send()`'s time went (packing, credit wait), the gaps between status packets as the TX lcore saw them, the FPGA's event totals, the lead of every timed burst start (start TSF minus the FPGA time when it was sent: a histogram), and the last 12 of the most recent 256 underflow/late/sequence events, each with the slow episodes of the sending thread in the 5 ms before it and, for a timed burst, how far into the burst the event was against how much of it the host had sent (less = the application fell behind) |
 | `ZCU216_RX_TRACE=<n>` | log the first n packets the RX merge takes (port, TSF, nsamps, SOB/EOB, the expected TSF, what each port has queued) |
 | `ZCU216_NO_SIMD=1` | scalar kernels instead of the SIMD ones (AVX-512 / NEON); the output is the same |
 | `ZCU216_DPDK_EAL` | EAL arguments, verbatim (as `dpdk_eal=`) |
@@ -665,8 +677,10 @@ waiting.
   `tx_max_pkts` (2040). A packet counts as in flight until its last word is
   retired, which matters for packets below about 144 samples. Status packets
   come from `<fpga>:49801` to the status queue ([Data plane](#data-plane-dpdk));
-  the source port is not checked. `send()` spins for credit and returns what it
-  accepted when its timeout expires, like UHD. The TX lcore extends the 32-bit
+  the source port is not checked. `send()` spins for credit -- the FPGA's plus
+  the host queue (`tx_host_queue_us`), which the TX lcore's gate releases as
+  the FPGA frees room -- and returns what it accepted when its timeout
+  expires, like UHD. The TX lcore extends the 32-bit
   consumed count and queues events for `tx_streamer::recv_async_msg()` and
   `device::recv_async_msg()`; it prints `U` (underflow), `S` (sequence) or `L`
   (late). `ZCU216_TX_STATS=1` prints, at streamer destruction, where `send()`'s

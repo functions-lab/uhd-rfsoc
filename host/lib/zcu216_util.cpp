@@ -18,6 +18,7 @@
 #include <cerrno>
 #include <chrono>
 #include <cmath>
+#include <pthread.h>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -75,6 +76,16 @@ long long parse_ll(const std::string& s, const std::string& what)
     if (t.empty() or end == t.c_str() or *end != '\0' or errno == ERANGE)
         throw uhd::value_error("ZCU216: cannot parse " + what + " from '" + s + "'");
     return v;
+}
+
+size_t buf_pkts_from_arg(const std::string& arg, double rate, size_t nchan, size_t spp)
+{
+    if (trim(arg) != "auto")
+        return size_t(std::max(1LL, std::min(64LL, parse_ll(arg, "spb_pkts"))));
+    if (not(rate > 0.0) or spp == 0)
+        return 32;
+    const double pkts = kAutoBufUs * 1e-6 * rate * double(std::max<size_t>(1, nchan)) / double(spp);
+    return size_t(std::max(1.0, std::min(32.0, std::floor(pkts))));
 }
 
 std::string fmt_double(double v)
@@ -201,10 +212,18 @@ ctrl_client::ctrl_client(const std::string& host, uint16_t port, double timeout_
     fcntl(_fd, F_SETFL, fl);
     int one = 1;
     setsockopt(_fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
+    _trace = std::getenv("ZCU216_CTRL_TRACE") != nullptr;
 }
 
 ctrl_client::~ctrl_client()
 {
+    if (_trace and not _tstats.empty()) {
+        std::string out;
+        for (const auto& kv : _tstats)
+            out += "; " + kv.first + " x" + std::to_string(kv.second.n) + " total "
+                   + std::to_string(kv.second.total_ms) + " ms max " + std::to_string(kv.second.max_ms) + " ms";
+        ZLOG_INFO("control calls (ZCU216_CTRL_TRACE)" << out);
+    }
     if (_fd >= 0)
         ::close(_fd);
 }
@@ -249,6 +268,33 @@ std::string ctrl_client::_read_line(const std::string& cmd, double timeout_s)
 
 std::string ctrl_client::call(const std::string& line, double timeout_s)
 {
+    const auto t_start = std::chrono::steady_clock::now();
+    struct trace_t
+    {
+        ctrl_client* c;
+        const std::string& line;
+        std::chrono::steady_clock::time_point t0;
+        ~trace_t()
+        {
+            if (not c->_trace)
+                return;
+            const double ms = std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - t0).count();
+            const std::string cmd = line.substr(0, line.find(' '));
+            {
+                std::lock_guard<std::mutex> l(c->_tmutex);
+                auto& st = c->_tstats[cmd];
+                st.n++;
+                st.total_ms += ms;
+                st.max_ms = std::max(st.max_ms, ms);
+            }
+            if (ms > 5.0) {
+                char name[32] = "?";
+                pthread_getname_np(pthread_self(), name, sizeof(name));
+                ZLOG_INFO("ctrl slow: '" << line << "' took " << ms << " ms (thread " << name << ")");
+            }
+        }
+    } trace{this, line, t_start};
     std::lock_guard<std::mutex> lock(_mutex);
     if (_broken)
         throw uhd::io_error("ZCU216: control connection is broken; recreate the device");

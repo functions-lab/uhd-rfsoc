@@ -56,7 +56,7 @@ public:
 #endif
     //! samples PER CHANNEL in one packet (spp slots / N)
     //! samples per channel in one application buffer: _buf_pkts packets
-    //! (device/stream arg spb_pkts=, default 32), so a
+    //! (device/stream arg spb_pkts=, default auto: ~250 us, 1..32), so a
     //! buffer is never only a fraction of a packet per channel.
     //! UHD apps size their buffers and calls by this; one packet per call at
     //! N = 8 or 16 meant a recv()/send() every 0.85 us.
@@ -263,6 +263,21 @@ private:
     uint64_t _conv_par = 0, _conv_inline = 0;
     // time accounting of recv() (ns): all of it, converting, releasing slots, waiting for data
     uint64_t _ns_recv = 0, _ns_conv = 0, _ns_rel = 0, _ns_wait = 0, _recv_calls = 0;
+    //! gaps between the application's recv() calls (it did not read) and
+    //! long recv() calls, printed with ZCU216_TX_STATS / ZCU216_RX_STATS: the
+    //! largest few with their time, and counts above 10 / 50 / 100 ms
+    bool _rx_stats = false;
+    std::chrono::steady_clock::time_point _first_call, _last_exit;
+    bool _have_exit = false;
+    struct rx_gap
+    {
+        double at_ms, dur_ms;
+        char kind; // 'g' gap between calls, 'c' long call
+    };
+    std::vector<rx_gap> _gaps; // the largest kGapKeep
+    static constexpr size_t kGapKeep = 12;
+    uint64_t _gap10 = 0, _gap50 = 0, _gap100 = 0, _call10 = 0;
+    void _note_gap(char kind, double at_ms, double dur_ms);
     // the lcores fill the port rings through these
     std::vector<std::unique_ptr<dpdk_sink>> _dpdk_sinks;
     std::unique_ptr<dpdk::rx_session> _dpdk_rx;

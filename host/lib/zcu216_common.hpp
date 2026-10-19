@@ -14,6 +14,7 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
+#include <map>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -51,6 +52,15 @@ std::string trim(const std::string& s);
 double parse_double(const std::string& s, const std::string& what);
 long long parse_ll(const std::string& s, const std::string& what);
 std::string fmt_double(double v); // "%.17g"
+//! Packets per application buffer (device/stream arg spb_pkts=): a number
+//! (1..64) is taken as it is; "auto" (the default) sizes get_max_num_samps()
+//! to about kAutoBufUs of samples at `rate` (per channel) and N channels,
+//! 1..32 packets of spp slots. One fixed 32 was 1.07 ms at 61.44 MS/s: a
+//! split-8 gNB (OCUDU / srsRAN Project) reads RX in blocks of that size and
+//! may run TX only 1 ms ahead of the last RX block, so it underflowed
+//! continuously; at the high rates auto still gives 32.
+constexpr double kAutoBufUs = 250.0;
+size_t buf_pkts_from_arg(const std::string& arg, double rate, size_t nchan, size_t spp);
 //! "k=v;k=v" -> device_addr_t (Protocol §2/§3)
 uhd::device_addr_t parse_kv(const std::string& s);
 //! CPU list "2-5", "2:3:4:5", "2;3", "2 3" (or "2,3" where UHD's arg parser
@@ -79,6 +89,19 @@ public:
 
 private:
     std::string _read_line(const std::string& cmd, double timeout_s);
+    //! ZCU216_CTRL_TRACE=1: every request timed (incl. the wait for the
+    //! connection's mutex), a log line for each one slower than 5 ms with the
+    //! calling thread's name, and per command the count, total and maximum at
+    //! destruction -- what the application blocks on in the daemon (a USRP
+    //! answers the same calls from registers in microseconds)
+    bool _trace = false;
+    struct cmd_stat
+    {
+        uint64_t n = 0;
+        double total_ms = 0, max_ms = 0;
+    };
+    std::map<std::string, cmd_stat> _tstats;
+    std::mutex _tmutex;
     std::mutex _mutex;
     int _fd = -1;
     std::string _rx;
