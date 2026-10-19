@@ -4,7 +4,10 @@ Xilinx RFSoC boards as UHD devices over 100 GbE. Stock UHD 4.6 applications
 (`uhd_usrp_probe`, `rx_samples_to_file`, `benchmark_rate`, GNU Radio, Python
 `uhd`) talk to the board as device `type=zcu216`: up to 16 RF channels, 3.0
 GS/s aggregate in sc16 (6.0 GS/s in sc8), TX and RX beamforming, full-rate TX
-and RX at once.
+and RX at once. The sample rate, and with it the bandwidth, is variable: an
+application picks it through UHD (`set_rx_rate`, `--rate`), from 56.25 to
+1250 MS/s per channel on the ZCU216 and from 122.88 to 2500 MS/s on the
+RFSoC 4x2, and the board retunes or reloads itself to serve it.
 
 [![CI](https://github.com/WeiCheng14159/rfsoc-uhd/actions/workflows/ci.yml/badge.svg)](https://github.com/WeiCheng14159/rfsoc-uhd/actions/workflows/ci.yml)
 
@@ -71,15 +74,54 @@ channel count serves every factor; its top rates carry only `otw=sc8` (and
 | RFSoC 4x2 | `rfsoc4x2_v49_1ch_qsfp_f2_fs4915p2.bit` | 1 | 2457.6 .. 122.88 (all) |
 | | `rfsoc4x2_v49_2ch_qsfp_f2_fs4915p2.bit` | 2 | 2457.6 .. 122.88 (1228.8) |
 
-### Sampling rates and carrier frequency
+Download them (with their `.hwh`) from the release, or build them:
 
-The per-channel sample rate is fs / F, F the RFDC decimation (= interpolation)
-factor (2 3 4 5 6 8 10 12 16 20 24 40), from each template's top rate down.
-The carrier is the RFDC fine-mixer NCO, set per channel and direction
-anywhere in the first Nyquist zone, 0 to fs/2 (a request outside is
-clamped). With every bitstream of both families installed, `get_rx_rates`
-offers (MS/s per channel; the wire formats in brackets where not every
-format fits):
+```sh
+# Vivado 2021.1 on PATH
+make -C fpga_board/zcu216 v49-package          # package the custom cores (once)
+make -C fpga_board/zcu216 v49-templates        # the five ZCU216 templates
+make -C fpga_board/zcu216 v49 N=8 F=3 FS=2250  # one build, e.g. the 8ch sc8max
+make -C fpga_board/rfsoc4x2 v49-templates      # the two RFSoC 4x2 templates
+make -C fpga_board/zcu216 v49-templates-245m76    # the 245.76 MHz family (fs 2457.6)
+make -C fpga_board/rfsoc4x2 v49-templates-245m76  # the 245.76 MHz family (fs 4915.2)
+# -> fpga_board/<board>/build/v49_qsfp/bitstreams/
+```
+
+## Sample rate (bandwidth) and carrier frequency
+
+The bandwidth IS the sample rate: each channel is digitised at fs / F, F the
+RFDC decimation (= interpolation) factor in force, and the RFDC's filters
+pass 0.96 x that rate (-3 dB; `host/benchmark/rate_bandwidth.py` measures
+it), so UHD's `get_rx_bandwidth()` reports the rate. To change the
+bandwidth, change the rate:
+
+```sh
+sudo /usr/libexec/uhd/examples/rx_samples_to_file --args type=zcu216,channels=2 \
+    --rate 245.76e6 --freq 950e6 --nsamps 1000000 --file /tmp/rx.dat
+sudo python3 -c "import uhd; u = uhd.usrp.MultiUSRP('type=zcu216,channels=2'); \
+    u.set_rx_rate(614.4e6); print(u.get_rx_rate(), u.get_rx_bandwidth())"
+```
+
+* A request is met from below: the highest offered rate at or below it (so
+  the bandwidth never exceeds the request), or the lowest rate if the
+  request is below all of them. Read back `get_rx_rate()`: RX and TX always
+  run at the same rate (one factor).
+* A rate of the loaded bitstream retunes in place (~1 s: factor, converter
+  clock, MTS); a rate of another bitstream of the same channel count (the
+  sc8max build, or the other clock family) reloads (10-20 s). Streaming
+  stops either way: set the rate before streaming, as UHD applications do.
+* The rates that need more than sc16 fits on the link are offered only to a
+  client that declares a narrower wire format: device arg `otw=sc8` (or
+  `sc12`). Without one a request for them gets the fastest sc16 rate.
+* The carrier is the RFDC fine-mixer NCO, set per channel and direction
+  anywhere in the first Nyquist zone, 0 to fs/2 (a request outside is
+  clamped).
+
+F runs over 2 3 4 5 6 8 10 12 16 20 24 40, from each template's top rate
+down. With every bitstream of both clock families installed (see
+Bitstreams), the rates on offer (`get_rx_rates`, `uhd_usrp_probe`) are, in
+MS/s per channel, with the wire formats in brackets where not every format
+fits:
 
 | board | N | fs 2500 / 5000 (250 MHz family) | fs 2250 (250 MHz family) | fs 2457.6 / 4915.2 (245.76 MHz family) |
 |---|---|---|---|---|
@@ -96,13 +138,10 @@ fc32 is offered where the link and the build's fabric beat allow it; the
 daemon's `info rate_otw=` lists the formats of every rate (Protocol §9, §10
 in `AGENTS.md`).
 
-Install the builds of both families side by side: the daemon offers every
-rate of every installed build (`uhd_usrp_probe` lists them), and an
-application picks one through UHD (`set_rx_rate` / `set_tx_rate`, or
-`--rate`): the highest offered rate at or below the request. A rate of the
-other family reloads the bitstream and reprograms the board's clock chips
-(10-20 s); a rate of the loaded build retunes in place (~1 s). The carrier
-range follows the loaded build's fs: the frontend / NCO range
+Only the installed bitstreams count: install both families' builds side by
+side for every rate above (a rate of the other family also reprograms the
+board's clock chips as part of its reload). The carrier range follows the
+loaded build's fs: the frontend / NCO range
 (`get_rx_lo_freq_range("NCO")`, `uhd_usrp_probe`'s "Freq range") is 0 -
 fs/2 after every rate change, e.g. 1125 -> 1228.8 MHz when a 4-channel
 ZCU216 goes from 750 to 614.4 MS/s. (`get_rx_freq_range()` adds the DSP
@@ -114,19 +153,6 @@ full-duplex `sc12` near the link limit (4-16 channels, 3.3-3.9 GS/s
 aggregate) is more than an x86 host converting to sc16 keeps up with (RX
 loss at the NIC); `sc8` there, and `sc16` from the rate where it fits, run
 clean in strict full-rate tests, bar an occasional run lost to the host.
-
-Download them (with their `.hwh`) from the release, or build them:
-
-```sh
-# Vivado 2021.1 on PATH
-make -C fpga_board/zcu216 v49-package          # package the custom cores (once)
-make -C fpga_board/zcu216 v49-templates        # the five ZCU216 templates
-make -C fpga_board/zcu216 v49 N=8 F=3 FS=2250  # one build, e.g. the 8ch sc8max
-make -C fpga_board/rfsoc4x2 v49-templates      # the two RFSoC 4x2 templates
-make -C fpga_board/zcu216 v49-templates-245m76    # the 245.76 MHz family (fs 2457.6)
-make -C fpga_board/rfsoc4x2 v49-templates-245m76  # the 245.76 MHz family (fs 4915.2)
-# -> fpga_board/<board>/build/v49_qsfp/bitstreams/
-```
 
 ## Set up the board (once)
 
@@ -178,9 +204,9 @@ host/gnuradio/run_tones.sh normal 4                      # GNU Radio: 4 tones ou
 ```
 
 A new `channels=` reloads the bitstream (~16 s). Within one channel count
-`set_rx_rate` / `set_tx_rate` retune in place (~1 s) to the highest
-supported rate at or below the request. For the sc8max rates pass
-`otw=sc8`.
+`set_rx_rate` / `set_tx_rate` pick the sample rate (= bandwidth) as in
+"Sample rate (bandwidth) and carrier frequency" above. For the sc8max rates
+pass `otw=sc8`.
 
 More: `host/README.md` (host module, device arguments), `rfsoc/server/README.md`
 (daemon), `fpga_board/README.md` (FPGA), `host/benchmark/README.md`
