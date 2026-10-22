@@ -3,13 +3,13 @@
 # UHD session asks for it (the daemon retunes in place: RFDC factor, MMCM,
 # MTS) and rate_loopback.py checks a TX->RX pulse at it.
 #
-#   ADDR=<board-ip> DEV_ARGS=channels=8 benchmark/rate_sweep.sh 375e6 281.25e6 ... 375e6
+#   ADDR=<board-ip> DEV_ARGS=channels=8 benchmark/rate_sweep.sh 312.5e6 250e6 ... 312.5e6
 #   benchmark/rate_sweep.sh 1000e6:833333333.3333334 100e6:62.5e6
 # A rate <asked>:<expected> checks a request between two rates is met from
 # below: the highest rate at or below it is served (Protocol §8).
 #
 # Environment: ADDR [discovery], DEV_ARGS (e.g. channels=N; otw=sc8 for rates
-# only sc8 carries, e.g. a 245.76 MHz template's top rates), CHAN (0), LOG
+# only sc8 carries, e.g. a template's top rates), CHAN (0), LOG
 # (/tmp/zcu216_rate_sweep). The daemon must run with the template loaded; its
 # log shows each retune and its MTS result ("RATE CHANGE", "MTS LOCKED",
 # "converter clock measured"). Prints one PASS|FAIL line per rate, then a total.

@@ -31,14 +31,13 @@
 #
 # factor = RFDC converter factor, a v49_geometry row of zcu216_uhd_v49.tcl
 # (default: that N's first row); fs = converter sample rate in MS/s (default
-# 2400). The builds (normal family: fs 2500 at 1-2 channels, 2250 at 4-16,
-# every factor from the max-rate one down to 40; sc8max: 4ch F2 fs 2500, 8ch F3
-# and 16ch F6 fs 2250, sc8 only) are listed
+# 2400). The builds (fs 2500 at every channel count, every factor from the
+# template's down to 40) are listed
 # in host/benchmark/oracle_builds.txt; `make v49-ladder` builds them.
 # A build at fs != 2400 is named ..._fs<fs>. The design is the one whose LMX2594
 # reference has a register file for fs in rfsoc/rfsoc_lib/xrfclk/ZCU216/ (the
 # board needs the same file): LMX2594_250.0_<fs>.0.txt -> zcu216_uhd_v49 (fs
-# 2250, 2400, 2500), LMX2594_245.76_<fs>.txt -> zcu216_uhd_v49_245m76 (2457.6).
+# 2400, 2500), LMX2594_245.76_<fs>.txt -> zcu216_uhd_v49_245m76 (2457.6).
 
 set scripts     [file dirname [file normalize [info script]]]
 set zcu216      [file normalize $scripts/..]

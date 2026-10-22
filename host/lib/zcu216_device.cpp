@@ -521,7 +521,7 @@ void zcu216_device::_select_channels(const device_addr_t& args)
                                + " is not a build (1, 2, 4, 8 or 16)");
     std::vector<std::string> rep;
     // otw=: declare the format with the choice of build (§9), so a loaded
-    // build that only that format fits (an sc8-max build) is kept instead of
+    // build at a rate only that format fits (e.g. sc8) is kept instead of
     // replaced by the sc16 default and loaded again by the next set_*_rate
     const std::string otw = args.has_key("otw") ? otw_lookup(args["otw"]).name : "";
     const std::string cmd = "set_channels " + std::to_string(want);

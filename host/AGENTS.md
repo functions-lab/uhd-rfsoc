@@ -41,9 +41,10 @@ status/flow-control packets over the 100G link (**DPDK**), the OTW formats of
 
 Samples travel over DPDK only: on a 6-core Xeon test host the kernel UDP path
 delivered only about two thirds of a 1-channel 1200 MS/s stream; DPDK carries
-up to 3.0 GS/s of sc16 (96 Gb/s, 97 % of the link) in both directions at
-once. So every UHD application that opens the device runs as root (`sudo
-<app>`, or through the `zcu216-uhd` wrapper).
+up to 96 Gb/s (97 % of the link; measured with 3.0 GS/s of sc16 on an
+earlier fs 2250 build) in both directions at once. So every UHD application
+that opens the device runs as root (`sudo <app>`, or through the
+`zcu216-uhd` wrapper).
 
 ```
 host/
@@ -253,9 +254,9 @@ and `find()` does not open the data plane.
   6-core / 12-thread Xeon where CPU c and c+6 are siblings: app 0,6, RX
   lcore 1, TX lcore 7, workers 2,3,4,5. At 100GbE rates `recv()`/`send()`
   are bound by the workers' memory traffic (one DIMM channel: ~22-27 GB/s in
-  all), so they get every core but the first two; on the 16ch 187.5 MS/s
-  build this layout passes sc12 RX strict where the earlier one (app on the
-  last core, 3 workers) did not. On heterogeneous (big.LITTLE) CPUs the
+  all), so they get every core but the first two; on a 16ch 187.5 MS/s
+  build (an earlier fs 2250 one) this layout passes sc12 RX strict where the
+  earlier layout (app on the last core, 3 workers) did not. On heterogeneous (big.LITTLE) CPUs the
   cores are ordered by `/sys/devices/system/cpu/cpu*/cpu_capacity`, fast
   ones first (CPU order kept within a class): the application, the lcores
   and the workers get fast cores only (within 90 % of the highest
@@ -264,15 +265,16 @@ and `find()` does not open the data plane.
   option. Change with `dpdk_rx_cores=`, `dpdk_tx_core=`, `dpdk_main_core=`,
   `rx_workers=`, `worker_cpus=` (and `ZCU216_APP_CPUS=`, `ZCU216_LCORE_CPUS=`,
   `ZCU216_WORKER_CPUS=` / `ZCU216_RX_WORKERS=` for the wrapper).
-* **sc8max builds at line rate** (4ch F2 fs2500 1250 MS/s, 8ch F3 / 16ch F6
-  fs2250 750 / 375 MS/s: 5.0 / 6.0 GS/s each way, `otw=sc8`): use cpu sc8 (sc16
+* **sc8 at the top rates** (the 4 / 8 / 16-channel templates at 1250 / 625 /
+  312.5 MS/s: 5.0 GS/s each way, `otw=sc8`): use cpu sc8 (sc16
   on the host doubles the memory traffic) and the full-rate duplex layout below.
   One direction at a time is clean. Full duplex at 96 Gb/s each way is at the
-  limit of a 6-core host with one DIMM channel, in sc16 as in sc8: expect
+  limit of a 6-core host with one DIMM channel, in any format: expect
   occasional host-side losses. Tried without making it clean: RX ring 2048 /
   4096 frames, deep C-states off, `tx_warmup=0` (fewer RX overflows at
-  TX-stream creation, a few small TX underruns instead at 16ch). Such losses
-  are host-side: the FPGA streamer's overflow count stays 0.
+  TX-stream creation, a few small TX underruns instead at 16ch; measured on
+  the earlier 6.0 GS/s sc8 builds). Such losses are host-side: the FPGA
+  streamer's overflow count stays 0.
 * **Python at line rate** (UHD's benchmark_rate.py, 1ch 1.2 GS/s duplex):
   keep spb_pkts at 32 and give the RX ring more than the ~30 ms that
   get_tx_stream() holds the GIL while the example's RX thread already
@@ -338,8 +340,8 @@ and `find()` does not open the data plane.
 | `type` | | `zcu216` (any board this module serves) or `rfsoc4x2` (RFSoC 4x2 boards only, reported as `type=rfsoc4x2`). With any other `type` the module returns nothing without touching the network. |
 | `addr` | broadcast | board management IP (control). Without it, discovery broadcasts on every IPv4 interface for 150 ms (`find_timeout=`) and each board answers with the address it was reached on. If UDP discovery is filtered, `type=zcu216,addr=` falls back to `info` over TCP. |
 | `serial`, `name`, `product` | | filter discovery results (`product=zcu216` or `rfsoc4x2`: the board kind) |
-| `channels` | 1 | the build to use: N = 1, 2, 4, 8 or 16 channels in one stream (Protocol §9). Sent as `set_channels N` right after `claim`; the daemon loads that N's default build -- the fastest whose sc16 stream fits the link: 1250 MS/s at 1-2 channels, 750 / 375 / 187.5 MS/s at 4 / 8 / 16 -- if another is loaded (seconds, `rate_timeout`). A daemon that answers `ERR unknown command` is a 1-channel daemon: the module warns and uses N = 1. |
-| `otw` | | the OTW format the application will stream in (§10), declared with every `set_rx_rate`/`set_tx_rate` (`otw=`, §3) so the daemon picks -- or refuses before reloading -- the build for it, and the default of a stream whose `otw_format` is empty. A rate is served by the highest build at or below it that carries the declared format. Needed for the sc8max builds: `channels=4,otw=sc8` and 1250 MS/s loads 4ch F2 fs2500 (sc8 only); without `otw=sc8` the same request gets the 750 MS/s sc16 build. Once a streamer exists, its format is declared instead. |
+| `channels` | 1 | the build to use: N = 1, 2, 4, 8 or 16 channels in one stream (Protocol §9). Sent as `set_channels N` right after `claim`; the daemon loads that N's default build -- the fastest whose sc16 stream fits the link: 1250 MS/s at 1-2 channels, 625 / 312.5 / 156.25 MS/s at 4 / 8 / 16 -- if another is loaded (seconds, `rate_timeout`). A daemon that answers `ERR unknown command` is a 1-channel daemon: the module warns and uses N = 1. |
+| `otw` | | the OTW format the application will stream in (§10), declared with every `set_rx_rate`/`set_tx_rate` (`otw=`, §3) so the daemon picks -- or refuses before reloading -- the build for it, and the default of a stream whose `otw_format` is empty. A rate is served by the highest build at or below it that carries the declared format. Needed for the sc8-only top rates: `channels=4,otw=sc8` and 1250 MS/s gives 1250 MS/s (sc8 only); without `otw=sc8` the same request gets 625 MS/s, the fastest sc16 rate. Once a streamer exists, its format is declared instead. |
 | `ctrl_port`, `disc_port` | 49710, 49700 | |
 | `ctrl_timeout` | 10 | seconds to wait for a control reply |
 | `rate_timeout` | 120 | seconds to wait for a reply that may reload the FPGA |
@@ -347,7 +349,7 @@ and `find()` does not open the data plane.
 | `host_data_ip` | auto | local IP for the data plane. Default: the source address the kernel routes to `data_ip` (UDP `connect()` + `getsockname()`). |
 | `host_data_mac` | auto | default: `SIOCGIFHWADDR` of the interface that owns `host_data_ip` |
 | `recv_port` | 49810 | RX UDP port base: ports `recv_port + k`, k < nports (one stream for all channels) |
-| `nports` | 2 | RX UDP ports = DPDK RX queues (<= 16), round-robin from the FPGA; queue k is polled by RX lcore k mod (number of RX cores). 2 carries the 3.0 GS/s sc16 maximum on one RX lcore (full-rate duplex, with the full-rate layout). |
+| `nports` | 2 | RX UDP ports = DPDK RX queues (<= 16), round-robin from the FPGA; queue k is polled by RX lcore k mod (number of RX cores). 2 carried 3.0 GS/s of sc16 (96 Gb/s) on one RX lcore (full-rate duplex, with the full-rate layout). |
 | `spp` | `info spp` (2048) | **slots** per RX packet (= samples at N = 1), multiple of 16 and N, limited by `mtu` |
 | `spb_pkts` | auto | packets per application buffer: `get_max_num_samps()` = spb_pkts x spp / N (RX and TX), 1..64. `auto`: about 250 us of samples at the stream's rate, 1..32 packets (32 from ~262 MS/s of 1ch sc16 up, 7 at 61.44 MS/s, 15 at 122.88 MS/s). A fixed 32 was 1.07 ms at 61.44 MS/s: a split-8 gNB (OCUDU / srsRAN Project) reads RX in blocks of `get_max_num_samps()` and runs TX at most 1 ms ahead of the last RX block, so it underflowed ~68 times/s. At N = 1 a packet is 1.6 us at 1.25 GS/s: the Python bindings make ~50k calls/s, so benchmark_rate.py received 7.7 % at 1 packet per call, 28 % at 4, ~100 % at 32. UHD's rx_samples_to_udp sends each such buffer as one datagram: give it `spb_pkts=` so spb_pkts x spp / N x 8 bytes (fc32) stays under 65507 (3 at N = 1, 7 at N = 2, 15 at N = 4). At N > 1 one packet holds only spp / N samples per channel, so UHD apps that size their buffers by `get_max_num_samps()` would otherwise call `recv()`/`send()` for every fraction of a microsecond |
 | `pps_emulation` | 1 | there is no PPS input (sensor `pps_present` = false). 1: `set_time_next_pps(t)` makes the device time read t at its next whole second (a timed `set_time`, Protocol §3c) and returns at once, `get_time_last_pps()` is the last whole second, and time source `external` is accepted as the emulated PPS (it stays `internal`). 0: those calls throw `no PPS input` |
@@ -369,7 +371,7 @@ and `find()` does not open the data plane.
 | `tx_prefill_lead_us` | 200 | play-out the auto prefill aims for |
 | `tx_prefill_us` | 1000 | the hold is released after this long even if not full (counted as "released by timeout" in the DPDK TX close line) |
 | `tx_warmup_rounds` | 4 | at stream creation, run the packing path this many times over scratch buffers (worker pool, kernels, assembly buffers at full size). 0 = off |
-| `tx_keep_warm` | 1 | while send() waits more than 200 us for credit (the FPGA full ahead of a timed start), hand the pool a no-op every 100 us so its workers stay in their spin window; measured: the first packing after a ~250 ms wait took 4 ms and underflowed at 4ch 562.5 MS/s sc8. 0 = off |
+| `tx_keep_warm` | 1 | while send() waits more than 200 us for credit (the FPGA full ahead of a timed start), hand the pool a no-op every 100 us so its workers stay in their spin window; measured: the first packing after a ~250 ms wait took 4 ms and underflowed at 4ch 562.5 MS/s sc8 (an earlier fs 2250 build). 0 = off |
 | `tx_warmup` | 512 | zero-filled packets the TX lcore sends to UDP port 9 of the FPGA (which drops them) when the streamer is created, to warm the DPDK TX path; 0 = off |
 | `tx_ignore_credit` | 0 | 1 = TX flow control off (measurement only: overruns the FPGA buffer) |
 | `tx_drain_timeout` | 2.0 | on streamer destruction, wait this long for queued TX to play out |
@@ -474,9 +476,9 @@ included), so a call can start and end anywhere.
   non-integer sample depends on its position in the call; the kernels do not.
 * **Cost.** `build/zcu216_kernel_bench [--cpu C] [--pool-cpus ...]` measures
   the kernels and the pool on this CPU (GS/s of wire slots, against UHD's own
-  converter). What the builds need: up to 1.25 GS/s at N = 1, 2.5 GS/s at
-  N = 2, 3.0 GS/s on the 4-16 channel normal builds, 4.8 GS/s of sc8 on the
-  sc8max ones. Beyond about two threads the conversion is cache / memory
+  converter). What the builds need: up to 1.25 GS/s at N = 1, 2.5 GS/s of
+  sc16 at N = 2-16, 4.0 GS/s of sc12 and 5.0 GS/s of sc8 on the 4-16 channel
+  templates. Beyond about two threads the conversion is cache / memory
   bandwidth bound. `benchmark_rate` asks for one packet per
   `recv()`/`send()` (its buffer is `get_max_num_samps()`), so it runs the
   kernels inline in its thread; an application with larger buffers (GNU
@@ -506,8 +508,8 @@ waiting.
   the tick rate and the stream are shared: `set_rx_rate` on any channel sets all
   of them (one query refreshes every channel's cache). The master clock rate is
   one tick per slot (TICK_STEP 1 on every build), N x the per-channel rate --
-  1.25 GHz for 1ch at 1250 MS/s, 3.0 GHz for the 4-16 channel max-rate
-  builds, 6.0 GHz for sc8max 8ch / 16ch (5.0 GHz at 4ch) -- and a per-channel
+  1.25 GHz for 1ch at 1250 MS/s, 5.0 GHz for the 4-16 channel templates at
+  their top rate, 2.5 GHz at their fastest sc16 rate -- and a per-channel
   sample advances N ticks.
 * **Frequency (Protocol §3b).** UHD's tune helper splits a request into an RF
   part (frontend `freq/value`) and a DSP part (`dsps/<i>/freq/value`, range
@@ -521,8 +523,8 @@ waiting.
 * **Frequency range.** The frontend's `freq/range` and `los/NCO/freq/range`
   are the daemon's `get_*_freq_range` (0..fs/2 of the loaded build), cached
   in `dev_state` and re-read by `set_rate()` after every rate change: a rate
-  of the other clock family (Protocol §8a) changes fs, e.g. 0..1125 ->
-  0..1228.8 MHz on a 4-channel ZCU216 going from 750 to 614.4 MS/s.
+  of the other clock family (Protocol §8a) changes fs, e.g. 0..1250 ->
+  0..1228.8 MHz on a 4-channel ZCU216 going from 625 to 614.4 MS/s.
   `multi_usrp::get_*_freq_range()` is UHD's overall range, the frontend's
   widened by the DSP part (±rate/2); the NCO centre still stops at fs/2.
 * **LOs.** Each frontend has `los/all` and `los/NCO` (`source` `internal` only,
@@ -539,7 +541,7 @@ waiting.
   served by the highest of this N's builds (`get_rx_rates`) at or below it
   that carries the declared format (below every build: the lowest). The
   reply's second token is the new build's tick rate, which differs between
-  builds of one N (4ch 750 MS/s ticks at 3.0 GHz, 4ch 1250 MS/s sc8max at
+  rates of one N (4ch 625 MS/s ticks at 2.5 GHz, 4ch 1250 MS/s at
   5.0 GHz): the module takes it
   as the master clock rate and, after a reload, re-reads `info` (`beat_slots`,
   formats, beamformer). A refusal (`... needs otw=sc8`) reaches the
@@ -853,13 +855,12 @@ zcu216-uhd tx_timed_samples --args $A --rate 1.25e9 --nsamps 100000 --secs 1.5  
 * Timed stream commands closer than a few ms apart: the later one may be late
   (the FPGA holds one command; the daemon queues).
 * One RX streamer at a time (see RX); a new TX streamer replaces the old one.
-* The sc8max builds need the device arg `otw=sc8` before `set_rx_rate` (an
-  application's `set_rx_rate` comes before its streamer, so the module cannot
-  know the format otherwise); without it the request is served by an sc16
-  build.
+* The top rates that only sc8 (or sc12) fit need the device arg `otw=sc8`
+  (`sc12`) before `set_rx_rate` (an application's `set_rx_rate` comes before
+  its streamer, so the module cannot know the format otherwise); without it
+  the request is served at the fastest sc16 rate.
 * RX fc32 is refused on the 512-bit-beat builds (every 4, 8 and 16-channel
   build: udp_streamer would need two FIFO words per clock); TX fc32 works.
-  The 1024-bit-beat sc8max builds (8ch, 16ch) carry sc8 only.
 * UHD 4.6 has no `multi_usrp::get_user_register`: read the §11 registers back
   with `get_user_settings_iface(chan)->peek32()` (C++) or through the tree.
 * On a net_tap vdev `nports` <= 3 (a DPDK 23.11 net_tap bug).

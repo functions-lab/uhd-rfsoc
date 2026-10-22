@@ -6,7 +6,7 @@ options:
     cmake_opt: ''
     comment: ''
     copyright: ''
-    description: 'ZCU216 normal 16ch (zcu216_v49_16ch_qsfp_f12_fs2250): timed tone
+    description: 'ZCU216 normal 16ch (zcu216_v49_16ch_qsfp_f8_fs2500): timed tone
       bursts, captured on every channel'
     gen_cmake: 'On'
     gen_linking: dynamic
@@ -24,7 +24,7 @@ options:
     run_options: prompt
     sizing_mode: fixed
     thread_safe_setters: ''
-    title: ZCU216 normal 16ch tones (187.5 MS/s, otw sc16)
+    title: ZCU216 normal 16ch tones (156.25 MS/s, otw sc16)
     window_size: (1000,1000)
   states:
     bus_sink: false
@@ -136,7 +136,7 @@ blocks:
   id: variable
   parameters:
     comment: ''
-    value: '1.875e+08'
+    value: '1.5625e+08'
   states:
     bus_sink: false
     bus_source: false

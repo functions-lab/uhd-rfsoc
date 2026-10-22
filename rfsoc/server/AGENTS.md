@@ -126,21 +126,18 @@ the wire formats each carries, is `host/benchmark/oracle_builds.txt`; names
 |---|---|---|---|---|---|---|
 | normal | 1 | 2500 | 2 3 4 5 6 8 10 12 16 20 24 40 | 1250 .. 62.5 MS/s | 128 b | sc16 sc12 sc8 fc32 |
 | normal | 2 | 2500 | 2 3 4 5 6 8 10 12 16 20 24 40 | 1250 .. 62.5 | 256 b | sc16 sc12 sc8; fc32 from F4 |
-| normal | 4 | 2250 | 3 4 5 6 8 10 12 16 20 24 40 | 750 .. 56.25 | 512 b | sc16 sc12 sc8 |
-| normal | 8 | 2250 | 6 8 10 12 16 20 24 40 | 375 .. 56.25 | 512 b | sc16 sc12 sc8 |
-| normal | 16 | 2250 | 12 16 20 24 40 | 187.5 .. 56.25 | 512 b | sc16 sc12 sc8 |
-| sc8max | 4 | 2500 | template F2, run-time 2 .. 40 | 1250 .. 62.5 | 512 b | sc8 at F2, sc12 sc8 at F3, sc16 from F4 |
-| sc8max | 8 / 16 | 2250 | template F3 / F6, run-time 3 4 5 / 6 8 10 (below: the normal build) | 750 .. 450 / 375 .. 225 | 1024 b | **sc8 only** |
+| normal | 4 | 2500 | 2 3 4 5 6 8 10 12 16 20 24 40 | 1250 .. 62.5 | 512 b | sc8 at F2, sc12 sc8 at F3, sc16 from F4 |
+| normal | 8 | 2500 | 4 5 6 8 10 12 16 20 24 40 | 625 .. 62.5 | 512 b | sc8 at F4, sc12 sc8 at F5 F6, sc16 from F8 |
+| normal | 16 | 2500 | 8 10 12 16 20 24 40 | 312.5 .. 62.5 | 512 b | sc8 at F8, sc12 sc8 at F10 F12, sc16 from F16 |
 | 245m76 | 1 / 2 / 4 | 2457.6 | template F2, run-time 2 .. 40 | 1228.8 .. 61.44 | 128 / 256 / 512 b | 4ch: sc8 at F2, sc12 sc8 at F3, sc16 from F4 |
 | 245m76 | 8 / 16 | 2457.6 | template F4 / F8, run-time .. 40 | 614.4 / 307.2 .. 61.44 | 512 b | sc8 at the top, sc16 from 307.2 / 153.6 |
 
-The normal family's top factor is the highest rate whose sc16 stream fits
-the link (97 % of it at 4-16 channels); sc8max doubles the per-channel rate in
-sc8 at 8 and 16 channels (6.0 GS/s, the same 96 Gb/s) and reaches the ADC's
-1250 MS/s at 4 (1.67x). A wire format is offered when N x rate x bytes/sample fits the 100GbE
-payload rate (`backend.link_problem`); RX fc32 is never offered on a
+Each template's factor is the highest rate whose stream fits the link in
+some wire format at a beat of at most 512 bits (5.0 GS/s of sc8, 81 % of
+it, at 4-16 channels; sc16 from 2.5 GS/s, also 81 %). A wire format is
+offered when N x rate x bytes/sample fits the 100GbE payload rate (`backend.link_problem`); RX fc32 is never offered on a
 512-bit-beat build (udp_streamer would need two FIFO words per clock), and a
-1024-bit-beat build carries sc8 only (one sc8 wire word per clock). The
+1024-bit-beat build (none ships) would carry sc8 only. The
 board's clock chips are programmed per build (Protocol §8a): the `.hwh`
 reference clock (= fs) and the MTS clocking wizard's input (300 or 122.88
 MHz) pick the LMK04828 + LMX2594 register files in `rfsoc_lib/xrfclk/<board>/`
@@ -268,7 +265,7 @@ Tests:
   `-(f mod fs)` (rfsoc_lib real→I/Q convention, `config_adc_nco`), the driver
   folds and handles even-zone inversion. Reported value = f rounded to the
   48-bit NCO step. RX and TX range 0–fs/2 (first Nyquist zone only: 0–1250 MHz
-  at fs 2500, 0–1125 MHz at 2250, 0–1228.8 MHz at 2457.6; RFSoC 4x2 0–2500
+  at fs 2500, 0–1228.8 MHz at 2457.6; RFSoC 4x2 0–2500
   MHz at 5000, 0–2457.6 MHz at 4915.2), of the loaded build, so a rate
   change to the other clock family moves it; a request outside is clamped. With `dsp=` (§3b) the NCO is
   rf − dsp (RX) / rf + dsp (TX), clamped the same way. After every NCO change

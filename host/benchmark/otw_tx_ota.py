@@ -47,7 +47,7 @@ ap.add_argument("--min-tnr-db", type=float, default=20.0,
                 help="the reference tone must stand this far above the noise bin, else CANNOT TEST")
 ap.add_argument("--cpus", default="fc32,sc16")
 ap.add_argument("--rx-otw", default="sc16",
-                help="RX wire format of the captures (sc8 on the sc8-only sc8max builds)")
+                help="RX wire format of the captures (sc8 at an sc8-only rate)")
 a = ap.parse_args()
 
 usrp = uhd.usrp.MultiUSRP(a.args)
@@ -103,8 +103,8 @@ if not pairs:
 lead = 8192
 # The TX burst must fit in the FPGA's TX credit (2 MiB) with room to spare,
 # so it is wholly buffered before it plays: at 16 ch x 187.5 MS/s (97 % of
-# the link) the default 81920-sample burst is 5.2 MB of sc16 and had to
-# stream in real time -- it underflowed. Keep it to 1 MiB of the widest
+# the link, an earlier fs 2250 build) the default 81920-sample burst is 5.2
+# MB of sc16 and had to stream in real time -- it underflowed. Keep it to 1 MiB of the widest
 # format used (fc32: 8 bytes per sample and channel).
 wire_bytes = max(8 if o == "fc32" else {"sc16": 4, "sc12": 3, "sc8": 2}[o] for o, _ in pairs)
 cap = (1 << 20) // (n * wire_bytes) // 16 * 16

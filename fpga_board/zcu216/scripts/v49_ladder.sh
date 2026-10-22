@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # v49_ladder.sh [STEP] -- build every v49 bitstream (`make v49-ladder`):
-# the normal family (the max-rate factor of each channel count and every RFDC
-# factor below it, down to 40) and the sc8max family of the 250 MHz clock
-# family, then the 245.76 MHz family's templates (fs 2457.6). See
+# the 250 MHz clock family at fs 2500 (each channel count's template, the
+# highest rate that fits the link in some wire format, and every RFDC factor
+# below it, down to 40), then the 245.76 MHz family's templates (fs 2457.6). See
 # v49_geometry in block_designs/zcu216_uhd_v49/zcu216_uhd_v49.tcl and
 # block_designs/zcu216_uhd_v49_245m76/zcu216_uhd_v49_245m76.tcl for the tables;
 # host/benchmark/oracle_builds.txt lists the same builds for the board tests.
@@ -23,14 +23,12 @@ STEP=${1:-bit}
 MAXPAR=${MAXPAR:-3}; MIN_FREE_GB=${MIN_FREE_GB:-12}; JOBS=${JOBS:-8}
 OUT=build/v49_qsfp; LOGS=$OUT/logs; mkdir -p "$LOGS"
 
-# N:F:fs -- the max-rate builds of both families first (they are tested
-# first), then the rest of the normal family's ladder
-BUILDS=("1:2:2500" "2:2:2500" "4:3:2250" "8:6:2250" "16:12:2250"   # normal, max rate
-        "4:2:2500" "8:3:2250" "16:6:2250")                         # sc8max
-for f in 3 4 5 6 8 10 12 16 20 24 40; do BUILDS+=("1:$f:2500" "2:$f:2500"); done
-for f in 4 5 6 8 10 12 16 20 24 40; do BUILDS+=("4:$f:2250"); done
-for f in 8 10 12 16 20 24 40; do BUILDS+=("8:$f:2250"); done
-for f in 16 20 24 40; do BUILDS+=("16:$f:2250"); done
+# N:F:fs -- the templates first (they are tested first), then the rest of
+# the ladder
+BUILDS=("1:2:2500" "2:2:2500" "4:2:2500" "8:4:2500" "16:8:2500")   # templates
+for f in 3 4 5 6 8 10 12 16 20 24 40; do BUILDS+=("1:$f:2500" "2:$f:2500" "4:$f:2500"); done
+for f in 5 6 8 10 12 16 20 24 40; do BUILDS+=("8:$f:2500"); done
+for f in 10 12 16 20 24 40; do BUILDS+=("16:$f:2500"); done
 # 245.76 MHz clock family: one run-time-rate template per channel count
 BUILDS+=("1:2:2457.6" "2:2:2457.6" "4:2:2457.6" "8:4:2457.6" "16:8:2457.6")
 
@@ -38,9 +36,11 @@ name_of() { local n=$1 f=$2 fs=$3; echo "zcu216_v49_${n}ch_qsfp_f${f}$([ "$fs" =
 # implementation strategy per build (default: Vivado's): 4ch F2 fs2500 runs its
 # fabric at 312.5 MHz, and with the default strategy the CMAC-side (322 MHz)
 # tready -> axis_pkt_arb paths missed by 0.28 ns; Performance_ExtraTimingOpt
-# closes them (+0.006 ns). The 245.76 MHz family's 4, 8 and 16-channel templates
-# run their 512-bit beat at 307.2 MHz: the same strategy from the start.
-strategy_of() { case $1 in zcu216_v49_4ch_qsfp_f2_fs2500|zcu216_v49_4ch_qsfp_f2_fs2457p6|\
+# closes them (+0.006 ns). The other 512-bit-beat templates (8ch F4 and 16ch F8
+# at 312.5 MHz, the 245.76 MHz family's 4, 8 and 16-channel ones at 307.2 MHz):
+# the same strategy from the start.
+strategy_of() { case $1 in zcu216_v49_4ch_qsfp_f2_fs2500|zcu216_v49_8ch_qsfp_f4_fs2500|\
+                           zcu216_v49_16ch_qsfp_f8_fs2500|zcu216_v49_4ch_qsfp_f2_fs2457p6|\
                            zcu216_v49_8ch_qsfp_f4_fs2457p6|zcu216_v49_16ch_qsfp_f8_fs2457p6)
                     echo Performance_ExtraTimingOpt ;; esac; }
 free_gb() { df -BG --output=avail "$OUT" | tail -1 | tr -dc 0-9; }

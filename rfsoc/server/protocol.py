@@ -414,8 +414,8 @@ class ControlCore:
         build when N is not the loaded build's, or when it is but at a rate
         the current otw cannot carry; otherwise keeps the loaded build.
         otw= declares the client's format first (it becomes the current
-        otw), so a client streaming sc8 keeps a loaded sc8-max build instead
-        of reloading the sc16 default and then the sc8 build again."""
+        otw), so a client streaming sc8 keeps a build loaded at an sc8-only
+        rate instead of switching to the sc16 default and back again."""
         if len(a) not in (1, 2):
             raise ProtocolError("usage: set_channels <N> [otw=<fmt>]")
         n = _int(a[0], "channel count", 1)
@@ -427,7 +427,7 @@ class ControlCore:
         if (n == self.be.num_channels and link_problem(
                 self._otw_pref, n, self.be.samp_rate, direction="tx")):
             # this N is loaded, but at a rate the current otw cannot carry
-            # (an sc8-max build left by an earlier client): its default build
+            # (an sc8-only rate left by an earlier client): its default build
             self.be.set_rate(self.be.default_rate())
         base = self._time_base()
         n, tick = self.be.set_channels(n)

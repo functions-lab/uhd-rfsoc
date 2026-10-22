@@ -784,7 +784,7 @@ port_sptr open_port(const uhd::device_addr_t& args, const local_iface& ifc, size
     // per-lcore cache), so the default FIFO ring hands it the coldest of
     // ~12k mbufs and every packet write first reads its lines from DRAM; on
     // one DIMM channel that halved sc16 TX at 12 GB/s (54 % -> 100 %
-    // measured, 16ch 187.5 MS/s).
+    // measured, 16ch 187.5 MS/s on an earlier fs 2250 build).
     p->tx_pool_ops = args.has_key("dpdk_tx_pool_ops") ? ops_arg("dpdk_tx_pool_ops") : "stack";
     for (unsigned c : p->rx_cores)
         if (c == p->tx_core or c == main_core)

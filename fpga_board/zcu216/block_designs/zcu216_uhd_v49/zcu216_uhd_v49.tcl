@@ -268,37 +268,30 @@ proc v49_eth100g_slaves {nch} {
 # per channel per beat (2 = one complex sample); beat_w = N x 16 x Data_Width
 # is the combined width of rfdc/M_ADC_AXIS and rfdc/S_DAC_AXIS (N channels
 # side by side, channel-major) and the S_WIDTH / M_WIDTH of udp_streamer /
-# udp_player. ADC and DAC sample at fs = 2400 MS/s unless noted (LMX/LMK clocking
-# unchanged: PL_CLK 300 MHz, SYSREF 10 MHz).
+# udp_player. ADC and DAC sample at fs = 2500 MS/s on every build
+# (host/benchmark/oracle_builds.txt; LMX2594 from 250 MHz, PL_CLK 300 MHz,
+# SYSREF 10 MHz).
 #
-# Two families (host/benchmark/oracle_builds.txt is the build list):
+# One family: each channel count's template is its highest rate whose
+# stream fits the 100G link in SOME wire format (Protocol §10), at a 512-bit
+# (or narrower) beat, so that every format can be converted; the daemon
+# retunes it at run time to every lower Gen3 factor (2 3 4 5 6 8 10 12 16 20
+# 24 40, Protocol §8), and every row is also a fixed build. Which formats a
+# rate carries is the daemon's link check: at 4 channels F2 (1250 MS/s)
+# streams sc8 only, F3 sc8 / sc12, F4 and below sc16 too.
 #
-#   normal  the highest rate whose sc16 stream fits the 100G link, and below it
-#           every RFDC factor (Gen3: 2 3 4 5 6 8 10 12 16 20 24 40) down to 40,
-#           one bitstream each, so a requested rate can be met from below.
-#           fs 2500 MS/s at 1 and 2 channels, 2250 at 4, 8 and 16.
-#   sc8max  twice the normal family's per-channel rate, sc8 only (Protocol §10):
-#           8ch F3 and 16ch F6 at fs 2250, 6.0 GS/s aggregate,
-#           96 Gb/s of sc8 -- the same link load as the sc16 maximum. Their
-#           1024-bit beat (two samples per channel per clock at 187.5 MHz)
-#           is one sc8 wire word, which udp_streamer / udp_player move once
-#           per clock in sc8 only. 4ch F2 at fs 2500: 1250 MS/s per channel
-#           (1.67x; 2x = 1500 MS/s is beyond the ADC: fs <= 2500 and F >= 2
-#           for I/Q output), 80 Gb/s of sc8, 512-bit beat at 312.5 MHz.
+#   N   fs    F (template first)                 DW  beat   fabric = fs/F/(DW/2)
+#   1  2500  2 3 4 5 6 8 10 12 16 20 24 40        8  128 b  312.5 .. 15.6 MHz
+#   2  2500  2 3 4 5 6 8 10 12 16 20 24 40        8  256 b  312.5 .. 15.6 MHz
+#   4  2500  2 3 4 5 6 8 10 12 16 20 24 40        8  512 b  312.5 .. 15.6 MHz
+#   8  2500  4 5 6 8 10 12 16 20 24 40            4  512 b  312.5 .. 31.3 MHz
+#  16  2500  8 10 12 16 20 24 40                  2  512 b  312.5 .. 62.5 MHz
 #
-#   N   fs    F                                 DW  beat   fabric = fs/F/(DW/2)
-#   1  2500  2 3 4 5 6 8 10 12 16 20 24 40       8  128 b  312.5 .. 15.6 MHz
-#   2  2500  2 3 4 5 6 8 10 12 16 20 24 40       8  256 b  312.5 .. 15.6 MHz
-#   4  2250  3 4 5 6 8 10 12 16 20 24 40         8  512 b  187.5 .. 14.1 MHz
-#   4  2500  2 (sc8max)                          8  512 b  312.5 MHz
-#   8  2250  6 8 10 12 16 20 24 40               4  512 b  187.5 .. 28.1 MHz
-#   8  2250  3 (sc8max)                          8 1024 b  187.5 MHz
-#  16  2250  12 16 20 24 40                      2  512 b  187.5 .. 56.3 MHz
-#  16  2250  6 (sc8max)                          4 1024 b  187.5 MHz
-#
-# Per-channel rate fs/F: 1250 MS/s at 1-2 channels, 750 / 375 / 187.5 MS/s at
-# 4 / 8 / 16 (3.0 GS/s, 96 Gb/s of sc16, 97 % of the link). The table below
-# holds one {F Data_Width} row per factor; v49_build.tcl names a build
+# Per-channel rate at the template: 1250 MS/s at 1, 2 and 4 channels, 625 at
+# 8, 312.5 at 16 (5.0 GS/s, 80 Gb/s of sc8 at 4-16). The largest sc16 rate is
+# 1250 MS/s at 1 and 2 channels, 625 / 312.5 / 156.25 MS/s at 4 / 8 / 16
+# (2.5 GS/s, 80 Gb/s, 81 % of the link). The table below holds one
+# {F Data_Width} row per factor; v49_build.tcl names a build
 # zcu216_v49_<N>ch_qsfp_f<F>[_fs<fs>] (_fs for fs != 2400) and needs
 # LMX2594_250.0_<fs>.0.txt on the board for its fs.
 #
@@ -319,8 +312,8 @@ proc v49_geometry {nch {F ""}} {
     1  {{2 8} {3 8} {4 8} {5 8} {6 8} {8 8} {10 8} {12 8} {16 8} {20 8} {24 8} {40 8}} \
     2  {{2 8} {3 8} {4 8} {5 8} {6 8} {8 8} {10 8} {12 8} {16 8} {20 8} {24 8} {40 8}} \
     4  {{2 8} {3 8} {4 8} {5 8} {6 8} {8 8} {10 8} {12 8} {16 8} {20 8} {24 8} {40 8}} \
-    8  {{3 8} {6 4} {8 4} {10 4} {12 4} {16 4} {20 4} {24 4} {40 4}} \
-    16 {{6 4} {12 2} {16 2} {20 2} {24 2} {40 2}} ]
+    8  {{4 4} {5 4} {6 4} {8 4} {10 4} {12 4} {16 4} {20 4} {24 4} {40 4}} \
+    16 {{8 2} {10 2} {12 2} {16 2} {20 2} {24 2} {40 2}} ]
   set fs [v49_fs]
   if {![dict exists $rows $nch]} { error "v49: no geometry for $nch channels (1, 2, 4, 8, 16)" }
   set row ""
@@ -332,12 +325,11 @@ proc v49_geometry {nch {F ""}} {
   if {$row eq ""} { error "v49: $nch channels is built at factor [join $factors {, }] only, not $F" }
   lassign $row F dw
   set beat [expr {$nch * 16 * $dw}]
-  # 1024 bits: the sc8max 8ch F3 / 16ch F6 builds, sc8 only (udp_streamer /
-  # udp_player turn one 32-slot beat into one sc8 wire word per clock)
-  if {$beat != 128 && $beat != 256 && $beat != 512 && $beat != 1024} { error "v49: N=$nch Data_Width $dw gives a $beat-bit beat (128, 256, 512 or 1024)" }
+  # at most 512 bits: every wire format converts (Protocol §10)
+  if {$beat != 128 && $beat != 256 && $beat != 512} { error "v49: N=$nch Data_Width $dw gives a $beat-bit beat (128, 256 or 512)" }
   set fab [expr {$fs / $F / ($dw / 2)}]
-  # 312.5 MHz: factor 2 at the ADC's 2.5 GS/s maximum (the 1ch/2ch/4ch
-  # _fs2500 builds)
+  # 312.5 MHz: the ADC's 2.5 GS/s maximum at the templates (1/2/4ch F2,
+  # 8ch F4, 16ch F8)
   if {$fab > 312.5} { error "v49: N=$nch F=$F Data_Width $dw at $fs MS/s needs a $fab MHz fabric (max 312.5)" }
   set ts 1
   # tx_beamformer PIPE (N >= 2): the beamformer IP as-is (3-cycle latency)
@@ -356,7 +348,7 @@ proc v49_tile_blocks {} {
 }
 
 # The clk_wiz solver only approximates some fabric frequencies of the rate
-# ladder (e.g. 2500/24 MHz -> 104.132, 2250/32 -> 70.286), and the converter
+# ladder (e.g. 2500/24 MHz -> 104.132), and the converter
 # AXIS clock must equal Fabric_Freq. An MMCM gets every ladder frequency
 # exactly from the 300 MHz input: VCO = 300 x M / D, f = VCO / O with M and
 # the CLKOUT0 divide O in 1/8 steps, VCO 800..1600 MHz, PFD >= 10 MHz. When

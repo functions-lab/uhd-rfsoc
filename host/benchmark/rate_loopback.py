@@ -9,7 +9,7 @@ pseudo-random QPSK pulse (sharp autocorrelation) at T0 + OFFSET; the
 cross-correlation peak gives its delay (whole TX->RX latency, in samples) and
 its height over the median.
 
-    zcu216-uhd python3 benchmark/rate_loopback.py --args type=zcu216,addr=<ip>,channels=N --rate 375e6
+    zcu216-uhd python3 benchmark/rate_loopback.py --args type=zcu216,addr=<ip>,channels=N --rate 312.5e6
 A request between two rates is met from below (Protocol §8):
 --expect names the rate that must be served (default: --rate).
 

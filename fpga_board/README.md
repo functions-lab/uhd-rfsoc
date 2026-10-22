@@ -2,7 +2,7 @@
 
 | directory | design | channels | board |
 |---|---|---|---|
-| `zcu216/` | `block_designs/zcu216_uhd_v49/` | 1, 2, 4, 8, 16 (fs 2500 / 2250) | Xilinx ZCU216 (`zcu216/README.md`) |
+| `zcu216/` | `block_designs/zcu216_uhd_v49/` | 1, 2, 4, 8, 16 (fs 2500) | Xilinx ZCU216 (`zcu216/README.md`) |
 | | `block_designs/zcu216_uhd_v49_245m76/` | 1, 2, 4, 8, 16 (fs 2457.6) | |
 | `rfsoc4x2/` | `block_designs/rfsoc4x2_uhd_v49/` | 1, 2 (fs 5000) | Real Digital RFSoC 4x2 (`rfsoc4x2/README.md`) |
 | | `block_designs/rfsoc4x2_uhd_v49_245m76/` | 1, 2 (fs 4915.2) | |
@@ -19,9 +19,9 @@ what it needs).
 
 ```
 make -C zcu216 v49-package                       # ../fpga_ip/ip_design/uhd_ip -> ../fpga_ip/ip/uhd_ip
-make -C zcu216 v49 N=4 F=3 FS=2250 [STEP=bd]     # one build
+make -C zcu216 v49 N=8 F=4 FS=2500 [STEP=bd]     # one build
 make -C zcu216 v49-ladder [MAXPAR=3] [JOBS=8]    # every build of host/benchmark/oracle_builds.txt
-make -C zcu216 v49-templates                     # one per channel count: run-time rate
+make -C zcu216 v49-templates                     # one per channel count: 1/2/4ch F2, 8ch F4, 16ch F8 at fs 2500
 make -C rfsoc4x2 v49-templates                   # the RFSoC 4x2's two (1ch F2, 2ch F4 at fs 5000)
 make -C zcu216 v49-templates-245m76              # 245.76 MHz family: 1/2/4ch F2, 8ch F4, 16ch F8 at fs 2457.6
 make -C rfsoc4x2 v49-templates-245m76            # 245.76 MHz family: 1ch F2, 2ch F2 at fs 4915.2
@@ -30,7 +30,7 @@ make -C rfsoc4x2 v49-templates-245m76            # 245.76 MHz family: 1ch F2, 2c
 Every build is a run-time-rate template (Protocol §8): its converter
 clock's MMCM has dynamic reconfiguration, so the daemon serves every RFDC
 factor above the built one by retuning in place. One bitstream per channel
-count (`v49-templates`) covers the normal family; the per-factor ladder is
+count (`v49-templates`) covers its clock family; the per-factor ladder is
 only needed for fixed-rate comparisons.
 
 Output: `<board>/build/v49_qsfp/bitstreams/` (timing-clean) or

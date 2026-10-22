@@ -19,7 +19,7 @@ the bitstreams copied there with `rfsoc/push_bitstreams.sh <bitstream dir>
 <ssh target>`, and the daemon started there with `./run_daemon.sh` (see
 `../README.md`).
 
-Full rate (up to 3.0 GS/s of sc16, 97 % of the link, both directions at
+Full rate (up to 96 Gb/s, 97 % of the link, both directions at
 once) needs the full-rate CPU layout in `AGENTS.md`, `sudo tools/isolate_cpus.sh
 apply` and governor `performance`.
 

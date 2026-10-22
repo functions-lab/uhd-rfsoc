@@ -2,10 +2,10 @@
 
 Xilinx RFSoC boards as UHD devices over 100 GbE. Stock UHD 4.6 applications
 (`uhd_usrp_probe`, `rx_samples_to_file`, `benchmark_rate`, GNU Radio, Python
-`uhd`) talk to the board as device `type=zcu216`: up to 16 RF channels, 3.0
-GS/s aggregate in sc16 (6.0 GS/s in sc8), TX and RX beamforming, full-rate TX
+`uhd`) talk to the board as device `type=zcu216`: up to 16 RF channels, 2.5
+GS/s aggregate in sc16 (5.0 GS/s in sc8), TX and RX beamforming, full-rate TX
 and RX at once. The sample rate, and with it the bandwidth, is variable: an
-application picks it through UHD (`set_rx_rate`, `--rate`), from 56.25 to
+application picks it through UHD (`set_rx_rate`, `--rate`), from 61.44 to
 1250 MS/s per channel on the ZCU216 and from 122.88 to 2500 MS/s on the
 RFSoC 4x2, and the board retunes or reloads itself to serve it.
 
@@ -15,7 +15,7 @@ RFSoC 4x2, and the board retunes or reloads itself to serve it.
 
 | side | what |
 |---|---|
-| board | a **ZCU216** (1, 2, 4, 8 or 16 channels, fs 2500 / 2250 or 2457.6 MS/s) or a **Real Digital RFSoC 4x2** (1 or 2 channels, fs 5000 or 4915.2 MS/s), running PYNQ 3.x, with a QSFP28 100G cable to the host |
+| board | a **ZCU216** (1, 2, 4, 8 or 16 channels, fs 2500 or 2457.6 MS/s) or a **Real Digital RFSoC 4x2** (1 or 2 channels, fs 5000 or 4915.2 MS/s), running PYNQ 3.x, with a QSFP28 100G cable to the host |
 | host | Linux, x86_64 (AVX-512 used when present) or aarch64 (NEON), a 100G NVIDIA/Mellanox ConnectX NIC (ConnectX-5/6/7, mlx5), Ubuntu 24.04 packages `libuhd-dev` 4.6, `uhd-host`, `python3-uhd`, `dpdk` / `libdpdk-dev` 23.11, `rdma-core`; optionally `gnuradio` 3.10 |
 | FPGA builds (optional) | Vivado 2021.1; prebuilt bitstreams are attached to each [release](https://github.com/WeiCheng14159/rfsoc-uhd/releases) |
 
@@ -38,26 +38,22 @@ reference (`host/uhd` at v4.6.0.0, `host/gnuradio/gnuradio` at v3.10.9.2:
 
 Each channel count has one run-time-rate template: it serves its top rate
 and every lower RFDC decimation / interpolation factor, changed in place by
-the daemon (~1 s, MTS kept), e.g. 750, 562.5, 450 ... 56.25 MS/s at 4
-channels. The sc8max builds reach rates whose sc16 stream would not fit the
-link, in `otw=sc8` only at their top rate (at 8 and 16 channels at every
-rate); the ZCU216's 4-channel one also serves the fs 2500 rates below
-1250 MS/s, with sc16 from 625, and the RFSoC 4x2's 2-channel one those
+the daemon (~1 s, MTS kept), e.g. 1250, 833.33, 625 ... 62.5 MS/s at 4
+channels. A template's top rates carry only `otw=sc8` (and `sc12`) where
+sc16 would not fit the link, the lower ones every format. The RFSoC 4x2's
+sc8max build reaches 2 x 2500 MS/s in `otw=sc8` and also serves the rates
 down to 833.33 MS/s, with sc16 from 1250.
 
-| board | file | channels | top rate, MS/s per channel |
+| board | file | channels | rates, MS/s per channel (sc16 from) |
 |---|---|---|---|
-| ZCU216 | `zcu216_v49_1ch_qsfp_f2_fs2500.bit` | 1 | 1250 |
-| | `zcu216_v49_2ch_qsfp_f2_fs2500.bit` | 2 | 1250 |
-| | `zcu216_v49_4ch_qsfp_f3_fs2250.bit` | 4 | 750 |
-| | `zcu216_v49_8ch_qsfp_f6_fs2250.bit` | 8 | 375 |
-| | `zcu216_v49_16ch_qsfp_f12_fs2250.bit` | 16 | 187.5 |
-| | `zcu216_v49_4ch_qsfp_f2_fs2500.bit` | 4 | 1250 (sc8max) |
-| | `zcu216_v49_8ch_qsfp_f3_fs2250.bit` | 8 | 750 (sc8max) |
-| | `zcu216_v49_16ch_qsfp_f6_fs2250.bit` | 16 | 375 (sc8max) |
-| RFSoC 4x2 | `rfsoc4x2_v49_1ch_qsfp_f2_fs5000.bit` | 1 | 2500 |
-| | `rfsoc4x2_v49_2ch_qsfp_f4_fs5000.bit` | 2 | 1250 |
-| | `rfsoc4x2_v49_2ch_qsfp_f2_fs5000.bit` | 2 | 2500 (sc8max) |
+| ZCU216 | `zcu216_v49_1ch_qsfp_f2_fs2500.bit` | 1 | 1250 .. 62.5 (all) |
+| | `zcu216_v49_2ch_qsfp_f2_fs2500.bit` | 2 | 1250 .. 62.5 (all) |
+| | `zcu216_v49_4ch_qsfp_f2_fs2500.bit` | 4 | 1250 .. 62.5 (625) |
+| | `zcu216_v49_8ch_qsfp_f4_fs2500.bit` | 8 | 625 .. 62.5 (312.5) |
+| | `zcu216_v49_16ch_qsfp_f8_fs2500.bit` | 16 | 312.5 .. 62.5 (156.25) |
+| RFSoC 4x2 | `rfsoc4x2_v49_1ch_qsfp_f2_fs5000.bit` | 1 | 2500 .. 125 (all) |
+| | `rfsoc4x2_v49_2ch_qsfp_f4_fs5000.bit` | 2 | 1250 .. 125 (all) |
+| | `rfsoc4x2_v49_2ch_qsfp_f2_fs5000.bit` (sc8max) | 2 | 2500 .. 833.33 (1250) |
 
 A second clock family puts the converters on a 245.76 MHz reference: fs
 2457.6 MS/s on the ZCU216 and 4915.2 MS/s on the RFSoC 4x2. One template per
@@ -80,7 +76,7 @@ Download them (with their `.hwh`) from the release, or build them:
 # Vivado 2021.1 on PATH
 make -C fpga_board/zcu216 v49-package          # package the custom cores (once)
 make -C fpga_board/zcu216 v49-templates        # the five ZCU216 templates
-make -C fpga_board/zcu216 v49 N=8 F=3 FS=2250  # one build, e.g. the 8ch sc8max
+make -C fpga_board/zcu216 v49 N=8 F=4 FS=2500  # one build, e.g. the 8ch template
 make -C fpga_board/rfsoc4x2 v49-templates      # the two RFSoC 4x2 templates
 make -C fpga_board/zcu216 v49-templates-245m76    # the 245.76 MHz family (fs 2457.6)
 make -C fpga_board/rfsoc4x2 v49-templates-245m76  # the 245.76 MHz family (fs 4915.2)
@@ -108,7 +104,7 @@ sudo python3 -c "import uhd; u = uhd.usrp.MultiUSRP('type=zcu216,channels=2'); \
   run at the same rate (one factor).
 * A rate of the loaded bitstream retunes in place (~1 s: factor, converter
   clock, MTS); a rate of another bitstream of the same channel count (the
-  sc8max build, or the other clock family) reloads (10-20 s). Streaming
+  other clock family, or the RFSoC 4x2's sc8max build) reloads (10-20 s). Streaming
   stops either way: set the rate before streaming, as UHD applications do.
 * The rates that need more than sc16 fits on the link are offered only to a
   client that declares a narrower wire format: device arg `otw=sc8` (or
@@ -123,16 +119,16 @@ Bitstreams), the rates on offer (`get_rx_rates`, `uhd_usrp_probe`) are, in
 MS/s per channel, with the wire formats in brackets where not every format
 fits:
 
-| board | N | fs 2500 / 5000 (250 MHz family) | fs 2250 (250 MHz family) | fs 2457.6 / 4915.2 (245.76 MHz family) |
-|---|---|---|---|---|
-| ZCU216 | 1, 2 | 1250, 833.33, 625, 500, 416.67, 312.5, 250, 208.33, 156.25, 125, 104.17, 62.5 | | 1228.8, 819.2, 614.4, 491.52, 409.6, 307.2, 245.76, 204.8, 153.6, 122.88, 102.4, 61.44 |
-| | 4 | 1250 [sc8], 833.33 [sc12 sc8], 625 .. 62.5 | 750, 562.5, 450, 375, 281.25, 225, 187.5, 140.63, 112.5, 93.75, 56.25 | 1228.8 [sc8], 819.2 [sc12 sc8], 614.4 .. 61.44 |
-| | 8 | | 750, 562.5, 450 [sc8]; 375 .. 56.25 | 614.4 [sc8], 491.52, 409.6 [sc12 sc8]; 307.2 .. 61.44 |
-| | 16 | | 375, 281.25, 225 [sc8]; 187.5 .. 56.25 | 307.2 [sc8], 245.76, 204.8 [sc12 sc8]; 153.6 .. 61.44 |
-| | carrier | 0 - 1250 MHz | 0 - 1125 MHz | 0 - 1228.8 MHz |
-| RFSoC 4x2 | 1 | 2500, 1666.67, 1250, 1000, 833.33, 625, 500, 416.67, 312.5, 250, 208.33, 125 | | 2457.6, 1638.4, 1228.8, 983.04, 819.2, 614.4, 491.52, 409.6, 307.2, 245.76, 204.8, 122.88 |
-| | 2 | 2500 [sc8], 1666.67 [sc12 sc8], 1250 .. 125 | | 2457.6 [sc8], 1638.4 [sc12 sc8], 1228.8 .. 122.88 |
-| | carrier | 0 - 2500 MHz | | 0 - 2457.6 MHz |
+| board | N | fs 2500 / 5000 (250 MHz family) | fs 2457.6 / 4915.2 (245.76 MHz family) |
+|---|---|---|---|
+| ZCU216 | 1, 2 | 1250, 833.33, 625, 500, 416.67, 312.5, 250, 208.33, 156.25, 125, 104.17, 62.5 | 1228.8, 819.2, 614.4, 491.52, 409.6, 307.2, 245.76, 204.8, 153.6, 122.88, 102.4, 61.44 |
+| | 4 | 1250 [sc8], 833.33 [sc12 sc8], 625 .. 62.5 | 1228.8 [sc8], 819.2 [sc12 sc8], 614.4 .. 61.44 |
+| | 8 | 625 [sc8], 500, 416.67 [sc12 sc8]; 312.5 .. 62.5 | 614.4 [sc8], 491.52, 409.6 [sc12 sc8]; 307.2 .. 61.44 |
+| | 16 | 312.5 [sc8], 250, 208.33 [sc12 sc8]; 156.25 .. 62.5 | 307.2 [sc8], 245.76, 204.8 [sc12 sc8]; 153.6 .. 61.44 |
+| | carrier | 0 - 1250 MHz | 0 - 1228.8 MHz |
+| RFSoC 4x2 | 1 | 2500, 1666.67, 1250, 1000, 833.33, 625, 500, 416.67, 312.5, 250, 208.33, 125 | 2457.6, 1638.4, 1228.8, 983.04, 819.2, 614.4, 491.52, 409.6, 307.2, 245.76, 204.8, 122.88 |
+| | 2 | 2500 [sc8], 1666.67 [sc12 sc8], 1250 .. 125 | 2457.6 [sc8], 1638.4 [sc12 sc8], 1228.8 .. 122.88 |
+| | carrier | 0 - 2500 MHz | 0 - 2457.6 MHz |
 
 fc32 is offered where the link and the build's fabric beat allow it; the
 daemon's `info rate_otw=` lists the formats of every rate (Protocol §9, §10
@@ -143,13 +139,13 @@ side for every rate above (a rate of the other family also reprograms the
 board's clock chips as part of its reload). The carrier range follows the
 loaded build's fs: the frontend / NCO range
 (`get_rx_lo_freq_range("NCO")`, `uhd_usrp_probe`'s "Freq range") is 0 -
-fs/2 after every rate change, e.g. 1125 -> 1228.8 MHz when a 4-channel
-ZCU216 goes from 750 to 614.4 MS/s. (`get_rx_freq_range()` adds the DSP
+fs/2 after every rate change, e.g. 1250 -> 1228.8 MHz when a 4-channel
+ZCU216 goes from 625 to 614.4 MS/s. (`get_rx_freq_range()` adds the DSP
 part's +-rate/2, as UHD does for every device; the centre still stops at
 fs/2.)
 
 At the top rates the FPGA delivers every packet in every format, but
-full-duplex `sc12` near the link limit (4-16 channels, 3.3-3.9 GS/s
+full-duplex `sc12` near the link limit (4-16 channels, 3.3-4.0 GS/s
 aggregate) is more than an x86 host converting to sc16 keeps up with (RX
 loss at the NIC); `sc8` there, and `sc16` from the rate where it fits, run
 clean in strict full-rate tests, bar an occasional run lost to the host.
@@ -205,8 +201,8 @@ host/gnuradio/run_tones.sh normal 4                      # GNU Radio: 4 tones ou
 
 A new `channels=` reloads the bitstream (~16 s). Within one channel count
 `set_rx_rate` / `set_tx_rate` pick the sample rate (= bandwidth) as in
-"Sample rate (bandwidth) and carrier frequency" above. For the sc8max rates
-pass `otw=sc8`.
+"Sample rate (bandwidth) and carrier frequency" above. For the rates only
+sc8 (or sc12) fits pass `otw=sc8` (`otw=sc12`).
 
 More: `host/README.md` (host module, device arguments), `rfsoc/server/README.md`
 (daemon), `fpga_board/README.md` (FPGA), `host/benchmark/README.md`

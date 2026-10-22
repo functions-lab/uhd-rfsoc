@@ -1,6 +1,6 @@
 # fpga_board/zcu216/Makefile -- the ZCU216 as a UHD device over 100 GbE: the v49
 # bitstreams (N = 1, 2, 4, 8, 16 channels). One self-contained block design per
-# clock family, block_designs/zcu216_uhd_v49/ (250 MHz: fs 2250, 2400, 2500) and
+# clock family, block_designs/zcu216_uhd_v49/ (250 MHz: fs 2500; 2400 without FS=) and
 # block_designs/zcu216_uhd_v49_245m76/ (245.76 MHz: fs 2457.6), chosen by FS
 # and built by scripts/v49_build.tcl into build/v49_qsfp/ (needs the packaged
 # cores: `make v49-package` first, and Vivado 2021.1 on PATH).
@@ -16,10 +16,11 @@ FS   ?=
 STEP ?= bit
 JOBS ?= 12
 MAXPAR ?= 3
-# The run-time-rate templates (Protocol §8): each channel count's top
-# normal-family build. MTS_clk_wiz has dynamic reconfiguration, so the daemon
-# serves every lower factor of that N from it (1ch: 1250 .. 62.5 MS/s).
-TEMPLATES := ^zcu216_v49_(1ch_qsfp_f2_fs2500|2ch_qsfp_f2_fs2500|4ch_qsfp_f3_fs2250|8ch_qsfp_f6_fs2250|16ch_qsfp_f12_fs2250)$$
+# The run-time-rate templates (Protocol §8): each channel count's top build
+# (fs 2500). MTS_clk_wiz has dynamic reconfiguration, so the daemon serves
+# every lower factor of that N from it: 1250 .. 62.5 MS/s at 1, 2 and 4
+# channels, 625 .. at 8, 312.5 .. at 16
+TEMPLATES := ^zcu216_v49_(1ch_qsfp_f2|2ch_qsfp_f2|4ch_qsfp_f2|8ch_qsfp_f4|16ch_qsfp_f8)_fs2500$$
 # The 245.76 MHz family's templates (fs 2457.6): 1228.8 .. 30.72 MS/s at 1, 2
 # and 4 channels, 614.4 .. at 8, 307.2 .. at 16
 TEMPLATES_245M76 := ^zcu216_v49_(1ch_qsfp_f2|2ch_qsfp_f2|4ch_qsfp_f2|8ch_qsfp_f4|16ch_qsfp_f8)_fs2457p6$$

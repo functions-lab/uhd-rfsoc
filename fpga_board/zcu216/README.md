@@ -10,4 +10,4 @@ builds the whole list. See `../README.md` for the commands and
 Each bitstream is also a run-time-rate template: the daemon retunes it to
 every lower factor of its channel count (1ch F2: 1250 .. 62.5 MS/s, ~1 s per
 change, MTS re-locked each time). `make v49-templates` builds the five that
-cover the normal family (1, 2, 4, 8, 16 channels).
+cover every fs 2500 rate (1, 2, 4ch F2, 8ch F4, 16ch F8).

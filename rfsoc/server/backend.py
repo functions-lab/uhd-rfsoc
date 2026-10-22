@@ -101,8 +101,9 @@ def link_problem(fmt: str, nch: int, rate: float, beat_bits: int = 0,
       payload capacity (vrt.LINK_PAYLOAD_BYTES_PER_S);
     * RX fc32 on a 512-bit-beat build (udp_streamer would need two FIFO words
       per clock: it drops every packet);
-    * anything but sc8 on a 1024-bit-beat build (the sc8max 8ch F3 / 16ch F6
-      builds: one beat is exactly one sc8 wire word per clock, Protocol §10)."""
+    * anything but sc8 on a 1024-bit-beat build (one beat is exactly one sc8
+      wire word per clock, Protocol §10; the cores allow it, no shipped
+      build has one)."""
     need = vrt.otw_wire_rate(fmt, int(nch) * float(rate))
     if need > vrt.LINK_PAYLOAD_BYTES_PER_S:
         return (f"otw={fmt}: {int(nch)} ch x {float(rate) / 1e6:g} MS/s x "
@@ -124,8 +125,8 @@ def link_formats(nch: int, rate: float) -> List[str]:
 
 def default_rate(nch: int, rates: List[float]) -> float:
     """The rate `set_channels` loads for N channels: the sc16-max build, i.e.
-    the highest rate whose sc16 stream fits the link (1ch and 2ch 1250,
-    4ch 750, 8ch 375, 16ch 187.5 MS/s on the normal family); the lowest rate
+    the highest rate whose sc16 stream fits the link (ZCU216 fs 2500: 1ch
+    and 2ch 1250, 4ch 625, 8ch 312.5, 16ch 156.25 MS/s); the lowest rate
     if none does."""
     if not rates:
         raise BackendError(f"no {nch}-channel build")
@@ -300,8 +301,8 @@ class Backend(ABC):
     def tick_rate(self) -> float:
         """UHD tick rate of the LOADED build = aggregate slot rate x
         TICK_STEP = N x per-channel rate (TICK_STEP 1 on every build: 1.25 GHz
-        at 1ch F2, 3.0 GHz on the 4-16ch max-rate builds, 6.0 GHz on sc8max
-        8ch / 16ch, 5.0 GHz on sc8max 4ch). It can
+        at 1ch F2, 5.0 GHz on the ZCU216 4-16ch templates at their top rate,
+        2.5 GHz at their fastest sc16 rate). It can
         differ between two builds of one N, so a host re-reads it after every
         set_channels / set_rx_rate (both replies carry it)."""
         return self.num_channels * self.samp_rate * self.tick_step

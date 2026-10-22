@@ -62,5 +62,5 @@ and the FPGA simulations (`../../fpga_ip/ip_design/uhd_ip/sim`).
 
 ```
 zcu216-uhd python3 benchmark/bf_cal_sweep.py --args type=zcu216,addr=<board-ip>,channels=4
-ADDR=<board-ip> DEV_ARGS=channels=8 benchmark/bench_strict.sh rxtx 375e6 8 sc16 sc16
+ADDR=<board-ip> DEV_ARGS=channels=8 benchmark/bench_strict.sh rxtx 312.5e6 8 sc16 sc16
 ```

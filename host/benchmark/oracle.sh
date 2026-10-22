@@ -15,7 +15,7 @@
 #                (bf_air_test.py) and the RX beamformer (rx_bf_air_test.py)
 #
 #   sudo -E env PATH=$PATH BOARD=xilinx@<board> ADDR=<board-ip> benchmark/oracle.sh <suite|all> [filter]
-#     filter: a substring of "<family> <N>ch <bitstream>" (e.g. sc8max, " 4ch ", _f3_)
+#     filter: a substring of "<family> <N>ch <bitstream>" (e.g. 245m76, " 4ch ", _f3_)
 #
 # Builds: oracle_builds.txt (their bitstreams copied into the board's checkout
 # with rfsoc/push_bitstreams.sh); BUILDS=<file> takes another list (an RFSoC
@@ -105,14 +105,15 @@ while read -r FAM N RATE BIT FMTS BF <&3; do
     # the Python tools get the same layout as the full-rate runs: ZCU216_APP_CPUS
     # (exported above) assumes the DPDK lcores sit on LAYOUT's cores. Without
     # it the RX lcore lands on CPU 1, shared with the application: at 16 ch x
-    # 187.5 MS/s (97 % of the link) a capture lost 4 packets (gap ->
-    # ERROR_CODE_OVERFLOW) in 3 of 3 over-the-air runs; with LAYOUT, 0 of 3.
-    # One layout for every family (on the sc8max builds a deeper RX ring or
-    # tx_warmup=0 traded one host-side failure for another at 96 Gb/s duplex).
+    # 187.5 MS/s sc16 (97 % of the link; an earlier fs 2250 build) a capture
+    # lost 4 packets (gap -> ERROR_CODE_OVERFLOW) in 3 of 3 over-the-air runs;
+    # with LAYOUT, 0 of 3. One layout for every family (at 96 Gb/s of sc8
+    # duplex a deeper RX ring or tx_warmup=0 traded one host-side failure for
+    # another).
     BL=$LAYOUT
     A="type=zcu216,addr=$ADDR,channels=$N,$BL"
     # the over-the-air check's wire format: sc16 where the build carries it,
-    # else sc8 (an sc8-only rate, or a 245m76 template's sc8 / sc12 top rates)
+    # else sc8 (a template's sc8 / sc12 top rates)
     case ",$FMTS," in *,sc16,*) WIRE=sc16 ;; *) WIRE=sc8 ;; esac
     log ""
     log "######## $FAM ${N}ch $BIT ($N x $RATE, wire $FMTS)"

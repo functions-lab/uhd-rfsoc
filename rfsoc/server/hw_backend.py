@@ -214,12 +214,13 @@ MTS_CW = "MTS_clk_wiz"
 # Gen3 RF-ADC decimation / RF-DAC interpolation factors (XRFdc_Set*Factor)
 GEN3_FACTORS = (1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 40)
 # the lowest converter AXIS clock a run-time factor may need (the ladder's
-# lowest is 14.06 MHz: 4ch F40 at 2250 MS/s)
+# lowest is 15.36 MHz: 1/2/4ch F40 at 2457.6 MS/s)
 FABRIC_MIN_MHZ = 10.0
 # MTS attempts before refusing to serve. An attempt can fail its DAC alignment
 # ("Alignment correction delay 31 required exceeds maximum (31) for DAC Tile
 # n", any Target_Latency): F4 on the 1ch and 2ch templates ~35 % of attempts,
-# the 4ch F3 template's bring-up up to twice in a row (on a ZCU216).
+# an earlier fs 2250 4ch F3 template's bring-up up to twice in a row (on a
+# ZCU216).
 # The next attempt locks; each is ~0.3 s.
 MTS_ATTEMPTS = 10
 
@@ -360,7 +361,7 @@ class Variant:
     and so the UHD tick rate = aggregate slot rate x TICK_STEP, the TX buffer
     depth, and whether it has a TX beamformer (tx_beamformer, N_CH = N) and
     an RX beamformer (rx_beamformer, N_CH = N; not in the older builds). Two
-    builds of one N can have different tick rates (4ch: 3.0 GHz at 750 MS/s,
+    rates of one N can have different tick rates (4ch: 2.5 GHz at 625 MS/s,
     5.0 GHz at 1250 MS/s). A .hwh without the cores (a synthetic test file)
     gets v49_geometry's TICK_STEP (backend.v49_tick_step)."""
 
@@ -387,7 +388,7 @@ class Variant:
         # (ADC Data_Width/2 on a quad tile, Data_Width on a dual one; DAC
         # Data_Width/2 on both)
         self.beat_slots = int(self.nch * next(iter(spc)))
-        # (32 slots: the 1024-bit sc8max beat, one sc8 wire word per beat)
+        # (32 slots: a 1024-bit beat, one sc8 wire word per beat)
         if self.beat_slots < 1 or (vrt.GRANULE % self.beat_slots
                                    and self.beat_slots != 2 * vrt.GRANULE):
             raise RuntimeError(f"fabric beat of {self.beat_slots} slots does not "
@@ -543,9 +544,9 @@ def scan_bitstreams(directory: str, extra: Tuple[str, ...] = (),
     to it (plus `extra` bitstreams, which win the (N, rate) they share),
     sorted by channel count, then highest rate first. Unusable files are
     logged and skipped. Each build keeps its own tick rate. Two builds of one
-    (N, rate) -- an sc8max template retuned to a normal template's rate --
-    resolve to the one that carries more wire formats there (the normal
-    one: an sc8max 1024-bit beat carries sc8 only), else the first."""
+    (N, rate) -- a template retuned to another build's rate -- resolve to
+    the one that carries more wire formats there (a 1024-bit beat carries
+    sc8 only), else the first."""
     paths = [os.path.abspath(p) for p in extra]
     extras = set(paths)
     board = board or get_board(None)
@@ -1081,8 +1082,8 @@ class HwBackend(Backend):
 
     def _switch_channels(self, n: int) -> None:
         # that channel count's DEFAULT build: the sc16-max one (the highest
-        # rate whose sc16 stream fits 100GbE), not the fastest -- the sc8-max
-        # builds stream only with otw=sc8 (Protocol §9)
+        # rate whose sc16 stream fits 100GbE), not the fastest -- the top
+        # rates of the 4-16ch templates stream only with otw=sc8 (Protocol §9)
         v = self.variants[(n, default_rate(n, self.rates_for(n)))]
         old = self.variant
         self._switch_to(v, f"CHANNEL CHANGE {old.nch} -> {v.nch} channel(s) "

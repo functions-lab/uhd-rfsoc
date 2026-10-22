@@ -1,12 +1,13 @@
 # AGENTS.md — fpga_board/zcu216
 
 - Designs: `block_designs/zcu216_uhd_v49/zcu216_uhd_v49.tcl` (+ `.xdc`; 250 MHz
-  clock family, fs 2250 / 2400 / 2500) and
+  clock family, fs 2500; 2400 is only the default without FS=) and
   `block_designs/zcu216_uhd_v49_245m76/zcu216_uhd_v49_245m76.tcl` (+ `.xdc`;
   245.76 MHz family, fs 2457.6: PL_CLK 122.88 MHz, SYSREF 7.68 MHz, Protocol
   §8a), each one for N = 1, 2, 4, 8, 16; block design name
-  `zcu216_v49_<N>ch_qsfp`. The 245.76 MHz templates are 1/2/4ch F2, 8ch F4
-  and 16ch F8, all at a 307.2 MHz converter clock. Only Xilinx
+  `zcu216_v49_<N>ch_qsfp`. The templates of both families are 1/2/4ch F2,
+  8ch F4 and 16ch F8, at a 312.5 MHz (fs 2500) or 307.2 MHz (fs 2457.6)
+  converter clock, beats of at most 512 bits. Only Xilinx
   IP + `../../fpga_ip/ip/uhd_ip` (ip_repo_paths is exactly that).
 - `v49_geometry` (in the design tcl) is the single N -> factor / Data_Width /
   beat / fabric-clock table; the factor is a block-design parameter on EVERY
@@ -18,8 +19,8 @@
   every build is a template: built and timed at its top factor, it serves
   every Gen3 factor above it at run time (the daemon retunes the MMCM and
   the RFDC factor, then re-runs MTS). The 5 templates (`make v49-templates`)
-  cover the normal family; Data_Width, the beat and fs stay the build's, so
-  the sc8max builds and another fs remain separate bitstreams.
+  cover every fs 2500 rate; Data_Width, the beat and fs stay the build's, so
+  another fs remains a separate bitstream.
 - fs is set when the RFDC is created: rewriting Sampling_Rate afterwards
   detaches tiles 0, 2, 3 from tile 1's clock distribution.
 - Channel c = ADC/DAC tile c/4 block c%4; N > 1 joins them with

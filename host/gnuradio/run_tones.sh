@@ -4,7 +4,7 @@
 # asks for the sudo password): the ZCU216's through zcu216-uhd, the RFSoC
 # 4x2's with plain sudo (device type=rfsoc4x2).
 #
-#   run_tones.sh normal 4                    # ZCU216 4T4R, 750 MS/s per channel
+#   run_tones.sh normal 4                    # ZCU216 4T4R, 625 MS/s per channel
 #   run_tones.sh normal 4 --addr <board-ip> -f 950e6
 #   run_tones.sh rfsoc4x2 normal 2           # RFSoC 4x2 2T2R, 1250 MS/s per channel
 #   run_tones.sh rfsoc4x2 normal 1 -t 20e6   # tone 20 MHz above the RF centre (default 10 MHz)

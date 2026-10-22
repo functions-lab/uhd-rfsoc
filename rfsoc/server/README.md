@@ -19,7 +19,7 @@ Needs, next to it:
 - the `.bit` / `.hwh` pairs to serve: from the build machine with
   `../push_bitstreams.sh <bitstream dir> xilinx@<board>`, or those of a
   release copied here. `host/benchmark/oracle_builds.txt` lists every build;
-  any subset works, and both clock families (fs 2250 / 2500 and 2457.6 on
+  any subset works, and both clock families (fs 2500 and 2457.6 on
   the ZCU216, 5000 and 4915.2 on the RFSoC 4x2) can be installed together:
   every rate of every build is offered. The board's LMK04828 / LMX2594
   register files for each build's clock plan are in `../rfsoc_lib/xrfclk/`
