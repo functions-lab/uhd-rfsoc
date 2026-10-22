@@ -11,6 +11,9 @@
 //                                     # use); the pool rows keep the original
 //                                     # affinity (unpinned workers)
 //   zcu216_kernel_bench --pool-cpus 2,3,4,5   # pool workers pinned like the module's
+//   zcu216_kernel_bench --sweep [--secs S]    # RX sc16 -> fc32 and TX fc32 -> sc16 only,
+//                                             # N = 1, 2, 4, 8, 16, each row timed for S s
+//                                             # (default 0.3)
 //
 // What the host can convert at all; zcu216_dram_bench then measures the same
 // kernels against DRAM with the NIC's DMA traffic, where a 100GbE stream
@@ -43,6 +46,8 @@ namespace {
 std::mt19937_64 rng(0x5A16D00D);
 cpu_set_t g_all_cpus; // the affinity before --cpu: the pool rows run with it
 std::vector<int> g_pool_cpus; // --pool-cpus: pin pool workers like the module does
+double g_secs = 0.3;          // --secs: how long each row repeats its conversion
+bool g_sweep  = false;        // --sweep: sc16 <-> fc32 only, every N
 
 const char* otw_name(otw_t o)
 {
@@ -190,11 +195,17 @@ void bench()
         cpu_t cpu;
         size_t N;
         const char* uhd_in;
-    } rcs[] = {{otw_t::sc16, cpu_t::fc32, 1, "sc16_chdr"}, {otw_t::sc16, cpu_t::sc16, 4, nullptr},
+    };
+    std::vector<rxcase> rcs = {{otw_t::sc16, cpu_t::fc32, 1, "sc16_chdr"}, {otw_t::sc16, cpu_t::sc16, 4, nullptr},
         {otw_t::sc16, cpu_t::fc32, 4, nullptr}, {otw_t::sc16, cpu_t::fc32, 8, nullptr},
         {otw_t::sc16, cpu_t::fc32, 16, nullptr}, {otw_t::sc8, cpu_t::fc32, 8, nullptr},
         {otw_t::sc8, cpu_t::sc16, 8, nullptr}, {otw_t::sc8, cpu_t::sc8, 8, nullptr},
         {otw_t::sc12, cpu_t::fc32, 4, nullptr}};
+    if (g_sweep) {
+        rcs.clear();
+        for (const size_t n : {1, 2, 4, 8, 16})
+            rcs.push_back({otw_t::sc16, cpu_t::fc32, n, nullptr});
+    }
     for (const auto& c : rcs) {
         const size_t slots = PKT * NP, S = slots / c.N;
         abuf pay(slots * 8);
@@ -215,7 +226,7 @@ void bench()
                 continue;
             const auto t0 = std::chrono::steady_clock::now();
             int reps      = 0;
-            while (secs_since(t0) < 0.3) {
+            while (secs_since(t0) < g_secs) {
                 for (size_t p = 0; p < NP; p++) // packet by packet, like recv()
                     k(pay.p + p * (slots / NP) * (c.otw == otw_t::sc12 ? 3 : slot_bytes(c.otw)), 0, S / NP,
                         op.data(), p * (S / NP));
@@ -223,10 +234,10 @@ void bench()
             }
             std::printf("  %s %6.2f", simd ? "SIMD" : "scalar", reps * double(slots) / secs_since(t0) / 1e9);
         }
-        if (c.uhd_in and c.N == 1) {
+        if (c.uhd_in and c.N == 1 and not g_sweep) {
             const auto t0 = std::chrono::steady_clock::now();
             int reps      = 0;
-            while (secs_since(t0) < 0.3) {
+            while (secs_since(t0) < g_secs) {
                 uhd_conv(c.uhd_in, cpu_name(c.cpu), 1.0 / 32767.0, pay.p, outs[0].p, slots);
                 reps++;
             }
@@ -239,9 +250,15 @@ void bench()
         cpu_t cpu;
         otw_t otw;
         size_t N;
-    } tcs[] = {{cpu_t::fc32, otw_t::sc16, 1}, {cpu_t::sc16, otw_t::sc16, 4}, {cpu_t::fc32, otw_t::sc16, 4},
-        {cpu_t::fc32, otw_t::sc16, 16}, {cpu_t::fc32, otw_t::sc12, 4}, {cpu_t::fc32, otw_t::sc8, 4},
-        {cpu_t::sc8, otw_t::sc8, 8}};
+    };
+    std::vector<txcase> tcs = {{cpu_t::fc32, otw_t::sc16, 1}, {cpu_t::sc16, otw_t::sc16, 4},
+        {cpu_t::fc32, otw_t::sc16, 4}, {cpu_t::fc32, otw_t::sc16, 16}, {cpu_t::fc32, otw_t::sc12, 4},
+        {cpu_t::fc32, otw_t::sc8, 4}, {cpu_t::sc8, otw_t::sc8, 8}};
+    if (g_sweep) {
+        tcs.clear();
+        for (const size_t n : {1, 2, 4, 8, 16})
+            tcs.push_back({cpu_t::fc32, otw_t::sc16, n});
+    }
     for (const auto& c : tcs) {
         const size_t slots = PKT * NP, S = slots / c.N;
         std::vector<size_t> chans(c.N);
@@ -262,16 +279,16 @@ void bench()
                 continue;
             const auto t0 = std::chrono::steady_clock::now();
             int reps      = 0;
-            while (secs_since(t0) < 0.3) {
+            while (secs_since(t0) < g_secs) {
                 k(ip.data(), 0, S, pay.p, 0);
                 reps++;
             }
             std::printf("  %s %6.2f", simd ? "SIMD" : "scalar", reps * double(slots) / secs_since(t0) / 1e9);
         }
-        if (c.N == 1 and c.cpu == cpu_t::fc32 and c.otw == otw_t::sc16) {
+        if (c.N == 1 and c.cpu == cpu_t::fc32 and c.otw == otw_t::sc16 and not g_sweep) {
             const auto t0 = std::chrono::steady_clock::now();
             int reps      = 0;
-            while (secs_since(t0) < 0.3) {
+            while (secs_since(t0) < g_secs) {
                 uhd_conv("fc32", "sc16_chdr", 32767.0, ins[0].p, pay.p, S);
                 reps++;
             }
@@ -282,6 +299,8 @@ void bench()
     // the pool on a large RX request (64 packets, N = 8, sc16 -> fc32), with
     // the original affinity: workers inherit the caller's, and under --cpu
     // they would all share that one CPU
+    if (g_sweep)
+        return;
     pthread_setaffinity_np(pthread_self(), sizeof(g_all_cpus), &g_all_cpus);
     for (const size_t W : {0, 1, 2, 4}) {
         std::vector<int> cpus(W, -1);
@@ -315,7 +334,7 @@ void bench()
         };
         const auto t0 = std::chrono::steady_clock::now();
         int reps      = 0;
-        while (secs_since(t0) < 0.3) {
+        while (secs_since(t0) < g_secs) {
             pool.run(W + 1, task, &ctx);
             reps++;
         }
@@ -349,8 +368,16 @@ int main(int argc, char** argv)
                 g_pool_cpus.push_back(std::atoi(l.substr(p0, p1 - p0).c_str()));
                 p0 = p1 == std::string::npos ? l.size() : p1 + 1;
             }
+        } else if (a == "--sweep") {
+            g_sweep = true;
+        } else if (a == "--secs" and i + 1 < argc) {
+            g_secs = std::atof(argv[++i]);
+            if (not(g_secs > 0)) {
+                std::fprintf(stderr, "--secs must be > 0\n");
+                return 2;
+            }
         } else {
-            std::fprintf(stderr, "usage: zcu216_kernel_bench [--cpu C] [--pool-cpus a,b,c,d]\n");
+            std::fprintf(stderr, "usage: zcu216_kernel_bench [--cpu C] [--pool-cpus a,b,c,d] [--sweep] [--secs S]\n");
             return 2;
         }
     }
