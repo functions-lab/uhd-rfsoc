@@ -157,7 +157,8 @@ On the PYNQ board (user `xilinx`):
 ```sh
 git clone https://github.com/WeiCheng14159/rfsoc-uhd.git ~/jupyter_notebooks/rfsoc-uhd
 cd ~/jupyter_notebooks/rfsoc-uhd
-cp rfsoc/server/zcu216_uhd.conf.example rfsoc/server/zcu216_uhd.conf   # set data_ip (the FPGA's 100G address)
+sudo rfsoc/setup_board.sh   # once: xrfdc MTS bindings if the image lacks them, zcu216_uhd.conf from the example
+# then set data_ip (the FPGA's 100G address) in rfsoc/server/zcu216_uhd.conf
 ```
 
 Put the bitstreams and their `.hwh` files in `rfsoc/server/` (from the
@@ -204,7 +205,7 @@ A new `channels=` reloads the bitstream (~16 s). Within one channel count
 "Sample rate (bandwidth) and carrier frequency" above. For the rates only
 sc8 (or sc12) fits pass `otw=sc8` (`otw=sc12`).
 
-More: `host/README.md` (host module, device arguments), `rfsoc/server/README.md`
+More: `host/README.md` (host setup), `host/AGENTS.md` (host module, device arguments), `rfsoc/server/README.md`
 (daemon), `fpga_board/README.md` (FPGA), `host/benchmark/README.md`
 (hardware tests), `host/gnuradio/README.md` (GNU Radio). Internals and the
 wire protocol: `AGENTS.md`.

@@ -69,6 +69,8 @@ jobs:
         run: python3 -m compileall -q -x '/(uhd|gnuradio/gnuradio)/' rfsoc host
       - name: The daemon parses its arguments without a board
         run: python3 rfsoc/server/zcu216_uhd_daemon.py --help > /dev/null
+      - name: Daemon unit tests
+        run: python3 -m unittest discover -s rfsoc/server/tests
       - name: Shell scripts parse
         run: |
           for f in $(git ls-files '*.sh') host/tools/zcu216-uhd; do bash -n "$f"; done
