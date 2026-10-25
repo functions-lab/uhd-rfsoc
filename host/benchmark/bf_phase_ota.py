@@ -14,7 +14,7 @@ measurement. The RF centre (TX and RX NCO) is --freq (default 950 MHz).
        state): coherent gain |y_all| / sum_c |y_c| -- 1.0 exactly when every
        TX path arrives in phase (all offsets zero), and y_all must equal
        sum_c y_c (superposition: the beamformer applied every weight);
-    c. a beam sweep like rfsoc_lib/beamformer_task.py (Beamformer weights,
+    c. a beam sweep with rfsoc_lib/dsp/beamformer.py (Beamformer weights,
        -90..90 deg): received level per steering angle, and where it peaks.
   1TNR (--mode rx): RX phase offsets, beamformer in bypass, the tone on one TX
     channel (--tx, default 0), every RX channel captured: the phase of RX r

@@ -735,16 +735,16 @@ const cpu_layout& default_layout()
         // the application on C0 with the EAL main lcore (that IS the
         // application thread, idle as an lcore after rte_eal_init), and a
         // conversion worker on every remaining core: recv()/send() at 100GbE
-        // rates are bound by the workers' memory traffic, and the measured
-        // best on a 6-core Xeon test host (one DIMM) gives them 4 cores
-        // (main/app 0+6, lcores 1+7, workers 2,3,4,5; the old layout, app on
-        // the last core and 3 workers, lost ~1 GB/s of RX at sc12)
+        // rates are bound by the workers' memory traffic, so the workers get
+        // every core the lcores do not (measured on a 6-core / 12-thread x86
+        // host with one DIMM channel: 4 workers instead of 3 gained ~1 GB/s
+        // of RX at sc12)
         if (k < cores.size()) {
-            l.app = *c0;
             // big.LITTLE: no hyperthread sibling beside the main lcore, so the
-            // application (an RX and a TX thread) gets one more fast core
-            if (hetero and c0->size() == 1 and k < cores.size() and fast(cores[k].front()))
-                l.app.push_back(cores[k++].front());
+            // application (an RX and a TX thread) gets one more fast core,
+            // which the workers leave alone
+            if (hetero and c0->size() == 1 and fast(cores[k].front()))
+                k++;
             for (size_t i = k; i < cores.size(); i++)
                 if (not hetero or fast(cores[i].front()))
                     l.workers.push_back(cores[i].front());
@@ -784,7 +784,7 @@ port_sptr open_port(const uhd::device_addr_t& args, const local_iface& ifc, size
     // per-lcore cache), so the default FIFO ring hands it the coldest of
     // ~12k mbufs and every packet write first reads its lines from DRAM; on
     // one DIMM channel that halved sc16 TX at 12 GB/s (54 % -> 100 %
-    // measured, 16ch 187.5 MS/s on an earlier fs 2250 build).
+    // measured with 16 channels at the link rate).
     p->tx_pool_ops = args.has_key("dpdk_tx_pool_ops") ? ops_arg("dpdk_tx_pool_ops") : "stack";
     for (unsigned c : p->rx_cores)
         if (c == p->tx_core or c == main_core)
@@ -911,7 +911,7 @@ public:
                                          << mis << " on the wrong queue, " << trunc
                                          << " oversized, " << full << " ring-full polls, "
                                          << ovf << " overflow(s) = " << disc
-                                         << " pkts discarded until every ring was half free; port: "
+                                         << " pkts discarded until every ring had drained; port: "
                                          << st.ipackets - st0.ipackets << " ipackets, "
                                          << st.imissed - st0.imissed << " imissed, "
                                          << st.rx_nombuf - st0.rx_nombuf << " rx_nombuf, "
@@ -983,12 +983,6 @@ inline frame_kind parse_frame(const rte_mbuf* m,
 }
 
 } // namespace
-
-void free_mbufs(void* const* mbufs, size_t n)
-{
-    if (n)
-        rte_pktmbuf_free_bulk(reinterpret_cast<rte_mbuf**>(const_cast<void**>(mbufs)), unsigned(n));
-}
 
 void free_rx_mbufs_raw(void* const* mbufs, size_t n)
 {

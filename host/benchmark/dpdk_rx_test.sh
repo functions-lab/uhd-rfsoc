@@ -23,8 +23,9 @@
 # Steps (PASS/FAIL unless marked INFO):
 #   1 uhd_usrp_probe: tree over DPDK, sensor cmac_aligned = true
 #   2 benchmark_rate RX 1.25 GS/s sc16: 0 dropped, 0 overruns;  fc32: INFO
-#   3 rx_samples_to_file pattern=1, NSAMPS at 1.25 GS/s: its dd disk pre-test forks
-#     (this used to die with "Error: stod"), it must print "Done!", and
+#   3 rx_samples_to_file pattern=1, NSAMPS at 1.25 GS/s: its dd disk pre-test
+#     forks with DPDK initialised (the fork() fix of host/AGENTS.md; a child
+#     that dies shows as "Error: stod"), it must print "Done!", and
 #     check_pattern_file.py must say BIT-EXACT
 #   4 tx_timed_samples: burst ACK, no 'U';  benchmark_rate TX 1.25 GS/s sc16 with
 #     ZCU216_TX_STATS=1: INFO (the gaps are printed)

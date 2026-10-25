@@ -54,7 +54,6 @@ public:
         throw uhd::not_implemented_error("zcu216: post_input_action (RFNoC) is not supported");
     }
 #endif
-    //! samples PER CHANNEL in one packet (spp slots / N)
     //! samples per channel in one application buffer: _buf_pkts packets
     //! (device/stream arg spb_pkts=, default auto: ~250 us, 1..32), so a
     //! buffer is never only a fraction of a packet per channel.
@@ -252,7 +251,6 @@ private:
     size_t _resume_slots = 0; // overflow: discard until every ring holds at most this many
     std::atomic<bool> _discard{false}; // the stream is discarding (DPDK lcores)
     size_t _nports = 1;
-    size_t _bytes_per_cpu_item = 0;
     const otw_info* _otw = nullptr; // Protocol §10 wire format
     std::unique_ptr<rx_kernel> _kern; // wire -> cpu, de-interleave
     std::vector<segment> _segs;       // planned, not yet converted
@@ -291,7 +289,7 @@ private:
     //! or the next command, and continuations issued "now" meanwhile merge
     //! into it: one command reaches the daemon for the whole chain. Sent one
     //! by one, a continuation joins only if it reaches the FPGA before the
-    //! previous link ends, and at 1.2 GS/s a 5000-sample link lasts 4 us,
+    //! previous link ends, and at 1.25 GS/s a 5000-sample link lasts 4 us,
     //! far less than one control round trip (BROKEN_CHAIN instead).
     struct held_cmd
     {
@@ -311,7 +309,7 @@ private:
     std::condition_variable _wait_cv;
     std::atomic<bool> _waiting{false};
 
-    uint64_t _overflows = 0;
+    uint64_t _overflows = 0; //!< ERROR_CODE_OVERFLOW reports (one per gap delivered)
     bool _warned_bad = false, _warned_late = false;
     int _gap_logs = 0; //!< gap warnings logged (the first few per stream)
     int _trace_left = 0; //!< ZCU216_RX_TRACE: packets still to trace

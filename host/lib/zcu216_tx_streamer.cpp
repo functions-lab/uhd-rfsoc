@@ -308,9 +308,10 @@ void tx_streamer_impl::shutdown()
     if (c.buf_words)
         ZLOG_DEBUG("TX closed: sent " << c.sent_words << " words, consumed "
                                       << c.consumed.load() << ", " << c.status_pkts
-                                      << " status packets, " << c.underflows << " underflows, "
-                                      << c.seq_errors << " seq errors, " << c.late << " late, "
-                                      << c.acks << " acks");
+                                      << " status packets (" << c.foreign << " foreign), "
+                                      << c.underflows << " underflows, " << c.seq_errors
+                                      << " seq errors, " << c.late << " late, " << c.acks
+                                      << " acks, " << c.ev_dropped << " events dropped");
     if (_src_fd >= 0)
         ::close(_src_fd);
     _src_fd = -1;
@@ -610,7 +611,7 @@ void tx_streamer_impl::_size_prefill()
     // An untimed burst plays from its first packet (Protocol §6), so the TX
     // lcore holds its first packets and releases them back to back
     // (dpdk::tx_endpoint::prefill_pkts); the lead they give has to cover the
-    // host's start-up. A fixed 32 packets were 27 us of 1.2 GS/s fc32, and
+    // host's start-up. A fixed 32 packets were 26 us of 1.25 GS/s fc32, and
     // every full-rate 1-channel fc32 run underflowed once, right after them.
     // tx_prefill=auto: tx_prefill_lead_us of play-out at the current rate and
     // format, at least 32 packets, at most 3/4 of the FPGA credit, the

@@ -177,7 +177,7 @@ static sockaddr_in make_sin(const std::string& ip, uint16_t port)
 }
 
 ctrl_client::ctrl_client(const std::string& host, uint16_t port, double timeout_s)
-    : _timeout(timeout_s), _host(host)
+    : _timeout(timeout_s)
 {
     const std::string ip = resolve_ipv4(host);
     _fd                  = ::socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);

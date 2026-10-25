@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """bf_cal_sweep.py -- channel phase offsets measured WITH THE BEAMFORMERS, the
-rfsoc_lib/beamformer_task.py way: a tone goes out, the beamformer weights are
+rfsoc_lib/dsp/beamformer.py way: a tone goes out, the beamformer weights are
 stepped, and only the received POWER is used.
 
 Per channel k (k = 1..N-1), weights w0 = 1, wk = exp(j theta), all others 0,
@@ -17,7 +17,7 @@ coefficient; exact for this two-path sum, robust to noise).
       channels; the power of the beam (RX channel 0) is used; repeated with
       the tone from each TX (--tx all) for the 1-transmit, N-receive result.
 Each offset is cross-checked against the direct coherent measurement of the
-same channel ratio (bypass captures). Then, like beamformer_task.sweep_beam,
+same channel ratio (bypass captures). Then, like a beam sweep,
 the beam is swept over steering angles (Beamformer weights, -90..90 deg)
 without and with the measured calibration (w_c * exp(-j offset_c)): the
 calibrated array adds in phase at the steering angle 0 (all weights equal).
@@ -192,7 +192,7 @@ if a.sweep:
     angles = np.arange(lo, hi + st / 2, st)
     if cal_tx:
         r = max(cal_tx, key=lambda rr: np.sum(np.abs(Hd[rr])))
-        print(f"\nTX steering sweep (beamformer_task style), power at RX{r}, without / with the calibration "
+        print(f"\nTX steering sweep, power at RX{r}, without / with the calibration "
               f"exp(-j offset) measured at RX{r}:")
         usrp.set_user_register(TX["en"], 1)
         for lab, cal in (("raw       ", np.zeros(n)), ("calibrated", cal_tx[r])):

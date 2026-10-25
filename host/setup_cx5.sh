@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Configure an NVIDIA/Mellanox ConnectX-5 port as the 100GbE sample link to the
-# ZCU216 CMAC (uhd_zcu216). Idempotent; run as root.
+# Configure an NVIDIA/Mellanox ConnectX (-5, -6, -7; mlx5) port as the 100GbE
+# sample link to the board's CMAC (uhd_zcu216). Idempotent; run as root.
 #
 #   sudo ./setup_cx5.sh <iface> <host-data-ip>/<prefix>
 #   e.g. sudo ./setup_cx5.sh enp1s0f1np1 <host-data-ip>/24   (the name follows the PCIe slot)
@@ -19,12 +19,12 @@
 #   pause off                 CMAC is built without 802.3x pause; keep the NIC
 #                             from emitting pause frames the FPGA would ignore.
 # Samples are received by DPDK (setup_dpdk.sh), not by the kernel, so kernel
-# socket buffers and NIC ring sizes no longer matter; an old
-# /etc/sysctl.d/60-uhd-zcu216.conf from earlier versions is harmless.
+# socket buffers and NIC ring sizes do not matter.
 #
 # Persistence: add to the iface stanza in /etc/network/interfaces
 #     mtu 9000
 #     post-up <repo>/host/setup_cx5.sh $IFACE <host-data-ip>/<prefix>
+# and keep NetworkManager off the port (nmcli device set $IFACE managed no).
 set -euo pipefail
 
 [[ $# -eq 2 ]] || { sed -n '5,9p' "$0" >&2; echo "usage: $0 <iface> <host-data-ip>/<prefix>" >&2; exit 2; }

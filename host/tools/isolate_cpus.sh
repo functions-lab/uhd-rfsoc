@@ -3,14 +3,14 @@
 # and converts on, for full-rate runs. Runtime only: nothing persists across a
 # reboot, and `restore` undoes it.
 #
-#   sudo tools/isolate_cpus.sh apply [housekeeping CPUs]   (default: 9)
+#   sudo tools/isolate_cpus.sh apply <housekeeping CPUs>    e.g. apply 9 or apply 9,11
 #   sudo tools/isolate_cpus.sh restore
 #   tools/isolate_cpus.sh status
 #
 # Why: the module's lcores busy-poll and its workers convert on fixed CPUs
-# (host/AGENTS.md, Full-rate duplex). Without isolation everything else may
-# run there too. Measured on a 6-core Xeon test host in a 22 s full-rate duplex run:
-# containerd, tailscaled, gnome-shell, kworkers, rcu_sched and a weekly
+# (host/AGENTS.md "Full-rate duplex"). Without isolation everything else may
+# run there too. Measured on a 6-core / 12-thread x86 host in a 22 s full-rate
+# duplex run: system daemons, the desktop, kworkers, rcu_sched and a weekly
 # fstrim were switched in on those CPUs thousands of times, and the two DPDK
 # lcores were preempted 36 and 28 times. Each preemption is a stall the
 # ~175-350 us of FPGA TX buffer / the RX rings must cover; when one does not,
@@ -18,19 +18,16 @@
 #
 # apply:   every task's affinity (all threads; per-CPU kernel threads refuse
 #          and stay), the unbound workqueue cpumask and every movable IRQ go
-#          to the housekeeping CPUs. Processes started later inherit their
-#          parent's affinity, so start the module's app from this shell's
-#          descendants or anywhere: the module pins its own threads with
-#          sched_setaffinity (lcores, workers, ZCU216_APP_CPUS), which is
-#          not limited by this.
+#          to the housekeeping CPUs: the CPUs the module's layout leaves free
+#          (with the default layout none is free; the full-rate duplex layout
+#          of host/AGENTS.md leaves one). Processes started later inherit their
+#          parent's affinity; the module pins its own threads with
+#          sched_setaffinity (lcores, workers, ZCU216_APP_CPUS), which is not
+#          limited by this.
 # restore: all of the above back to every online CPU.
-#
-# Default housekeeping CPU 9 (a 6-core / 12-thread host): the full-rate layout uses 0,1,6,7 (app), 2,3
-# (RX workers), 4,5,11 (TX workers), 8 (RX lcore), 10 (TX lcore); 9 is free.
 set -u
 cmd=${1:-status}
 ALLCPUS=0-$(($(nproc --all) - 1))
-HK=${2:-9}
 
 mask_of() { # cpu list -> hex mask
     python3 -c "import sys
@@ -57,8 +54,9 @@ set_all() { # cpu list
 
 case $cmd in
     apply)
+        [ -n "${2:-}" ] || { echo "usage: $0 apply <housekeeping CPUs>  (e.g. apply 9)" >&2; exit 2; }
         [ "$(id -u)" = 0 ] || exec sudo -E "$0" "$@"
-        set_all "$HK"
+        set_all "$2"
         ;;
     restore)
         [ "$(id -u)" = 0 ] || exec sudo -E "$0" "$@"
@@ -69,7 +67,7 @@ case $cmd in
         echo "PID 1 affinity: $(taskset -c -p 1 | sed 's/.*: //')"
         ;;
     *)
-        echo "usage: $0 apply [housekeeping CPUs] | restore | status" >&2
+        echo "usage: $0 apply <housekeeping CPUs> | restore | status" >&2
         exit 2
         ;;
 esac

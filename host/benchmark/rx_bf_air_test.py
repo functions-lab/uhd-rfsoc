@@ -12,8 +12,8 @@ antenna; one timed capture per step, every RX channel, sc16 on the wire:
      the uncalibrated array (1.0 only when every path arrives in phase);
   3. RX beamformer on, phase-calibrated weights w_c = conj(a_c) / |a_c| from
      step 1: the paths now add in phase, coherent gain ~1.0;
-  4. an angle sweep with the Beamformer weights (like rfsoc_lib/
-     beamformer_task.py), beam level per angle.
+  4. an angle sweep with the Beamformer weights (like
+     rfsoc_lib/dsp/beamformer.py), beam level per angle.
 Channels 1..N-1 keep delivering raw samples while the beamformer runs; they
 are checked against step 1 as well.
 

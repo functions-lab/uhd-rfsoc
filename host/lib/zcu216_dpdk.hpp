@@ -39,9 +39,9 @@ public:
     virtual size_t reserve(uint8_t** bufs, size_t max) = 0;
     //! Zero-copy (device arg rx_zero_copy, default on): the lcore hands over
     //! its mbufs instead of copying their payloads into slot buffers, and the
-    //! consumer returns them with free_mbufs() once converted. The payload
-    //! stays where the NIC wrote it (DDIO: in the LLC) and one copy of every
-    //! byte is saved.
+    //! consumer returns them with free_rx_mbufs_raw() once converted. The
+    //! payload stays where the NIC wrote it (DDIO: in the LLC) and one copy
+    //! of every byte is saved.
     virtual bool zero_copy() const
     {
         return false;
@@ -56,10 +56,11 @@ public:
     virtual size_t slot_bytes() const = 0;
     //! Overflow hysteresis, for the whole stream (every queue of it): after
     //! overflowed() the lcores discard whole bursts while discarding() says
-    //! so, i.e. until every ring of the stream is half free again. The loss
-    //! is then one long gap, not a gap after nearly every packet (which
-    //! costs the consumer an extra recv() per packet and keeps it behind).
-    //! Both return false / do nothing when the sink does not take part.
+    //! so, i.e. until every ring of the stream has drained to the fraction
+    //! rx_overflow_resume (default 1/16) of its capacity. The loss is then
+    //! one long gap, not a gap after nearly every packet (which costs the
+    //! consumer an extra recv() per packet and keeps it behind). Both return
+    //! false / do nothing when the sink does not take part.
     virtual bool overflowed()
     {
         return false;
@@ -72,13 +73,12 @@ public:
     virtual void note_full() = 0;
 };
 
-//! return mbufs a zero-copy sink was given (any thread)
-void free_mbufs(void* const* mbufs, size_t n);
-//! free_mbufs() for zero-copy RX mbufs straight from the NIC: one segment, not
-//! shared, all from the pool of mbufs[0]. They go back with one
-//! rte_mempool_put_bulk, without reading each header as rte_pktmbuf_free does
-//! (the header was last touched by the RX lcore on another core: a cross-core
-//! miss per packet, ~13 % of recv() at 12 GB/s).
+//! Return the mbufs a zero-copy sink was given (any thread). They came
+//! straight from the NIC -- one segment, not shared, all from the pool of
+//! mbufs[0] -- so they go back with one rte_mempool_put_bulk, without reading
+//! each header as rte_pktmbuf_free does (the header was last touched by the
+//! RX lcore on another core: a cross-core miss per packet, ~13 % of recv()
+//! at 12 GB/s).
 void free_rx_mbufs_raw(void* const* mbufs, size_t n);
 //! Give the calling (application) thread a DPDK lcore id once, so its mbuf
 //! allocations and frees go through a per-thread mempool cache instead of
@@ -108,19 +108,21 @@ port_sptr open_port(const uhd::device_addr_t& args, const local_iface& ifc, size
 //!         polling lcores share ONE physical core -- with zero-copy RX they
 //!         are light, and a spinning lcore must never share a core with
 //!         conversion work
-//!   app   the threads of C0, beside the main lcore (zcu216_device::_place_app
-//!         pins the application there)
-//!   workers  the first thread of every other core
-//! Measured on a 6-core/12-thread Xeon test host, CX-5 at PCIe Gen3 x16, 8 x 300
-//! MS/s sc16, benchmark_rate with 32-packet buffers: lcores sharing one core
-//! gave TX 98.8-99.6 % against 71.6 % with each lcore on its own core (the
-//! conversion workers then had too few cores); RX ~100 % either way. Each
-//! piece is overridden by dpdk_main_core / dpdk_rx_cores / dpdk_tx_core /
-//! worker_cpus / rx_workers.
+//!   workers  the first thread of every other core (on big.LITTLE one fast
+//!         core after C0 is left out, for the application)
+//! The application gets what is left -- C0 beside the main lcore, and the
+//! spare fast core on big.LITTLE (zcu216_device::_place_app derives it from
+//! the lcores and workers in use). Measured on a 6-core/12-thread x86 host,
+//! ConnectX-5 at PCIe Gen3 x16, 8 x 312.5 MS/s sc16, benchmark_rate with
+//! 32-packet buffers: lcores sharing one core gave TX 98.8-99.6 % against
+//! 71.6 % with each lcore on its own core (the conversion workers then had
+//! too few cores); RX ~100 % either way. Each piece is overridden by
+//! dpdk_main_core / dpdk_rx_cores / dpdk_tx_core / worker_cpus / rx_workers.
+//! The initial values below stand only where the topology cannot be read.
 struct cpu_layout
 {
     unsigned main = 0, tx = 1;
-    std::vector<unsigned> rx{2}, workers, app;
+    std::vector<unsigned> rx{2}, workers;
 };
 const cpu_layout& default_layout();
 //! "2:8" style list

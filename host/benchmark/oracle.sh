@@ -19,20 +19,22 @@
 #
 # Builds: oracle_builds.txt (their bitstreams copied into the board's checkout
 # with rfsoc/push_bitstreams.sh); BUILDS=<file> takes another list (an RFSoC
-# 4x2: BUILDS=oracle_builds_rfsoc4x2.txt; the daemon picks the board from the
-# bitstream). Run as root on the PC (UHD over DPDK); the board is driven over
-# ssh as the invoking user ($SUDO_USER), passwordless (BatchMode). The run
-# restarts the board's daemon for every build: nothing else may use the board
-# meanwhile.
+# 4x2: BUILDS=oracle_builds_rfsoc4x2.txt). Run as root on the PC (UHD over
+# DPDK); the board is driven over ssh as the invoking user ($SUDO_USER),
+# passwordless (BatchMode), through the board's run_daemon.sh (which needs
+# passwordless sudo there). The run restarts the board's daemon for every
+# build: nothing else may use the board meanwhile.
 # Environment (no address or host name is built in):
 #   BOARD      ssh target of the board, e.g. xilinx@<board> (required)
 #   ADDR       board LAN address [discovery: exactly one board]
 #   BOARD_DIR  the board's git checkout of this repository
 #              [/home/xilinx/jupyter_notebooks/rfsoc-uhd]
 #   RUNS (10)  DUR (30)  FREQ (950e6: RF centre of the over-the-air tests)
-#   LAYOUT     device args of the full-rate runs [host/AGENTS.md "Full-rate
-#              duplex" for a 6-core PC]; APP_CPUS [0,1,6,7] (ZCU216_APP_CPUS)
-#   ISOLATE (1) tools/isolate_cpus.sh apply for the run, restore after
+#   LAYOUT     device args of the full-rate runs; APP_CPUS (ZCU216_APP_CPUS);
+#              HK_CPUS (the CPUs left to the rest of the system). The defaults
+#              are the full-rate duplex layout of host/AGENTS.md for a 6-core /
+#              12-thread host (APP_CPUS 0,1,6,7, HK_CPUS 9): adapt all three.
+#   ISOLATE (1) tools/isolate_cpus.sh apply HK_CPUS for the run, restore after
 #   OUT        [/tmp/zcu216_oracle/<date-time>]
 # Exit code: the number of failed items (a run, a check, a test).
 set -u
@@ -53,13 +55,13 @@ DUR=${DUR:-30}
 FREQ=${FREQ:-950e6}
 LAYOUT=${LAYOUT:-rx_workers=2,worker_cpus=2:3,tx_workers=3,tx_worker_cpus=4:5:11,dpdk_rx_cores=8,dpdk_tx_core=10,dpdk_rxd=128,tx_max_pkts=256,num_recv_frames=1024}
 export ZCU216_APP_CPUS=${APP_CPUS:-0,1,6,7}
+HK_CPUS=${HK_CPUS:-9}
 OUT=${OUT:-/tmp/zcu216_oracle/$(date +%Y%m%d-%H%M%S)}
 mkdir -p "$OUT"
 if [ -z "${ADDR:-}" ]; then
     ADDR=$(uhd_find_devices --args type=zcu216 2>/dev/null | awk '/^ +addr: /{print $2}')
     [ "$(echo "$ADDR" | wc -w)" = 1 ] || { echo "discovery found '$ADDR'; set ADDR=<board-ip>" >&2; exit 2; }
 fi
-SRV=$BOARD_DIR/rfsoc/server
 bssh() { # -n: never read stdin (the build list's while-read loop reads it)
     if [ -n "${SUDO_USER:-}" ]; then sudo -u "$SUDO_USER" ssh -n -o BatchMode=yes "$BOARD" "$@"
     else ssh -n -o BatchMode=yes "$BOARD" "$@"; fi
@@ -67,28 +69,14 @@ bssh() { # -n: never read stdin (the build list's while-read loop reads it)
 log() { echo "$*" | tee -a "$OUT/oracle.log"; }
 FAILS=0
 
-load_build() { # <bitstream basename>: the daemon serving that build
-    # the old daemon must be gone before the new one binds its ports: pkill
-    # only signals it (the first load of a run failed when it did not wait)
-    bssh "sudo pkill -f '[z]cu216_uhd_daemon[.]py'; for i in \$(seq 60); do pgrep -f '[z]cu216_uhd_daemon[.]py' > /dev/null || break; sleep 0.5; done; \
-sudo pkill -9 -f '[z]cu216_uhd_daemon[.]py'; t=\$(date +%s); \
-[ -f /tmp/uhdd.log ] && sudo mv /tmp/uhdd.log /tmp/uhdd_\$t.log; [ -f /tmp/uhdd.out ] && sudo mv /tmp/uhdd.out /tmp/uhdd_\$t.out; true" || return 1
-    bssh "cd $SRV && sudo -E env BOARD=ZCU216 XILINX_XRT=/usr nohup /usr/local/share/pynq-venv/bin/python3 \
-zcu216_uhd_daemon.py --allow-unlocked --bitstream $SRV/$1.bit --log /tmp/uhdd.log > /tmp/uhdd.out 2>&1 < /dev/null &" || return 1
-    local i l
-    for i in $(seq 90); do
-        l=$(bssh "grep -hE 'serving|Traceback' /tmp/uhdd.log /tmp/uhdd.out 2>/dev/null | tail -1")
-        case $l in
-            *"not serving"*|*Traceback*) echo "$l"; return 1 ;;
-            *serving*) return 0 ;;
-        esac
-        sleep 2
-    done
-    return 1
+load_build() { # <bitstream basename>: the daemon serving that build (run_daemon.sh
+    # stops the running daemon, starts the new one and returns once it serves;
+    # its log is /tmp/uhd_daemon.log on the board)
+    bssh "cd $BOARD_DIR && ./run_daemon.sh restart --bitstream $BOARD_DIR/rfsoc/server/$1.bit"
 }
 
 if [ "${ISOLATE:-1}" = 1 ]; then
-    "$TOOLS/isolate_cpus.sh" apply >/dev/null && trap '"$TOOLS/isolate_cpus.sh" restore >/dev/null' EXIT
+    "$TOOLS/isolate_cpus.sh" apply "$HK_CPUS" >/dev/null && trap '"$TOOLS/isolate_cpus.sh" restore >/dev/null' EXIT
 fi
 log "oracle $SUITE${FILTER:+ ($FILTER)}: board $ADDR via $BOARD, $RUNS x ${DUR}s runs, RF $FREQ, isolation ${ISOLATE:-1}; logs in $OUT"
 log "source $(git -C "$HERE" log -1 --format='%h %s' 2>/dev/null || echo 'not a git checkout')"
@@ -103,13 +91,9 @@ while read -r FAM N RATE BIT FMTS BF <&3; do
     # beamforming alone has nothing to do on a build without the 4T4R flag
     [ "$SUITE" = beamforming ] && [ "$BF" != yes ] && continue
     # the Python tools get the same layout as the full-rate runs: ZCU216_APP_CPUS
-    # (exported above) assumes the DPDK lcores sit on LAYOUT's cores. Without
-    # it the RX lcore lands on CPU 1, shared with the application: at 16 ch x
-    # 187.5 MS/s sc16 (97 % of the link; an earlier fs 2250 build) a capture
-    # lost 4 packets (gap -> ERROR_CODE_OVERFLOW) in 3 of 3 over-the-air runs;
-    # with LAYOUT, 0 of 3. One layout for every family (at 96 Gb/s of sc8
-    # duplex a deeper RX ring or tx_warmup=0 traded one host-side failure for
-    # another).
+    # (exported above) assumes the DPDK lcores sit on LAYOUT's cores. With the
+    # module's default layout instead, an lcore shares a core with the
+    # application and over-the-air captures near the link rate lose packets.
     BL=$LAYOUT
     A="type=zcu216,addr=$ADDR,channels=$N,$BL"
     # the over-the-air check's wire format: sc16 where the build carries it,
@@ -174,7 +158,7 @@ while read -r FAM N RATE BIT FMTS BF <&3; do
     fi
 done 3< "$BUILDS"
 
-bssh "sudo pkill -f '[z]cu216_uhd_daemon[.]py'" || true
+bssh "cd $BOARD_DIR && ./run_daemon.sh stop" || true
 # per (build, format): runs, clean, runs with TX underruns, runs with RX loss
 python3 - "$OUT/oracle.log" <<'EOF' | tee -a "$OUT/oracle.log"
 import re, sys, collections

@@ -3,7 +3,7 @@
 # unmodified against the real board, one PASS / FAIL / N/A line each.
 #
 #   sudo env PATH=$PATH ADDR=<board-ip> benchmark/uhd_examples_hw.sh
-#   sudo env PATH=$PATH ADDR=<board-ip> N=4 RATE=600e6 benchmark/uhd_examples_hw.sh
+#   sudo env PATH=$PATH ADDR=<board-ip> N=4 RATE=625e6 benchmark/uhd_examples_hw.sh
 #
 # The examples run on the hardware, at the build's own rate. RX captures of the
 # section-5 pattern (device arg pattern=1) are checked bit-exactly by
@@ -14,7 +14,7 @@
 # Run as root (DPDK) with the board's daemon up and the 100G link aligned.
 # Environment (no address is built in):
 #   ADDR      board LAN address [discovery, which must find exactly one board]
-#   N (1)     channels of the loaded build;  RATE (1.2e9) per-channel rate
+#   N (1)     channels of the loaded build;  RATE (1.25e9) per-channel rate
 #   TPS       ticks per sample [1 at N = 1, else N: section 9]
 #   WIRE      the build's wire format for every example (sc16; sc8 on the
 #             sc8-only builds 4ch F=2 / 8ch F=4 / 16ch F=8: adds otw=sc8)
@@ -49,7 +49,7 @@ if [ "$NDEV" -ne 1 ]; then
 fi
 ADDR=${ADDR:-$(echo "$DISC" | awk '/^ +addr: /{print $2; exit}')}
 N=${N:-1}
-RATE=${RATE:-1.2e9}
+RATE=${RATE:-1.25e9}
 WIRE=${WIRE:-sc16}
 if [ "$WIRE" != sc16 ]; then OTWS=${OTWS-}; fi
 if [ "$N" = 1 ]; then TPS=${TPS:-1}; OTWS=${OTWS-sc12 sc8 fc32}; else TPS=${TPS:-$N}; OTWS=${OTWS-sc12 sc8}; fi
@@ -59,7 +59,7 @@ A="type=zcu216,addr=$ADDR,channels=$N${DEV_ARGS:+,$DEV_ARGS}"
 # the pattern as the wire format rounds it
 POTW=(); [ "$WIRE" != sc16 ] && POTW=(--otw "$WIRE")
 # captures: a 32768-frame ring per port (as dpdk_rx_test.sh), so the file
-# writer's stalls are absorbed instead of overflowing at 1.2 GS/s
+# writer's stalls are absorbed instead of overflowing at 1.25 GS/s
 AC="$A,pattern=1,num_recv_frames=32768"
 ALL=$(seq -s, 0 $((N - 1)))
 L=${LOGDIR:-/tmp/zcu216_uhd_hw}
@@ -257,7 +257,7 @@ timeout 30 "$RUN" "$E/gpio" --args "$A" >"$L/gpio.log" 2>&1
 result "gpio: fails cleanly (the ZCU216 has no GPIO)" $?
 
 # --- the Python examples (the python bindings over the same module)
-# a 55 ms RX ring (32768 frames at 1.2 GS/s): the example starts its RX thread,
+# a 50 ms RX ring (32768 frames at 1.25 GS/s): the example starts its RX thread,
 # then creates the TX streamer on the main thread, and UHD's binding holds the
 # GIL through get_tx_stream() (~30 ms here), so recv() is not called for that
 # long; a smaller ring overflows once at the start (21-28 M samples dropped)

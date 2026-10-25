@@ -46,7 +46,7 @@ public:
     //! run fn(ctx, t) for t = 0..ntasks-1 (ntasks < 65536), in parallel;
     //! returns when all are done
     void run(size_t ntasks, task_fn fn, void* ctx);
-    //! "4 workers on CPUs 8,9,10,11"
+    //! "4 worker(s) on CPUs 8,9,10,11"
     std::string desc() const;
     //! calls that ran on the workers / fell back to the caller alone (busy)
     uint64_t parallel_calls() const

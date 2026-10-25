@@ -15,9 +15,9 @@
 # Needs the board daemon serving (it loads the matching bitstream itself) and
 # a display (run it from the PC's desktop session; sudo -E keeps DISPLAY).
 # The compiled .py goes to ~/.cache/<board>_gnuradio, rebuilt when the .grc is
-# newer. /usr/bin/grcc explicitly: an old GNU Radio 3.8 grcc may sit earlier
-# on PATH.
+# newer, with GNU Radio 3.10's grcc (GRCC=<path> picks another one).
 set -euo pipefail
+GRCC=${GRCC:-grcc}
 D=$(cd "$(dirname "$0")" && pwd)
 B=zcu216
 case ${1:-} in zcu216|rfsoc4x2) B=$1; shift ;; esac
@@ -27,7 +27,7 @@ G=$D/grc/${B}_tones_$1_$2ch.grc
 OUT=${XDG_CACHE_HOME:-$HOME/.cache}/${B}_gnuradio
 mkdir -p "$OUT"
 PY=$OUT/${B}_tones_$1_$2ch.py
-[ "$PY" -nt "$G" ] || /usr/bin/grcc -o "$OUT" "$G" > /dev/null
+[ "$PY" -nt "$G" ] || "$GRCC" -o "$OUT" "$G" > /dev/null
 shift 2
 [ "$B" = rfsoc4x2 ] && exec sudo -E env -u PYTHONPATH python3 "$PY" "$@"
 exec zcu216-uhd python3 "$PY" "$@"

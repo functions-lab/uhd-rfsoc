@@ -3,8 +3,7 @@
 (Protocol §3d: the daemon resets the NCO phases of a direction
 together after every tune, one update event per tile.)
 
-Hardware check, not for the emulator (it has no phase). Feed ONE CW tone to
-every RX channel under test (a splitter from a generator, or from DAC 0 with
+Feed ONE CW tone to every RX channel under test (a splitter from a generator, or from DAC 0 with
 --tx: this script then plays the tone itself). Per trial the script retunes
 all RX channels away and back (optionally with a common set_command_time),
 captures, and measures each channel's phase relative to channel 0:

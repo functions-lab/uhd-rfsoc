@@ -28,9 +28,9 @@ OTW formats (Protocol §10): --otw sc8|sc12|fc32 compares against the
 pattern passed through the FPGA's conversion (server/vrt.py: sc8 = round-half-up
 (x/256) saturated, sc12 = round-half-up(x/16) saturated, fc32 = x/32768) and the
 host's scaling to the CPU format: --type short holds v*256 (sc8), v*16 (sc12) or
-x (fc32); --type float/double holds v/128, v/2048 or x/32768. A TX dump of the
-fake (DAC int16, after the FPGA's wire -> int16) is checked the same way with
---type short. A quantised counter no longer names its tick in every sample, so
+x (fc32); --type float/double holds v/128, v/2048 or x/32768. A dump of DAC
+int16 samples (after the FPGA's wire -> int16) is checked the same way with
+--type short. A quantised counter does not name its tick in every sample, so
 the start tick is found by search; where a few start ticks fit equally (one
 quantisation step spans several samples) all of them are carried into the
 --t0 and channel-alignment checks.

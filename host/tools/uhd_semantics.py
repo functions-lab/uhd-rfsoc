@@ -27,8 +27,8 @@ Checks (each prints PASS/FAIL; exit code = number of failures):
   bandwidth   = rate (fs / factor), range
   sensors     lo_locked per channel, every mboard sensor readable
   fragments   a recv() buffer smaller than a packet: more_fragments
-  timed       set_command_time + tune/gain on every channel: replied at once,
-              applied by the daemon in ONE group at the time (--fake-log)
+  timed       set_command_time + tune/gain on every channel: replied at once
+              (the daemon's log shows them applied in ONE group at the time)
   pps         set_time_unknown_pps: no wait beyond multi_usrp's own, the time
               reads just past 0 afterwards (the emulated edge, like a USRP)
   N >= 2 only:
@@ -320,8 +320,9 @@ class Run:
             md1.more_fragments, md2.more_fragments, y.shape[1], mds[-1].more_fragments))
 
     def t_timed(self):
+        # the daemon's log shows the grouping ("timed group: 2N op(s) applied
+        # together at t=..."); here only the replies are checked
         u = self.u
-        before = open(self.a.fake_log).read().count('timed group:') if self.a.fake_log else 0
         t = u.get_time_now() + T.TimeSpec(0.3)
         u.set_command_time(t)
         for c in range(self.N):
@@ -330,18 +331,7 @@ class Run:
         u.clear_command_time()
         ok = all(abs(u.get_rx_freq(c) - (7e8 + 1e6 * c)) < 1 for c in range(self.N))
         time.sleep(0.6)
-        why = 'replied at once %s' % ok
-        if self.a.fake_log:
-            groups = re.findall(r'timed group: (\d+) op\(s\) applied together at t=(\d+)',
-                                open(self.a.fake_log).read())[before:]
-            want = 2 * self.N
-            ok &= len(groups) == 1 and int(groups[0][0]) == want
-            if groups:
-                dt = (int(groups[0][1]) - t.to_ticks(self.tick)) / self.tick
-                ok &= 0 <= dt < 0.05
-                why += '; daemon applied %s op(s) in %d group(s), %.2f ms after the command time' % (
-                    groups[0][0], len(groups), dt * 1e3)
-        self.result('timed', ok, why)
+        self.result('timed', ok, 'replied at once %s' % ok)
 
     def t_pps(self):
         u = self.u
@@ -415,7 +405,6 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--args', required=True)
     ap.add_argument('--rate', type=float, default=0.0, help='per-channel rate (default: the device\'s)')
-    ap.add_argument('--fake-log', default='', help='the emulator\'s log (checks the timed group)')
     ap.add_argument('--only', default='', help='comma list of checks')
     a = ap.parse_args()
     r = Run(a)

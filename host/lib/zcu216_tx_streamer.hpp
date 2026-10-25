@@ -58,7 +58,6 @@ public:
         throw uhd::not_implemented_error("zcu216: post_output_action (RFNoC) is not supported");
     }
 #endif
-    //! samples PER CHANNEL in one packet (spp slots / N)
     //! samples per channel in one application buffer: _buf_pkts packets
     //! (device/stream arg spb_pkts=, default auto: ~250 us, 1..32), so a
     //! buffer is never only a fraction of a packet per channel.
@@ -101,7 +100,8 @@ private:
         uint32_t seq = 0;
         // event counters (TX lcore; read after it stopped)
         uint64_t status_pkts = 0, underflows = 0, seq_errors = 0, late = 0, acks = 0;
-        uint64_t foreign = 0, ev_dropped = 0;
+        uint64_t foreign = 0;    // status-queue packets that were not ours
+        uint64_t ev_dropped = 0; // events lost because the async ring was full
     };
 
     //! Measurement hooks (ZCU216_TX_STATS=1 / tx_ignore_credit=1), printed at
@@ -171,15 +171,17 @@ private:
     void _on_status(const uint8_t* pay, uint32_t len);
     void _fc_lock();
     void _fc_unlock();
-    //! FPGA time from the last status packet (Protocol §7 words 2-3: its TSF
-    //! when it was sent), written by the TX lcore under a sequence counter,
-    //! extrapolated by the host clock at the tick rate. false before the first
-    //! status packet. A few us of network latency and the clocks' ppm: good
-    //! enough for leads (ms) and for deciding what is already late.
     //! the current burst for the TX stats events (sender writes, lcore reads)
     std::atomic<uint64_t> _bst_tsf{0}, _bst_samps{0};
+    //! the last status packet's TSF and host arrival time, written by the TX
+    //! lcore under the sequence counter _st_seq
     std::atomic<uint32_t> _st_seq{0};
     std::atomic<uint64_t> _st_tsf{0}, _st_ns{0};
+    //! FPGA time from the last status packet (Protocol §7 words 2-3: its TSF
+    //! when it was sent), extrapolated by the host clock at the tick rate.
+    //! false before the first status packet. A few us of network latency and
+    //! the clocks' ppm: good enough for leads (ms) and for deciding what is
+    //! already late.
     bool _fpga_now(uint64_t& ticks) const;
 
     //! stream_setup_tx; returns after taking the new baseline

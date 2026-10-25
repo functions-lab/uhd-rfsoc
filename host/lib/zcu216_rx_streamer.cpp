@@ -130,8 +130,7 @@ rx_streamer_impl::rx_streamer_impl(
     // the daemon's current format (§3) is now this stream's; later rate
     // requests declare it
     _st->set_cur_otw(_otw->name);
-    const cpu_t cpu     = cpu_lookup(args.cpu_format);
-    _bytes_per_cpu_item = cpu_bytes(cpu);
+    const cpu_t cpu = cpu_lookup(args.cpu_format);
 
     _nchan = _st->nchan;
     // spp counts SLOTS: whole 64-byte FIFO words of the format (§10: 16 sc16,
@@ -199,7 +198,7 @@ rx_streamer_impl::rx_streamer_impl(
             c.ports.pop_back();
         _spp = spp_r;
         // auto: ~250 us of samples per buffer, 32 packets at the high rates:
-        // one packet is 1.7 us at 1.2 GS/s, a call per packet the Python
+        // one packet is 1.6 us at 1.25 GS/s, a call per packet the Python
         // bindings cannot make (benchmark_rate.py received 7.7 %), and one
         // packet is below par_min_slots for the worker pool (otw fc32 at N = 1:
         // 51.9 % -> 100.0 % measured). At low rates fewer packets: a split-8
@@ -292,8 +291,10 @@ void rx_streamer_impl::shutdown()
         pkts += p->pkts;
         full += p->full_waits;
     }
-    ZLOG_DEBUG("RX closed: " << pkts << " pkts, " << _w.gaps << " gaps, " << _w.late
-                             << " late, " << _w.bad << " bad, " << full << " ring-full polls; "
+    ZLOG_DEBUG("RX closed: " << pkts << " pkts, " << _w.gaps << " gaps (" << _overflows
+                             << " overflows reported), " << _w.late << " late, " << _w.bad
+                             << " bad, " << full << " ring-full polls, " << _w.late_cmds
+                             << " late commands, " << _w.broken << " broken chains; "
                              << _conv_par << " parallel / " << _conv_inline
                              << " single-thread conversions");
     if (_st->pool and (_conv_par or _conv_inline))

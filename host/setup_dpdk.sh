@@ -3,7 +3,7 @@
 # transport). Idempotent; run as root.
 #
 #   sudo ./setup_dpdk.sh <iface> [nr_2M_hugepages]
-#   <iface>: the ConnectX-5 100G netdev (its name follows the PCIe slot, e.g.
+#   <iface>: the ConnectX 100G netdev (its name follows the PCIe slot, e.g.
 #   enp1s0f1np1); nr_2M_hugepages default 4096 (8 GB)
 #   --install   also apt-get install the missing packages
 #   --clean     also delete stale hugepage files in /dev/hugepages that no
@@ -13,7 +13,7 @@
 #   dpdk, libdpdk-dev        the EAL/ethdev libraries and pkg-config libdpdk
 #                            (CMake refuses to build the module without it)
 #   rdma-core,               the mlx5 PMD is *bifurcated*: it talks to the
-#   ibverbs-providers        ConnectX-5 through libibverbs/libmlx5 while the
+#   ibverbs-providers        ConnectX through libibverbs/libmlx5 while the
 #                            kernel mlx5_core driver keeps the netdev. No vfio
 #                            binding: the netdev, its IP, ARP and ping keep working.
 #   hugepages                mbuf pools (~200 MB at nports=4 with 4096 RX

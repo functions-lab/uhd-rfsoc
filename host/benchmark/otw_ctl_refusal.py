@@ -4,7 +4,7 @@ carry (Protocol §10)? Talks the control protocol directly (no UHD, no
 data plane): claim, set_channels N, set the rate with otw=sc16, then ask for
 fc32 on the RX and TX stream setups and on a rate request, and print each reply.
 
-    python3 benchmark/otw_ctl_refusal.py --addr <board-ip> --channels 2 --rate 1.2e9
+    python3 benchmark/otw_ctl_refusal.py --addr <board-ip> --channels 2 --rate 1.25e9
 """
 import argparse
 import socket

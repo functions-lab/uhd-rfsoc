@@ -17,6 +17,10 @@
 //       [--workers 1,3,5] [--main 2] [--nic 0[,6]] [--nic-gbps 12] [--spb 32]
 //       [--app-mb 0] [--ring-mb 512] [--tx-ring-mb (duplex TX; default --ring-mb)] [--secs 3]
 //   duplex: the TX side uses --tx-workers / --tx-main / --tx-nic (CPUs).
+//   CPUs: by default nothing is pinned (3 RX workers, 2 TX workers, one NIC
+//   thread per side). Pin every thread to its own physical core for numbers
+//   that mean something, e.g. on a 6-core / 12-thread host --workers 1,3,5
+//   --main 2 --nic 0 (duplex: --tx-workers 7,9 --tx-main 4 --tx-nic 6).
 //   --app-mb 0: the application buffers are reused (cache-resident, like
 //   benchmark_rate); > 0: they walk through a region of that size (an
 //   application that keeps the samples).
@@ -85,9 +89,10 @@ struct opts
     std::string dir = "rx", otw = "sc16", cpu = "sc16";
     size_t n = 16, spb = 32, ring_mb = 512, tx_ring_mb = 0, app_mb = 0;
     double nic_gbps = 12.0, secs = 3.0;
-    std::vector<int> workers{1, 3, 5}, tx_workers{7, 9};
-    int main_cpu = 2, tx_main = 4;
-    std::vector<int> nic_cpus{0}, tx_nic_cpus{6};
+    // -1 = not pinned (see the usage above)
+    std::vector<int> workers{-1, -1, -1}, tx_workers{-1, -1};
+    int main_cpu = -1, tx_main = -1;
+    std::vector<int> nic_cpus{-1}, tx_nic_cpus{-1};
 };
 
 // the NIC: streams DMA traffic over the ring at `gbps` (0 = as fast as it can),

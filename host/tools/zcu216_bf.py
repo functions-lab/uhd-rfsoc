@@ -33,12 +33,10 @@ and channels 1..N-1 their raw samples.
 --check verifies every read-back and exits non-zero on
 a mismatch. --capture NSAMPS (with --rx) receives all N channels and checks RX
 channel 0 against that formula bit for bit, with the weights and SHIFT read
-back from the tree:
-  * device arg pattern=1 (the emulator): x_0 is the section-5/9 pattern, so
-    every channel is known; channels 1..N-1 must be the raw pattern. (On the
-    FPGA the pattern is muxed in AFTER the beamformer: use real ADC data there.)
-  * real ADC data: x_0 is not observable, so w[0] must be 0 (e.g. --weights
-    "0,0 32767,0 ..."); the beam is then a function of channels 1..N-1 only.
+back from the tree, on real ADC data: x_0 is not observable while the beam is
+on, so w[0] must be 0 (e.g. --weights "0,0 32767,0 ..."); the beam is then a
+function of the delivered channels 1..N-1 only. (The section-5 test pattern
+is of no use here: the FPGA inserts it after the beamformer.)
 """
 import argparse
 import math
@@ -188,41 +186,24 @@ def main():
                  'shift reads %d' % shift)
 
     if a.capture:
-        pattern = 'pattern=1' in a.args.replace(' ', '')
         xi, xq = capture(usrp, n, a.capture)
         m = xi.shape[1]
         want(m == a.capture, 'captured %d of %d samples x %d channels' % (m, a.capture, n))
-        if m:
-            if pattern:
-                # section 9: channel c of the sample at tick T is I = (T + c) & 0xFFFF, Q = ~I;
-                # one tick per slot, so T advances by N per sample
-                t0 = (int(xi[1, 0]) - 1) & 0xFFFF
-                k = np.arange(m, dtype=np.int64)
-                pat_i = [s16((t0 + k * n + c) & 0xFFFF) for c in range(n)]
-                pat_q = [s16(~((t0 + k * n + c) & 0xFFFF) & 0xFFFF) for c in range(n)]
-                raw_ok = all(np.array_equal(xi[c], pat_i[c]) and np.array_equal(xq[c], pat_q[c])
-                             for c in range(1, n))
-                want(raw_ok, 'channels 1..%d are the raw pattern' % (n - 1))
-                x = (np.array(pat_i), np.array(pat_q))
-            else:
-                if weights[0] != (0, 0):
-                    print('real ADC data: x_0 is not observable, so the check needs w[0] = 0 (got %d,%d)'
-                          % weights[0])
-                    return 1
-                x = (xi.copy(), xq.copy())
-                x[0][0, :], x[1][0, :] = 0, 0
-            if enable:
-                yi, yq = beam(x, weights, shift)
-                bad = np.flatnonzero((yi != xi[0]) | (yq != xq[0]))
-                want(bad.size == 0, 'channel 0 == sat16((sum_c x_c w[c] + 2^(14+%d)) >> (15+%d)) for all %d '
-                     'samples%s' % (shift, shift, m, '' if bad.size == 0 else
-                                    ' -- %d differ, first at %d: got %d,%d want %d,%d' % (
-                                        bad.size, bad[0], xi[0, bad[0]], xq[0, bad[0]], yi[bad[0]], yq[bad[0]])))
-                sat = int(np.count_nonzero((np.abs(yi) >= 32767) | (np.abs(yq) >= 32767)))
-                print('      (%d of %d beam samples at the int16 limits)' % (sat, m))
-            elif pattern:
-                want(np.array_equal(xi[0], x[0][0]) and np.array_equal(xq[0], x[1][0]),
-                     'bypass: channel 0 is the raw pattern')
+        if m and enable:
+            if weights[0] != (0, 0):
+                print('x_0 is not observable while the beam is on, so the check needs w[0] = 0 (got %d,%d)'
+                      % weights[0])
+                return 1
+            x = (xi.copy(), xq.copy())
+            x[0][0, :], x[1][0, :] = 0, 0
+            yi, yq = beam(x, weights, shift)
+            bad = np.flatnonzero((yi != xi[0]) | (yq != xq[0]))
+            want(bad.size == 0, 'channel 0 == sat16((sum_c x_c w[c] + 2^(14+%d)) >> (15+%d)) for all %d '
+                 'samples%s' % (shift, shift, m, '' if bad.size == 0 else
+                                ' -- %d differ, first at %d: got %d,%d want %d,%d' % (
+                                    bad.size, bad[0], xi[0, bad[0]], xq[0, bad[0]], yi[bad[0]], yq[bad[0]])))
+            sat = int(np.count_nonzero((np.abs(yi) >= 32767) | (np.abs(yq) >= 32767)))
+            print('      (%d of %d beam samples at the int16 limits)' % (sat, m))
     if a.check or a.capture:
         print('RESULT:', 'PASS' if fails == 0 else 'FAIL')
     return 1 if fails else 0

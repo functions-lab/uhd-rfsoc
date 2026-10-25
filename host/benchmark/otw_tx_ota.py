@@ -16,7 +16,7 @@ mean amplitude (dBFS), amplitude and phase relative to the sc16/fc32 reference
 identical within noise; sc8 the same amplitude/phase within its quantisation,
 lower SNR (an int8 tone of amplitude 16 LSB: ~32 dB full-band SQNR).
 
-    zcu216-uhd python3 benchmark/otw_tx_ota.py --args type=zcu216,addr=<ip>,channels=4 --rate 600e6
+    zcu216-uhd python3 benchmark/otw_tx_ota.py --args type=zcu216,addr=<ip>,channels=4 --rate 625e6
 """
 import argparse
 import math
@@ -102,10 +102,9 @@ if not pairs:
 
 lead = 8192
 # The TX burst must fit in the FPGA's TX credit (2 MiB) with room to spare,
-# so it is wholly buffered before it plays: at 16 ch x 187.5 MS/s (97 % of
-# the link, an earlier fs 2250 build) the default 81920-sample burst is 5.2
-# MB of sc16 and had to stream in real time -- it underflowed. Keep it to 1 MiB of the widest
-# format used (fc32: 8 bytes per sample and channel).
+# so it is wholly buffered before it plays: a burst larger than the buffer
+# has to stream in real time and underflows near the link rate. Keep it to
+# 1 MiB of the widest format used (fc32: 8 bytes per sample and channel).
 wire_bytes = max(8 if o == "fc32" else {"sc16": 4, "sc12": 3, "sc8": 2}[o] for o, _ in pairs)
 cap = (1 << 20) // (n * wire_bytes) // 16 * 16
 if lead + a.nsamps + 8192 > cap:

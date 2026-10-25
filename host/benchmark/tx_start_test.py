@@ -6,7 +6,7 @@ once with an untimed start and once with a timed start (now + LEAD), and counts
 the async events (underflow, late, seq, burst ACK) of each. Run through the
 wrapper (DPDK needs root and the module):
 
-    zcu216-uhd python3 benchmark/tx_start_test.py --args type=zcu216,addr=<board-ip> --rate 1.2e9
+    zcu216-uhd python3 benchmark/tx_start_test.py --args type=zcu216,addr=<board-ip> --rate 1.25e9
 """
 import argparse
 import threading
@@ -17,7 +17,7 @@ import uhd
 
 ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
 ap.add_argument("--args", default="type=zcu216")
-ap.add_argument("--rate", type=float, default=1.2e9)
+ap.add_argument("--rate", type=float, default=1.25e9)
 ap.add_argument("--dur", type=float, default=2.0)
 ap.add_argument("--lead", type=float, default=0.05, help="timed start: seconds ahead of now")
 ap.add_argument("--otw", default="sc16")

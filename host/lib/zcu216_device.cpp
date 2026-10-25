@@ -484,7 +484,7 @@ zcu216_device::zcu216_device(const device_addr_t& args)
         for (const char* k : {"use_dpdk", "recv_buff_size", "send_buff_size"})
             if (args.has_key(k))
                 ZLOG_WARN("Device arg " << k << " is obsolete and ignored: DPDK is the only "
-                                               "sample transport (host/README.md)");
+                                               "sample transport (host/AGENTS.md)");
         if (_st->data_ip.compare(0, 4, "127.") == 0)
             throw uhd::value_error("ZCU216: data IP " + _st->data_ip
                                    + " is loopback, but samples travel over DPDK, which needs a "

@@ -6,9 +6,9 @@
 # benchmark_rate exits 0 on a stream that only timed out (no link: rx 0 %).
 #
 #   benchmark/bench_strict.sh <rx|tx|rxtx> <rate per channel> [nchan] [cpu] [otw]
-#   benchmark/bench_strict.sh rx 1.2e9                 # 1ch RX sc16 -> fc32 host
-#   benchmark/bench_strict.sh rx 300e6 8 sc16 sc16
-#   benchmark/bench_strict.sh tx 600e6 4 sc16 sc8
+#   benchmark/bench_strict.sh rx 1.25e9                # 1ch RX sc16 -> fc32 host
+#   benchmark/bench_strict.sh rx 312.5e6 8 sc16 sc16
+#   benchmark/bench_strict.sh tx 625e6 4 sc16 sc8
 #
 # Environment: ADDR (board LAN address) [discovery], DEV_ARGS (extra device args,
 # e.g. "otw=sc8" on an sc8-only build), DUR (10 s), LOG (/tmp/zcu216_bench).

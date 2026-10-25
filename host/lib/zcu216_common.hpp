@@ -23,7 +23,6 @@
 #define ZLOG_DEBUG(msg) UHD_LOG_DEBUG("ZCU216", msg)
 #define ZLOG_INFO(msg) UHD_LOG_INFO("ZCU216", msg)
 #define ZLOG_WARN(msg) UHD_LOG_WARNING("ZCU216", msg)
-#define ZLOG_ERROR(msg) UHD_LOG_ERROR("ZCU216", msg)
 
 namespace zcu216 {
 
@@ -40,7 +39,6 @@ constexpr size_t kDefaultSpp       = 2048;
 constexpr size_t kSampQuantum      = 16; // §4/§6/§9: FPGA works in 16-slot units
 constexpr size_t kBeatSamps        = 4;  // one 128-bit ADC beat (slots)
 constexpr size_t kTxMaxSpp         = 2048; // §6 (slots)
-constexpr size_t kSampsPerTxWord   = 16; // slots in one 64-byte TX buffer word
 constexpr size_t kMaxChans         = 16; // §9: N = 1, 2, 4, 8, 16
 constexpr size_t kHdrBytes         = 16; // 4-word header, §4/§6
 constexpr const char* kDiscRequest     = "ZCU216-DISC?";
@@ -82,10 +80,6 @@ public:
     std::string call(const std::string& line, double timeout_s = -1.0);
     std::vector<std::string> call_tokens(const std::string& line, double timeout_s = -1.0);
     double call_double(const std::string& line, double timeout_s = -1.0);
-    const std::string& host() const
-    {
-        return _host;
-    }
 
 private:
     std::string _read_line(const std::string& cmd, double timeout_s);
@@ -106,7 +100,6 @@ private:
     int _fd = -1;
     std::string _rx;
     double _timeout;
-    std::string _host;
     bool _broken = false;
 };
 
@@ -218,7 +211,7 @@ struct dev_state
         return tx_rate.at(ch)->load();
     }
     //! ticks per (per-channel) sample at the current rate: tick_rate / rate
-    //! (N for a multi-channel build, F/2 for the N = 1 rate variants)
+    //! (= N: one tick per slot on every build, Protocol §4/§9)
     uint64_t ticks_per_sample(double rate) const;
     //! ticks per wire slot: ticks_per_sample / N (1 for every N > 1 build)
     uint64_t ticks_per_slot(double rate) const
@@ -232,11 +225,6 @@ struct dev_state
     {
         const size_t b = beat_slots_info.load();
         return b ? b : (nchan > kBeatSamps ? nchan : kBeatSamps);
-    }
-    //! smallest per-channel sample count that fills whole 16-slot units
-    size_t samp_quantum() const
-    {
-        return nchan >= kSampQuantum ? 1 : kSampQuantum / nchan;
     }
 
     //! host-side data-plane endpoint: resolved once, shared by rx and tx
