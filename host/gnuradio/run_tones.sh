@@ -6,10 +6,11 @@
 #
 #   run_tones.sh normal 4                    # ZCU216 4T4R, 625 MS/s per channel
 #   run_tones.sh normal 4 --addr <board-ip> -f 950e6
+#   run_tones.sh normal 4 --tx-phases 0,90,180,-90 --tx-amps 0.25,0.25,0.25,0.25
 #   run_tones.sh rfsoc4x2 normal 2           # RFSoC 4x2 2T2R, 1250 MS/s per channel
 #   run_tones.sh rfsoc4x2 normal 1 -t 20e6   # tone 20 MHz above the RF centre (default 10 MHz)
-#   boards: zcu216 (default): normal (N = 1, 2, 4, 8, 16), sc8max (4, 8, 16);
-#           rfsoc4x2: normal (N = 1, 2), sc8max (2)
+#   boards: zcu216 (default): normal (N = 1, 2, 4, 8, 16);
+#           rfsoc4x2: normal (N = 1, 2)
 #
 # Needs the board daemon serving (it loads the matching bitstream itself) and
 # a display (run it from the PC's desktop session; sudo -E keeps DISPLAY).

@@ -1,11 +1,12 @@
 # GNU Radio flowgraphs for the ZCU216 and the RFSoC 4x2 (`type=zcu216`)
 
 One flowgraph per board and channel count, `grc/<board>_tones_<family>_<N>ch.grc`,
-at the build's maximum rate (the bandwidth): a timed tone burst on every TX
-channel (the same tone, `tone` = 10 MHz above the RF centre `freq` = 950 MHz;
-both are parameters: `-t` / `-f` on the command line) and a timed capture of
-every RX channel inside it, shown in a Qt time sink and a Qt frequency sink (a tab
-per group of 4 channels above 4).
+at the build's fastest sc16 rate (the bandwidth): a timed tone burst on every
+TX channel (the same tone, `tone` = 10 MHz above the RF centre `freq` = 950 MHz;
+both are parameters: `-t` / `-f` on the command line), each channel with its
+own phase and amplitude, and a timed capture of every RX channel inside it,
+shown in a Qt time sink and a Qt frequency sink (a tab per group of 4 channels
+above 4).
 
 ## Run it from GNU Radio Companion (on the PC, in its desktop session)
 
@@ -30,29 +31,40 @@ snippet that issues the timed RX command and fires each burst.
 | family | N | build | per-channel rate | wire |
 |---|---|---|---|---|
 | normal | 1 / 2 / 4 / 8 / 16 | `_f2_fs2500` / `_f2_fs2500` / `_f2_fs2500` / `_f4_fs2500` / `_f8_fs2500` | 1250 / 1250 / 625 / 312.5 / 156.25 MS/s | sc16 |
-| sc8max | 4 / 8 / 16 | `_f2_fs2500` / `_f4_fs2500` / `_f8_fs2500` | 1250 / 625 / 312.5 MS/s | sc8 |
 
-On the ZCU216 both families use the same template per channel count: `normal`
-runs it at its fastest sc16 rate, `sc8max` at its top rate, which only sc8
-fits on the link.
-
-RFSoC 4x2 (`grc/rfsoc4x2_tones_normal_{1,2}ch.grc`, `grc/rfsoc4x2_tones_sc8max_2ch.grc`;
-fs 5000: twice the ZCU216's per-channel rate at the same factor), run with
-`run_tones.sh rfsoc4x2 normal 1` / `... normal 2` / `... sc8max 2`. Their device args carry
+RFSoC 4x2 (`grc/rfsoc4x2_tones_normal_{1,2}ch.grc`; fs 5000: twice the
+ZCU216's per-channel rate at the same factor), run with
+`run_tones.sh rfsoc4x2 normal 1` / `... normal 2`. Their device args carry
 `type=rfsoc4x2` (the module finds only RFSoC 4x2 boards with it) and run with plain sudo, nothing ZCU216 in them:
 
 | family | N | build | per-channel rate | wire |
 |---|---|---|---|---|
 | normal | 1 / 2 | `rfsoc4x2_v49_1ch_qsfp_f2_fs5000` / `rfsoc4x2_v49_2ch_qsfp_f4_fs5000` | 2500 / 1250 MS/s | sc16 |
-| sc8max | 2 | `rfsoc4x2_v49_2ch_qsfp_f2_fs5000` | 2500 MS/s | sc8 |
 
-Each flowgraph opens at its family's maximum rate. Set `samp_rate` lower and
+Each flowgraph opens at its build's fastest sc16 rate. Set `samp_rate` lower and
 the daemon retunes the template to the highest rate at or below it
 (`../benchmark/oracle_builds.txt` lists them).
 
 With channels 0-3 cabled over the air as a 4T4R link, RX 0-3 show the tone
 (the sum of the four TX, at its own amplitude and phase per RX); channels not
 cabled show noise. Other peaks in the spectrum are over-the-air signals near the band.
+
+**TX phase and amplitude per channel** (every flowgraph): the tabs under the
+plots hold one slider per channel for the TX phase (-180..180 deg) and one for
+the TX amplitude (0..1 of full scale), movable while it runs; a change takes
+effect on the next burst. Their start values come from `--tx-phases` and
+`--tx-amps` (comma-separated, one value per channel; default 0 deg and 0.25):
+
+    host/gnuradio/run_tones.sh normal 4 --tx-phases 0,21.3,158.3,-55.8 --tx-amps 0.25,0.16,0.25,0.18
+
+The time plots show the real (solid) and imaginary (dashed) part of every RX
+channel in one figure, one colour per channel (up to 4 channels per figure;
+the 8- and 16-channel flowgraphs have one tab per group of 4), so the offsets
+between channels are visible. With DAC c cabled to ADC c, move the sliders
+until the traces show what you want (e.g. RX phases 90 deg apart, equal
+amplitudes): the TX setting that does it is the inverse of that loopback's own
+phase and gain, which stays the same across runs at the same carrier, tone and
+rate.
 
 Expected in the console: once at start, "start_of_burst inside a burst" and
 a few "cmd time errors" (gr-uhd's sink opens a timed burst when it starts,
