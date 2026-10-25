@@ -33,16 +33,16 @@
 #         The Vivado project (build/v49_qsfp/<name>_proj) is deleted once the
 #         bitstream is out unless V49_KEEP_PROJ=1 is in the environment.
 #
-# factor = RFDC converter factor, a v49_geometry row of rfsoc4x2_uhd_v49.tcl
-# (default: that N's first row); fs = converter sample rate in MS/s (default
-# 5000, the dual RF-ADC's maximum). The builds: normal family 1ch F2..40 and
-# 2ch F4..40, sc8max 2ch F2, all at fs 5000 (scripts/v49_ladder.sh); every one
-# is a run-time-rate template (Protocol §8), so 1ch F2 and 2ch F4
-# serve the whole normal family; the 245.76 MHz family (fs 4915.2) has one
-# template per channel count, 1ch F2 and 2ch F2. A build is named
-# ..._fs<fs> for fs != 2400. The design is the one whose LMX2594 reference
-# has a register file for fs in rfsoc/rfsoc_lib/xrfclk/RFSoC4x2/ (the board
-# needs the same file): LMX2594_250.0_<fs>.0.txt -> rfsoc4x2_uhd_v49 (5000),
+# factor = RFDC converter factor, a v49_geometry row of the design (default:
+# that N's first row, the template); fs = converter sample rate in MS/s
+# (default 5000, the dual RF-ADC's maximum). The builds: 1ch F2..40, 2ch
+# F4..40 and the sc8-only 2ch F2, all at fs 5000 (scripts/v49_ladder.sh,
+# host/benchmark/oracle_builds_rfsoc4x2.txt); every one is a run-time-rate
+# template (Protocol §8), so 1ch F2 and 2ch F4 serve every fs 5000 rate; the
+# 245.76 MHz family (fs 4915.2) has one template per channel count, 1ch F2
+# and 2ch F2. The design is the one whose LMX2594 reference has a register
+# file for fs in rfsoc/rfsoc_lib/xrfclk/RFSoC4x2/ (the board needs the same
+# file): LMX2594_250.0_<fs>.0.txt -> rfsoc4x2_uhd_v49 (5000),
 # LMX2594_245.76_<fs>.txt -> rfsoc4x2_uhd_v49_245m76 (4915.2).
 
 set scripts     [file dirname [file normalize [info script]]]
@@ -80,8 +80,7 @@ set design_name rfsoc4x2_v49_${V49_NCH}ch_qsfp
 set step        [expr {$argc > 1 ? [lindex $argv 1] : "bit"}]
 set jobs        [expr {$argc > 2 ? [lindex $argv 2] : 8}]
 set V49_FACTOR  [dict get [v49_geometry $V49_NCH [expr {$argc > 3 ? [lindex $argv 3] : ""}]] F]
-set variant     "_f$V49_FACTOR"
-if {$V49_FS != 2400.0} { append variant "_fs[string map {. p} [format %g $V49_FS]]" }
+set variant     "_f${V49_FACTOR}_fs[string map {. p} [format %g $V49_FS]]"
 set proj_name   ${design_name}${variant}_proj
 # V49_PROJ_TAG=<t>: a separate project (<name>_proj_<t>), so the same build can
 # run several implementation strategies at once; outputs keep the build's name
@@ -99,11 +98,11 @@ cd $outdir
 set_param board.repoPaths [list $board_dir/board_files]
 
 # The RTL top = BD wrapper + cmac_100g (neither cmac_usplus nor
-# gtwizard_ultrascale may sit in the block design, see rfsoc4x2_uhd_v49.tcl). Every
-# wrapper port passes through unchanged, except the CMAC-side ports the design
-# exports, which become nets on cmac_100g; the QSFP28 serial pins, the GT
-# refclk and the QSFP28 low-speed outputs (held constant) are new top ports,
-# named as in the design XDC.
+# gtwizard_ultrascale may sit in the block design: fpga_ip/ip_design/cmac_100g/AGENTS.md).
+# Every wrapper port passes through unchanged, except the CMAC-side ports the
+# design exports, which become nets on cmac_100g; the QSFP28 serial pins, the
+# GT refclk and the QSFP28 low-speed outputs (held constant) are new top
+# ports, named as in the design XDC.
 proc v49_gen_top {wrapper out} {
   set f [open $wrapper]; set src [read $f]; close $f
   if {![regexp {module\s+(\w+)\s*\(} $src -> wname]} { error "v49_gen_top: no module in $wrapper" }
@@ -174,9 +173,9 @@ proc v49_write_outputs {proj_name design_name variant} {
   file copy -force ./$proj_name/$proj_name.gen/sources_1/bd/$design_name/hw_handoff/${design_name}.hwh \
       ./$proj_name/bitstream/${design_name}${variant}.hwh
   # a timing-clean build's pair also lands in build/v49_qsfp/bitstreams (what
-  # rfsoc/push_bitstreams.sh copies); one that missed
-  # timing goes to bitstreams_timing_fail instead, so it can never replace a
-  # good one in the deploy set
+  # rfsoc/push_bitstreams.sh copies); one that missed timing goes to
+  # bitstreams_timing_fail instead, so it can never replace a good one in the
+  # deploy set
   set wns [get_property STATS.WNS [get_runs impl_1]]
   set whs [get_property STATS.WHS [get_runs impl_1]]
   set dest [expr {($wns >= 0 && $whs >= 0) ? "./bitstreams" : "./bitstreams_timing_fail"}]
@@ -197,17 +196,12 @@ proc v49_write_outputs {proj_name design_name variant} {
   }
 }
 
-if {$step eq "impl"} {
-  open_project ./$proj_name/$proj_name.xpr
-  if {[get_property STATUS [get_runs synth_1]] ne "synth_design Complete!"} {
-    launch_runs synth_1 -jobs $jobs
-    wait_on_run synth_1
-  }
-  # post-route phys_opt: closes the last tenths of a ns on the CMAC-side
-  # (322 MHz) paths placement leaves slightly short (4ch F=3: CMAC tready
-  # -> axis_pkt_arb output register, -0.2 ns)
-  # an implementation strategy from the environment (make v49 STRATEGY=...);
-  # set first: a strategy rewrites the step options below it
+# Implementation to a bitstream, then the outputs. An implementation strategy
+# from the environment (make v49 STRATEGY=..., v49_ladder.sh strategy_of) is
+# set first: a strategy rewrites the step options below it. Post-route
+# phys_opt closes the last tenths of a ns on the CMAC-side (322 MHz) paths
+# placement leaves slightly short.
+proc v49_implement {proj_name design_name variant jobs} {
   if {[info exists ::env(V49_IMPL_STRATEGY)] && $::env(V49_IMPL_STRATEGY) ne ""} {
     set_property strategy $::env(V49_IMPL_STRATEGY) [get_runs impl_1]
   }
@@ -216,6 +210,15 @@ if {$step eq "impl"} {
   wait_on_run impl_1
   open_run impl_1
   v49_write_outputs $proj_name $design_name $variant
+}
+
+if {$step eq "impl"} {
+  open_project ./$proj_name/$proj_name.xpr
+  if {[get_property STATUS [get_runs synth_1]] ne "synth_design Complete!"} {
+    launch_runs synth_1 -jobs $jobs
+    wait_on_run synth_1
+  }
+  v49_implement $proj_name $design_name $variant $jobs
   exit
 }
 
@@ -224,7 +227,7 @@ set_property BOARD_PART realdigital.org:rfsoc4x2:part0:1.0 [current_project]
 set_property target_language Verilog [current_project]
 # ip/uhd_ip: the data-plane cores (sources, testbenches, packaging in
 # ip_design/uhd_ip); the two I/Q joiners from ip/iprepo -- the design's only
-# other non-Xilinx IP (named singly: nothing else in ip/iprepo is used)
+# other non-Xilinx IP (each named singly)
 set_property ip_repo_paths [list $hwd/ip/uhd_ip $hwd/ip/iprepo/dual_rf_adc_iq_merger_1.0 \
                                  $hwd/ip/iprepo/dual_channel_rf_adc_iq_packer_1.0] [current_project]
 update_ip_catalog
@@ -255,16 +258,4 @@ if {$step eq "synth"} {
   wait_on_run synth_1
   exit
 }
-# post-route phys_opt: closes the last tenths of a ns on the CMAC-side
-# (322 MHz) paths placement leaves slightly short (4ch F=3: CMAC tready
-# -> axis_pkt_arb output register, -0.2 ns)
-# an implementation strategy from the environment (make v49 STRATEGY=...);
-# set first: a strategy rewrites the step options below it
-if {[info exists ::env(V49_IMPL_STRATEGY)] && $::env(V49_IMPL_STRATEGY) ne ""} {
-  set_property strategy $::env(V49_IMPL_STRATEGY) [get_runs impl_1]
-}
-set_property STEPS.POST_ROUTE_PHYS_OPT_DESIGN.IS_ENABLED true [get_runs impl_1]
-launch_runs impl_1 -to_step write_bitstream -jobs $jobs
-wait_on_run impl_1
-open_run impl_1
-v49_write_outputs $proj_name $design_name $variant
+v49_implement $proj_name $design_name $variant $jobs

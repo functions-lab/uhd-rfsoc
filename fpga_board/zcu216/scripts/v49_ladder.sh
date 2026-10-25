@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# v49_ladder.sh [STEP] -- build every v49 bitstream (`make v49-ladder`):
-# the 250 MHz clock family at fs 2500 (each channel count's template, the
-# highest rate that fits the link in some wire format, and every RFDC factor
-# below it, down to 40), then the 245.76 MHz family's templates (fs 2457.6). See
-# v49_geometry in block_designs/zcu216_uhd_v49/zcu216_uhd_v49.tcl and
-# block_designs/zcu216_uhd_v49_245m76/zcu216_uhd_v49_245m76.tcl for the tables;
+# v49_ladder.sh [STEP] -- build every v49 bitstream (`make v49-ladder`; with
+# ONLY=<regex>, `make v49-templates[-245m76]`): the 250 MHz clock family at
+# fs 2500 (each channel count's template, the highest rate that fits the link
+# in some wire format, and every RFDC factor below it, down to 40), then the
+# 245.76 MHz family's templates (fs 2457.6). See v49_geometry in
+# block_designs/<design>/<design>.tcl for the tables;
 # host/benchmark/oracle_builds.txt lists the same builds for the board tests.
 #
 #   STEP          bd | synth | bit (default bit; bd checks every block design fast)
@@ -32,13 +32,12 @@ for f in 10 12 16 20 24 40; do BUILDS+=("16:$f:2500"); done
 # 245.76 MHz clock family: one run-time-rate template per channel count
 BUILDS+=("1:2:2457.6" "2:2:2457.6" "4:2:2457.6" "8:4:2457.6" "16:8:2457.6")
 
-name_of() { local n=$1 f=$2 fs=$3; echo "zcu216_v49_${n}ch_qsfp_f${f}$([ "$fs" = 2400 ] || echo "_fs${fs/./p}")"; }
-# implementation strategy per build (default: Vivado's): 4ch F2 fs2500 runs its
-# fabric at 312.5 MHz, and with the default strategy the CMAC-side (322 MHz)
-# tready -> axis_pkt_arb paths missed by 0.28 ns; Performance_ExtraTimingOpt
-# closes them (+0.006 ns). The other 512-bit-beat templates (8ch F4 and 16ch F8
-# at 312.5 MHz, the 245.76 MHz family's 4, 8 and 16-channel ones at 307.2 MHz):
-# the same strategy from the start.
+name_of() { local n=$1 f=$2 fs=$3; echo "zcu216_v49_${n}ch_qsfp_f${f}_fs${fs/./p}"; }
+# implementation strategy per build (default: Vivado's). The 512-bit-beat
+# templates (4ch F2, 8ch F4, 16ch F8 of both families, fabric at 312.5 /
+# 307.2 MHz) miss timing by ~0.3 ns on the CMAC-side (322 MHz) tready ->
+# axis_pkt_arb paths with the default strategy; Performance_ExtraTimingOpt
+# closes them.
 strategy_of() { case $1 in zcu216_v49_4ch_qsfp_f2_fs2500|zcu216_v49_8ch_qsfp_f4_fs2500|\
                            zcu216_v49_16ch_qsfp_f8_fs2500|zcu216_v49_4ch_qsfp_f2_fs2457p6|\
                            zcu216_v49_8ch_qsfp_f4_fs2457p6|zcu216_v49_16ch_qsfp_f8_fs2457p6)

@@ -21,7 +21,7 @@
 #   ../../fpga_ip/ip/uhd_ip                         packaged cores (`make v49-package` first);
 #                                                   the only non-Xilinx IP the design uses
 #   ../../fpga_ip/ip_design/cmac_100g               CMAC + split-quad GT wrapper RTL
-# Output: build/v49_qsfp/bitstreams/zcu216_v49_<N>ch_qsfp_f<F>[_fs<fs>].{bit,hwh}
+# Output: build/v49_qsfp/bitstreams/zcu216_v49_<N>ch_qsfp_f<F>_fs<fs>.{bit,hwh}
 #         (fs with its decimal point as p: _fs2457p6)
 #         (the deploy set; a build that misses timing goes to
 #         bitstreams_timing_fail/), with its timing and utilization reports.
@@ -29,15 +29,14 @@
 #         bitstream is out -- the design is its .tcl/.xdc -- unless
 #         V49_KEEP_PROJ=1 is in the environment.
 #
-# factor = RFDC converter factor, a v49_geometry row of zcu216_uhd_v49.tcl
-# (default: that N's first row); fs = converter sample rate in MS/s (default
-# 2400). The builds (fs 2500 at every channel count, every factor from the
-# template's down to 40) are listed
-# in host/benchmark/oracle_builds.txt; `make v49-ladder` builds them.
-# A build at fs != 2400 is named ..._fs<fs>. The design is the one whose LMX2594
-# reference has a register file for fs in rfsoc/rfsoc_lib/xrfclk/ZCU216/ (the
-# board needs the same file): LMX2594_250.0_<fs>.0.txt -> zcu216_uhd_v49 (fs
-# 2400, 2500), LMX2594_245.76_<fs>.txt -> zcu216_uhd_v49_245m76 (2457.6).
+# factor = RFDC converter factor, a v49_geometry row of the design (default:
+# that N's first row, the template); fs = converter sample rate in MS/s
+# (default 2500). The builds (every factor from the template's down to 40,
+# at fs 2500) are listed in host/benchmark/oracle_builds.txt; `make
+# v49-ladder` builds them. The design is the one whose LMX2594 reference has
+# a register file for fs in rfsoc/rfsoc_lib/xrfclk/ZCU216/ (the board needs
+# the same file): LMX2594_250.0_<fs>.0.txt -> zcu216_uhd_v49 (2500),
+# LMX2594_245.76_<fs>.txt -> zcu216_uhd_v49_245m76 (2457.6).
 
 set scripts     [file dirname [file normalize [info script]]]
 set zcu216      [file normalize $scripts/..]
@@ -45,7 +44,7 @@ set hwd         [file normalize $zcu216/../../fpga_ip]
 if {$argc < 1} { error "usage: v49_build.tcl -tclargs <N> [bd|synth|bit|impl] [jobs] [factor] [fs]" }
 set V49_NCH     [lindex $argv 0]
 set outdir      $zcu216/build/v49_qsfp
-set V49_FS      [expr {$argc > 4 ? double([lindex $argv 4]) : 2400.0}]
+set V49_FS      [expr {$argc > 4 ? double([lindex $argv 4]) : 2500.0}]
 # the clock family of fs: the LMX2594 register file that makes it
 proc v49_bd_of_fs {fs xrfclk} {
   set hits {}
@@ -70,8 +69,7 @@ set design_name zcu216_v49_${V49_NCH}ch_qsfp
 set step        [expr {$argc > 1 ? [lindex $argv 1] : "bit"}]
 set jobs        [expr {$argc > 2 ? [lindex $argv 2] : 8}]
 set V49_FACTOR  [dict get [v49_geometry $V49_NCH [expr {$argc > 3 ? [lindex $argv 3] : ""}]] F]
-set variant     "_f$V49_FACTOR"
-if {$V49_FS != 2400.0} { append variant "_fs[string map {. p} [format %g $V49_FS]]" }
+set variant     "_f${V49_FACTOR}_fs[string map {. p} [format %g $V49_FS]]"
 set proj_name   ${design_name}${variant}_proj
 # V49_PROJ_TAG=<t>: a separate project (<name>_proj_<t>), so the same build can
 # run several implementation strategies at once; outputs keep the build's name
@@ -87,10 +85,10 @@ file mkdir $outdir
 cd $outdir
 
 # The RTL top = BD wrapper + cmac_100g (neither cmac_usplus nor
-# gtwizard_ultrascale may sit in the block design, see zcu216_uhd_v49.tcl). Every
-# wrapper port passes through unchanged, except the CMAC-side ports the design
-# exports, which become nets on cmac_100g; the zSFP28 serial pins and the GT
-# refclk are new top ports, named as in the design XDC.
+# gtwizard_ultrascale may sit in the block design: fpga_ip/ip_design/cmac_100g/AGENTS.md).
+# Every wrapper port passes through unchanged, except the CMAC-side ports the
+# design exports, which become nets on cmac_100g; the zSFP28 serial pins and
+# the GT refclk are new top ports, named as in the design XDC.
 proc v49_gen_top {wrapper out} {
   set f [open $wrapper]; set src [read $f]; close $f
   if {![regexp {module\s+(\w+)\s*\(} $src -> wname]} { error "v49_gen_top: no module in $wrapper" }
@@ -161,9 +159,9 @@ proc v49_write_outputs {proj_name design_name variant} {
   file copy -force ./$proj_name/$proj_name.gen/sources_1/bd/$design_name/hw_handoff/${design_name}.hwh \
       ./$proj_name/bitstream/${design_name}${variant}.hwh
   # a timing-clean build's pair also lands in build/v49_qsfp/bitstreams (what
-  # rfsoc/push_bitstreams.sh copies); one that missed
-  # timing goes to bitstreams_timing_fail instead, so it can never replace a
-  # good one in the deploy set
+  # rfsoc/push_bitstreams.sh copies); one that missed timing goes to
+  # bitstreams_timing_fail instead, so it can never replace a good one in the
+  # deploy set
   set wns [get_property STATS.WNS [get_runs impl_1]]
   set whs [get_property STATS.WHS [get_runs impl_1]]
   set dest [expr {($wns >= 0 && $whs >= 0) ? "./bitstreams" : "./bitstreams_timing_fail"}]
@@ -184,17 +182,12 @@ proc v49_write_outputs {proj_name design_name variant} {
   }
 }
 
-if {$step eq "impl"} {
-  open_project ./$proj_name/$proj_name.xpr
-  if {[get_property STATUS [get_runs synth_1]] ne "synth_design Complete!"} {
-    launch_runs synth_1 -jobs $jobs
-    wait_on_run synth_1
-  }
-  # post-route phys_opt: closes the last tenths of a ns on the CMAC-side
-  # (322 MHz) paths placement leaves slightly short (4ch F=3: CMAC tready
-  # -> axis_pkt_arb output register, -0.2 ns)
-  # an implementation strategy from the environment (make v49 STRATEGY=...);
-  # set first: a strategy rewrites the step options below it
+# Implementation to a bitstream, then the outputs. An implementation strategy
+# from the environment (make v49 STRATEGY=..., v49_ladder.sh strategy_of) is
+# set first: a strategy rewrites the step options below it. Post-route
+# phys_opt closes the last tenths of a ns on the CMAC-side (322 MHz) paths
+# placement leaves slightly short.
+proc v49_implement {proj_name design_name variant jobs} {
   if {[info exists ::env(V49_IMPL_STRATEGY)] && $::env(V49_IMPL_STRATEGY) ne ""} {
     set_property strategy $::env(V49_IMPL_STRATEGY) [get_runs impl_1]
   }
@@ -203,6 +196,15 @@ if {$step eq "impl"} {
   wait_on_run impl_1
   open_run impl_1
   v49_write_outputs $proj_name $design_name $variant
+}
+
+if {$step eq "impl"} {
+  open_project ./$proj_name/$proj_name.xpr
+  if {[get_property STATUS [get_runs synth_1]] ne "synth_design Complete!"} {
+    launch_runs synth_1 -jobs $jobs
+    wait_on_run synth_1
+  }
+  v49_implement $proj_name $design_name $variant $jobs
   exit
 }
 
@@ -240,16 +242,4 @@ if {$step eq "synth"} {
   wait_on_run synth_1
   exit
 }
-# post-route phys_opt: closes the last tenths of a ns on the CMAC-side
-# (322 MHz) paths placement leaves slightly short (4ch F=3: CMAC tready
-# -> axis_pkt_arb output register, -0.2 ns)
-# an implementation strategy from the environment (make v49 STRATEGY=...);
-# set first: a strategy rewrites the step options below it
-if {[info exists ::env(V49_IMPL_STRATEGY)] && $::env(V49_IMPL_STRATEGY) ne ""} {
-  set_property strategy $::env(V49_IMPL_STRATEGY) [get_runs impl_1]
-}
-set_property STEPS.POST_ROUTE_PHYS_OPT_DESIGN.IS_ENABLED true [get_runs impl_1]
-launch_runs impl_1 -to_step write_bitstream -jobs $jobs
-wait_on_run impl_1
-open_run impl_1
-v49_write_outputs $proj_name $design_name $variant
+v49_implement $proj_name $design_name $variant $jobs

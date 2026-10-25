@@ -24,7 +24,7 @@
 // 512 bits that is the "max rate" geometry, one 16-slot group per cycle --
 // and SPP is the format's maximum (as the daemon sets it), so the framer's
 // per-packet overhead does not limit the rate.
-// S_WIDTH 1024 (sc8max builds, sc8 only) always runs its own max-rate
+// S_WIDTH 1024 (the sc8-only wide beat no build uses) always runs its own max-rate
 // geometry: adc_clk 187.5 MHz, a 32-slot beat -> one sc8 wire word per cycle
 // (96 Gb/s), SPP the format's maximum; any other FMT must drop everything.
 module tb_udp_streamer #(parameter int TICK_STEP = 1, parameter int S_WIDTH = 128,

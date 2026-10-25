@@ -6,7 +6,8 @@
 //   s_axis  (adc_clk)   S_WIDTH-bit converter stream (128, 256, 512 or 1024), one
 //                       32-bit slot (complex int16, I low, Q high) per 32 bits,
 //                       slot 0 from bit 0. The RFDC ignores tready.
-//                       Forwarded unchanged on m_axis_adc (DDR capture path).
+//                       Forwarded unchanged on m_axis_adc (a pass-through
+//                       the v49 designs leave unconnected, tready tied to 1).
 //                       With N channels (Protocol §9) the block design has
 //                       already merged them into one beat, sample-major
 //                       (ch_interleave DIR=0): slot i = channel i%N, sample i/N.
@@ -71,22 +72,20 @@
 // fc32 at S_WIDTH = 512 would need two FIFO words per adc_clk cycle: it is not
 // supported. Every packet is then dropped at admission and counted in
 // OVERFLOWS (no frame is sent); the daemon refuses that combination.
-// S_WIDTH = 1024 (the sc8max builds, Protocol §9) carries sc8 ONLY: a beat
-// is 32 slots, the packer's group is the whole beat and the sc8 converter
-// turns it into exactly one wire word, so the FIFO takes one word per
-// adc_clk cycle (96 Gb/s at 187.5 MHz). sc16, sc12 and fc32 would need more
-// than one word per cycle; like fc32 at 512, their packets are all dropped at
-// admission and counted, and the daemon refuses them.
-// Time is a 64-bit count of ticks. The tick rate is fixed per build (UHD
-// tick_rate, 1.2 GHz; 960 MHz for N = 16) whatever the converter factor F
-// compiled into the block design; one slot is TICK_STEP ticks (single
-// channel: F/2, so F = 2, 4, 8 -> 1, 2, 4; multi-channel builds: 1, one tick
-// per slot, Protocol §9). A beat carries S_WIDTH/32 slots, so the
-// timekeeper advances by BEAT_TICKS = (S_WIDTH/32)*TICK_STEP per ADC beat and
-// slot k of a beat has timestamp now + k*TICK_STEP. Packet timestamps are
-// multiples of BEAT_TICKS. TIME_SET is aligned down to a multiple of
-// BEAT_TICKS, which assumes TICK_STEP is a power of two (it is for every
-// supported F). A 512-bit FIFO word is always 16 slots, so the 16-slot
+// S_WIDTH = 1024 (a beat the core supports; no v49 build has one, Protocol
+// §10) carries sc8 ONLY: a beat is 32 slots, the packer's group is the whole
+// beat and the sc8 converter turns it into exactly one wire word, so the FIFO
+// takes one word per adc_clk cycle (96 Gb/s at 187.5 MHz). sc16, sc12 and
+// fc32 would need more than one word per cycle; like fc32 at 512, their
+// packets are all dropped at admission and counted, and the daemon refuses
+// them.
+// Time is a 64-bit count of ticks; one slot is TICK_STEP ticks (1 on every
+// v49 build: tick_rate = N x the per-channel rate, Protocol §9). A beat
+// carries S_WIDTH/32 slots, so the timekeeper advances by BEAT_TICKS =
+// (S_WIDTH/32)*TICK_STEP per ADC beat and slot k of a beat has timestamp
+// now + k*TICK_STEP. Packet timestamps are multiples of BEAT_TICKS. TIME_SET
+// is aligned down to a multiple of BEAT_TICKS, which assumes TICK_STEP is a
+// power of two. A 512-bit FIFO word is always 16 slots, so the 16-slot
 // granularity of NUM_SAMPS and SPP does not depend on S_WIDTH.
 
 `timescale 1ns / 1ps
@@ -94,7 +93,7 @@
 
 module udp_streamer #(
     parameter integer DATA_FIFO_DEPTH = 1024,     // 512-bit words
-    parameter integer TICK_STEP       = 1,        // ticks per slot = F/2 (1 ch); power of 2
+    parameter integer TICK_STEP       = 1,        // ticks per slot (1 on every v49 build); power of 2
     parameter integer S_WIDTH         = 128       // s_axis / m_axis_adc width: 128, 256, 512 or 1024 (sc8 only)
 ) (
     // ---- ADC side
@@ -105,7 +104,7 @@ module udp_streamer #(
     input  wire [S_WIDTH-1:0] s_axis_tdata,
     input  wire         s_axis_tvalid,
     output wire         s_axis_tready,
-    // Pass-through of s_axis to the existing DDR capture path. The streamer
+    // Pass-through of s_axis (unused in the v49 designs). The streamer
     // observes every beat on tvalid alone: the RFDC ignores tready, so the
     // downstream ready is only forwarded, never acted on.
     output wire [S_WIDTH-1:0] m_axis_adc_tdata,

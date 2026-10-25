@@ -330,9 +330,8 @@ proc v49_geometry {nch {F ""}} {
   if {$row eq ""} { error "v49: $nch channels is built at factor [join $factors {, }] only, not $F" }
   lassign $row F dw
   set beat [expr {$nch * 16 * $dw}]
-  # 1024 bits: the sc8max 8ch F3 / 16ch F6 builds, sc8 only (udp_streamer /
-  # udp_player turn one 32-slot beat into one sc8 wire word per clock)
-  if {$beat != 128 && $beat != 256 && $beat != 512 && $beat != 1024} { error "v49: N=$nch Data_Width $dw gives a $beat-bit beat (128, 256, 512 or 1024)" }
+  # at most 512 bits: every wire format converts (Protocol §10)
+  if {$beat != 128 && $beat != 256 && $beat != 512} { error "v49: N=$nch Data_Width $dw gives a $beat-bit beat (128, 256 or 512)" }
   set fab [expr {$fs / $F / ($dw / 2)}]
   # 312.5 MHz: the fastest converter clock the v49 data path is timed at
   # (the templates here run at 307.2)
@@ -354,7 +353,7 @@ proc v49_tile_blocks {} {
 }
 
 # The clk_wiz solver only approximates some fabric frequencies of the rate
-# ladder (e.g. 2500/24 MHz -> 104.132, 2250/32 -> 70.286), and the converter
+# ladder (e.g. 2500/24 MHz -> 104.132), and the converter
 # AXIS clock must equal Fabric_Freq. An MMCM gets every ladder frequency
 # exactly from the 122.88 MHz input: VCO = 122.88 x M / D, f = VCO / O with M and
 # the CLKOUT0 divide O in 1/8 steps, VCO 800..1600 MHz, PFD >= 10 MHz. When
@@ -892,9 +891,10 @@ proc create_hier_cell_rfdc { parentCell nameHier nch } {
   # here, at creation (v49_apply_geometry). The creation geometry -- factor 2,
   # Data_Width 8, Fabric/Outclk fs/8 -- is a starting point:
   # v49_apply_geometry writes the build's factor and Data_Width.
-  set fs [expr {[info exists ::V49_FS] ? double($::V49_FS) : 2457.6}]
+  set fs [v49_fs]
   set fs_gsps [format %g [expr {$fs / 1000.0}]]
   set fs_mhz [format %.3f $fs]
+  # the creation clocks below were generated at fs 2400 and scale with fs
   set fs_k [expr {$fs / 2400.0}]
   set usp_rf_data_converter [ create_bd_cell -type ip -vlnv xilinx.com:ip:usp_rf_data_converter:2.5 usp_rf_data_converter ]
   set_property -dict [ list \

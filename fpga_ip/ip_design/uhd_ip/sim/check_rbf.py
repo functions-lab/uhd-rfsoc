@@ -25,7 +25,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, *[".."] * 4))
-sys.path.insert(0, REPO)
+sys.path.insert(0, os.path.join(REPO, "rfsoc"))   # rfsoc_lib (the daemon's library)
 
 NSETS = 9
 WDEF = 0x00007FFF

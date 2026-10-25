@@ -8,8 +8,8 @@
 # Extra NAME=value arguments are passed to synth_design as generics (e.g.
 # TX_BUF_WORDS=32768 for the 2 MiB TX buffer).
 #
-# Clocks: adc_clk at <adc_mhz> (300 for the 128/256-bit builds and for the
-# 512-bit max-rate builds, one 16-slot group per cycle), tx_clk = CMAC user clock 322.265625 MHz,
+# Clocks: adc_clk at <adc_mhz> (312.5 at the templates: a 128, 256 or
+# 512-bit beat per cycle), tx_clk = CMAC user clock 322.265625 MHz,
 # s_axi_aclk 100 MHz, all mutually asynchronous (every crossing is an XPM CDC
 # primitive or async FIFO, which carry their own constraints). The I/O ports
 # are left unconstrained: this checks the register-to-register paths inside

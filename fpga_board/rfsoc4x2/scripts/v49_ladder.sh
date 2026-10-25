@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# v49_ladder.sh [STEP] (RFSoC 4x2) -- build every v49 bitstream (`make v49-ladder`):
-# the normal family (the max-rate factor of each channel count and every RFDC
-# factor below it, down to 40) and the sc8max 2ch build, all at fs 5000, then
-# the 245.76 MHz clock family's templates (fs 4915.2). See v49_geometry in
-# block_designs/rfsoc4x2_uhd_v49/rfsoc4x2_uhd_v49.tcl and
-# block_designs/rfsoc4x2_uhd_v49_245m76/rfsoc4x2_uhd_v49_245m76.tcl for the tables;
+# v49_ladder.sh [STEP] (RFSoC 4x2) -- build every v49 bitstream (`make
+# v49-ladder`; with ONLY=<regex>, `make v49-templates[-245m76]`): the 250 MHz
+# clock family at fs 5000 (the sc16 top factor of each channel count, 1ch F2
+# / 2ch F4, every RFDC factor below it down to 40, and the sc8-only 2ch F2),
+# then the 245.76 MHz family's templates (fs 4915.2). See v49_geometry in
+# block_designs/<design>/<design>.tcl for the tables;
 # host/benchmark/oracle_builds_rfsoc4x2.txt lists the same builds for the board tests.
 #
 #   STEP          bd | synth | bit (default bit; bd checks every block design fast)
@@ -23,25 +23,20 @@ STEP=${1:-bit}
 MAXPAR=${MAXPAR:-3}; MIN_FREE_GB=${MIN_FREE_GB:-12}; JOBS=${JOBS:-8}
 OUT=build/v49_qsfp; LOGS=$OUT/logs; mkdir -p "$LOGS"
 
-# N:F:fs -- the max-rate builds of both families first, then the rest of the
-# normal family's ladder (v49_geometry in block_designs/rfsoc4x2_uhd_v49/rfsoc4x2_uhd_v49.tcl)
+# N:F:fs -- the templates and the sc8-only 2ch F2 first, then the rest of the
+# fs 5000 ladder
 BUILDS=("1:2:5000" "2:4:5000" "2:2:5000")
 for f in 3 4 5 6 8 10 12 16 20 24 40; do BUILDS+=("1:$f:5000"); done
 for f in 5 6 8 10 12 16 20 24 40; do BUILDS+=("2:$f:5000"); done
 # 245.76 MHz clock family: one run-time-rate template per channel count
 BUILDS+=("1:2:4915.2" "2:2:4915.2")
 
-name_of() { local n=$1 f=$2 fs=$3; echo "rfsoc4x2_v49_${n}ch_qsfp_f${f}$([ "$fs" = 2400 ] || echo "_fs${fs/./p}")"; }
-# implementation strategy per build (default: Vivado's). These missed timing by
-# 0.02-0.24 ns with the default on this part (xczu48dr), each on a
-# routing-dominated path in the CMAC 322 MHz domain (udp_player /
-# axis_pkt_arb), and closed with Performance_ExtraTimingOpt -- except 2ch F16,
-# still -0.164 with it, which closed with Performance_Explore (+0.051, 3 runs;
-# NetDelay_high +0.034, SpreadLogic_high -0.278). The 1ch F2 template (QSFP28
-# on quad 128) missed by 0.036 ns the same way (udp_player, txoutclk) and
-# closed with Performance_ExtraTimingOpt (+0.013; Performance_Explore +0.014),
-# and so did the 2ch F2 sc8max (-0.046 -> +0.012). The 245.76 MHz family's
-# two templates (307.2 MHz) get it from the start.
+name_of() { local n=$1 f=$2 fs=$3; echo "rfsoc4x2_v49_${n}ch_qsfp_f${f}_fs${fs/./p}"; }
+# implementation strategy per build (default: Vivado's). On this part
+# (xczu48dr) these builds miss timing by 0.02-0.24 ns with the default
+# strategy, each on a routing-dominated path in the CMAC 322 MHz domain
+# (udp_player / axis_pkt_arb); Performance_ExtraTimingOpt closes them, except
+# 2ch F16, which needs Performance_Explore.
 strategy_of() {
     case $1 in
         rfsoc4x2_v49_1ch_qsfp_f2_fs4915p2|rfsoc4x2_v49_2ch_qsfp_f2_fs4915p2|\

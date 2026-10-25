@@ -9,7 +9,8 @@
 //                        inside a frame, tuser on the tlast beat = bad FCS.
 //   m_axis_ctl (tx_clk)  512-bit ARP replies and status packets, to be merged
 //                        with udp_streamer's frames by axis_pkt_arb.
-//   s_axis_dma (adc_clk) existing DMA DAC stream, passed through when dac_src=0.
+//   s_axis_dma (adc_clk) alternative DAC stream, passed through when dac_src=0
+//                        (the v49 designs tie its tvalid to 0: silence).
 //   m_axis_dac (adc_clk) M_WIDTH-bit (128, 256, 512 or 1024) converter stream, one
 //                        32-bit slot (complex int16, I low, Q high) per 32
 //                        bits, slot 0 from bit 0 (= sc16 LE wire order). With
@@ -54,7 +55,7 @@
 //
 // Register map (byte offsets):
 //   0x00 ID           RO  0x5A503031 'ZP01'
-//   0x04 CTRL         RW  [0] enable [1] dac_src (0 DMA pass-through, 1 player)
+//   0x04 CTRL         RW  [0] enable [1] dac_src (0 s_axis_dma pass-through, 1 player)
 //                         [2] clear stats (self-clearing)
 //                         [3] flush TX buffer (strobe; consumed stays monotonic,
 //                             see below)
@@ -103,9 +104,8 @@
 // baseline instead of assuming it restarts at 0.
 //
 // Time is udp_streamer's tick: the timestamp of slot 0 of the ADC beat in
-// the same adc_clk cycle. One slot is TICK_STEP ticks (F/2 for converter
-// factor F on a single-channel build, 1 on a multi-channel build; must equal
-// udp_streamer's TICK_STEP), one beat is BEAT_TICKS = (M_WIDTH/32)*TICK_STEP
+// the same adc_clk cycle. One slot is TICK_STEP ticks (1 on every v49 build;
+// must equal udp_streamer's TICK_STEP), one beat is BEAT_TICKS = (M_WIDTH/32)*TICK_STEP
 // ticks. A DAC beat presented on m_axis_dac in the cycle where adc_time == T
 // carries the slots of ticks T, T+TICK_STEP, .., T+BEAT_TICKS-TICK_STEP; a
 // timed burst starts on the beat with T <= TSF < T + BEAT_TICKS. A 512-bit
@@ -127,7 +127,8 @@
 // adc_clk cycle (4.8 GS/s at 300 MHz) plays without a bubble while the
 // crossing carries only 1/2 (sc8) or 3/4 (sc12) of a word per cycle. fc32
 // halves the stream before the crossing instead.
-// M_WIDTH = 1024 (the sc8max builds, Protocol §9) plays sc8 ONLY: one sc8
+// M_WIDTH = 1024 (a beat the core supports; no v49 build has one, Protocol
+// §10) plays sc8 ONLY: one sc8
 // word (32 slots) expands into one whole 1024-bit DAC beat, so the crossing
 // FIFO delivers one word per adc_clk cycle (96 Gb/s at 187.5 MHz). sc16, sc12
 // and fc32 would need more than a word per cycle: with any of them the
@@ -165,7 +166,7 @@ module udp_player #(
     parameter integer CHAIN_STAGES    = 0,      // deep play-out buffer: block-RAM FIFOs in series
     parameter integer CHAIN_DEPTH     = 4096,   // words per stage (power of 2, >= 64)
     parameter integer URAM_RD_LATENCY = 4,      // raised to 5 when TX_BUF_WORDS > 16384
-    parameter integer TICK_STEP       = 1,      // ticks per slot = F/2 (1 ch) (= udp_streamer's)
+    parameter integer TICK_STEP       = 1,      // ticks per slot (= udp_streamer's; 1 on every v49 build)
     parameter integer M_WIDTH         = 128     // m_axis_dac / s_axis_dma width: 128, 256, 512 or 1024 (sc8 only)
 ) (
     // ---- CMAC side (tx_clk = gt_txusrclk2; the CMAC RX AXIS is on it too)
@@ -437,7 +438,7 @@ module udp_player #(
     // XPM async FIFO must see its reset while both of its clocks run, so every
     // FIFO here is held in reset until BOTH tx_aresetn and adc_aresetn have
     // released (each crossed to the other domain with xpm_cdc_async_rst). The
-    // DMA pass-through (dac_src=0) is pure adc_clk logic and needs no tx_clk.
+    // The s_axis_dma pass-through (dac_src=0) is pure adc_clk logic and needs no tx_clk.
     wire tx_rstn_d, adc_rstn_t;
     xpm_cdc_async_rst #(.DEST_SYNC_FF(4), .RST_ACTIVE_HIGH(0))
     u_txrst (.src_arst(tx_aresetn), .dest_clk(adc_clk), .dest_arst(tx_rstn_d));

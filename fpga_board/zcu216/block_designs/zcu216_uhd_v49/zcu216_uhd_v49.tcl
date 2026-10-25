@@ -15,7 +15,7 @@
 #   V49_NCH          channel count N: 1, 2, 4, 8 or 16 (required)
 #   V49_FACTOR       RFDC converter factor F, a v49_geometry row of N
 #                    (default: N's first row)
-#   V49_FS           converter sample rate fs, MS/s (default 2400)
+#   V49_FS           converter sample rate fs, MS/s (default 2500)
 #   V49_DEFINE_ONLY  1: define the v49_* procs and return without building
 # The block design is named zcu216_v49_<N>ch_qsfp.
 #
@@ -292,18 +292,18 @@ proc v49_eth100g_slaves {nch} {
 # 1250 MS/s at 1 and 2 channels, 625 / 312.5 / 156.25 MS/s at 4 / 8 / 16
 # (2.5 GS/s, 80 Gb/s, 81 % of the link). The table below holds one
 # {F Data_Width} row per factor; v49_build.tcl names a build
-# zcu216_v49_<N>ch_qsfp_f<F>[_fs<fs>] (_fs for fs != 2400) and needs
-# LMX2594_250.0_<fs>.0.txt on the board for its fs.
+# zcu216_v49_<N>ch_qsfp_f<F>_fs<fs> and needs LMX2594_250.0_<fs>.0.txt on
+# the board for its fs.
 #
 # TICK_STEP 1 on every build: one tick is one 32-bit slot time, tick_rate =
 # N x per-channel rate (udp_streamer aligns times to whole beats with a mask,
 # so TICK_STEP must be a power of two; the old 1-channel rule F/2 would
 # exclude factors 6 10 12 20 24 40).
 # The converter sample rate fs (MS/s, ADC = DAC, every tile): V49_FS, set by
-# scripts/v49_build.tcl, 2400 by default. Each design Tcl writes it into its
+# scripts/v49_build.tcl, 2500 by default. Each design Tcl writes it into its
 # rfdc creation dict.
 proc v49_fs {} {
-  expr {[info exists ::V49_FS] ? double($::V49_FS) : 2400.0}
+  expr {[info exists ::V49_FS] ? double($::V49_FS) : 2500.0}
 }
 
 proc v49_geometry {nch {F ""}} {
@@ -883,14 +883,15 @@ proc create_hier_cell_rfdc { parentCell nameHier nch } {
   create_bd_cell -type ip -vlnv xilinx.com:ip:axis_register_slice:1.1 axis_register_slice_1
 
   # Create instance: usp_rf_data_converter, and set properties
-  # Every tile at fs = V49_FS (default 2400 MS/s) with its PLL bypassed:
+  # Every tile at fs = V49_FS (default 2500 MS/s) with its PLL bypassed:
   # Sampling_Rate and Refclk_Freq = fs (the LMX2594 output). fs must be right
   # here, at creation (v49_apply_geometry). The creation geometry -- factor 2,
   # Data_Width 8, Fabric/Outclk fs/8 -- is a starting point:
   # v49_apply_geometry writes the build's factor and Data_Width.
-  set fs [expr {[info exists ::V49_FS] ? double($::V49_FS) : 2400.0}]
+  set fs [v49_fs]
   set fs_gsps [format %g [expr {$fs / 1000.0}]]
   set fs_mhz [format %.3f $fs]
+  # the creation clocks below were generated at fs 2400 and scale with fs
   set fs_k [expr {$fs / 2400.0}]
   set usp_rf_data_converter [ create_bd_cell -type ip -vlnv xilinx.com:ip:usp_rf_data_converter:2.5 usp_rf_data_converter ]
   set_property -dict [ list \

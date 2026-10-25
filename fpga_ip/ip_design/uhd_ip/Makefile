@@ -5,11 +5,11 @@
 #   src/            the RTL (Verilog-2001, XPM macros); register maps in the headers
 #   sim/            xsim testbenches + Python checkers (wire format: the Protocol, top AGENTS.md)
 #   package_ip.tcl  -> ../../ip/uhd_ip/<core>_1.0 (user.org:uhd:<core>:1.0), the IP
-#                   repo the v49 block designs import (zcu216_uhd_v49.tcl, rfsoc4x2_uhd_v49.tcl)
+#                   repo the v49 block designs (fpga_board/<board>/block_designs) import
 #   ooc_timing.tcl  out-of-context synth + place + route timing check
 #
-# After any change under src/: make sim sim-fmt && make package, and commit
-# src/ together with ../../ip/uhd_ip.
+# After any change under src/: the matching sims (`make all` runs every one),
+# then `make package`; commit src/ together with ../../ip/uhd_ip.
 # Vivado 2021.1: the one on PATH, else Xilinx's default install location
 VIVADO_ROOT ?= $(or $(patsubst %/bin/vivado,%,$(realpath $(shell command -v vivado 2>/dev/null))),/tools/Xilinx/Vivado/2021.1)
 VIVADO      := $(VIVADO_ROOT)/bin/vivado
@@ -30,17 +30,19 @@ sim-fmt:
 	VIVADO_ROOT=$(VIVADO_ROOT) FMTS="0 1 2 3" TICK_STEPS=1 sim/run_sim.sh
 	VIVADO_ROOT=$(VIVADO_ROOT) FMTS="0 1 2 3" TICK_STEPS=1 sim/run_sim_player.sh
 
-# max-rate geometry: 512-bit beats at 300 MHz (a 16-slot group per cycle,
-# 4.8 GS/s): sc8 / sc12 must neither overflow nor underflow; sc16 there is
-# beyond the 100G link (drops allowed). Plus the 2 MiB TX buffer.
+# max-rate geometry: 512-bit beats with a 16-slot group per cycle (the
+# templates' top rates, 5 GS/s): sc8 / sc12 must neither overflow nor
+# underflow; sc16 there is beyond the 100G link (drops allowed). Plus the
+# 2 MiB TX buffer.
 sim-max:
 	VIVADO_ROOT=$(VIVADO_ROOT) FAST=1 WIDTHS=512 TICK_STEPS=1 FMTS="1 2 0" sim/run_sim.sh
 	VIVADO_ROOT=$(VIVADO_ROOT) FAST=1 WIDTHS=512 TICK_STEPS=1 FMTS="1 2" sim/run_sim_player.sh
 	VIVADO_ROOT=$(VIVADO_ROOT) FAST=1 TXBW=32768 WIDTHS=512 TICK_STEPS=1 FMTS=1 sim/run_sim_player.sh
 
-# sc8max geometry: 1024-bit beats at 187.5 MHz (one sc8 wire word per cycle,
-# 6 GS/s, 96 Gb/s), sc8 only: sc8 must neither overflow nor underflow; the
-# streamer must drop (and count) every packet of the other formats.
+# the cores' 1024-bit beat (Protocol §10; no v49 build has one): 187.5 MHz,
+# one sc8 wire word per cycle (6 GS/s, 96 Gb/s), sc8 only: sc8 must neither
+# overflow nor underflow; the streamer must drop (and count) every packet of
+# the other formats.
 sim-wide:
 	VIVADO_ROOT=$(VIVADO_ROOT) WIDTHS=1024 TICK_STEPS=1 FMTS="1 0 2 3" sim/run_sim.sh
 	VIVADO_ROOT=$(VIVADO_ROOT) WIDTHS=1024 TICK_STEPS=1 FMTS=1 sim/run_sim_player.sh
@@ -63,12 +65,11 @@ sim-rbf:
 package:
 	$(VIVADO) -mode batch -nojournal -nolog -notrace -source package_ip.tcl
 
-# the deployed converter geometries, all at the 300 MHz worst case (128, 256
-# and 512-bit beats); the player with the 2 MiB (32768-word) TX buffer;
-# tx_clk 322.27 MHz
-OOC_CFGS := udp_streamer:128:300 udp_streamer:256:300 udp_streamer:512:300 \
-            udp_player:128:300 udp_player:256:300 udp_player:512:300 \
-            udp_streamer:1024:187.5 udp_player:1024:187.5
+# the deployed converter geometries (128, 256 and 512-bit beats), all at the
+# templates' 312.5 MHz converter clock; the player with the 2 MiB
+# (32768-word) TX buffer; tx_clk 322.27 MHz
+OOC_CFGS := udp_streamer:128:312.5 udp_streamer:256:312.5 udp_streamer:512:312.5 \
+            udp_player:128:312.5 udp_player:256:312.5 udp_player:512:312.5
 ooc:
 	mkdir -p ooc
 	cd ooc && for c in $(OOC_CFGS); do \

@@ -322,7 +322,8 @@ proc v49_geometry {nch {F ""}} {
   if {$row eq ""} { error "v49 (RFSoC4x2): $nch channels is built at factor [join $factors {, }] only, not $F" }
   lassign $row F S
   set beat [expr {$nch * 32 * $S}]
-  if {$beat != 128 && $beat != 256 && $beat != 512 && $beat != 1024} { error "v49: N=$nch S=$S gives a $beat-bit beat" }
+  # at most 512 bits: every wire format converts (Protocol §10)
+  if {$beat != 128 && $beat != 256 && $beat != 512} { error "v49: N=$nch S=$S gives a $beat-bit beat (128, 256 or 512)" }
   set fab [expr {$fs / $F / $S}]
   if {$fab > 312.5} { error "v49: N=$nch F=$F S=$S at $fs MS/s needs a $fab MHz fabric (max 312.5)" }
   set pipe [expr {$fab > 150.0 ? 1 : 0}]

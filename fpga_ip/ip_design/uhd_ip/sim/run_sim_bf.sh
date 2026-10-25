@@ -17,11 +17,11 @@ XPM=$VIVADO_ROOT/data/ip/xpm
 IP=${BF_IP_HDL:-$PWD/../src}
 HERE=$PWD
 
-# N:BEAT_W:aclk period (ps) -- zcu216_uhd_v49.tcl v49_geometry rows with N >= 2
-# (1024: the sc8max 8ch F3 / 16ch F6 builds at 187.5 MHz)
-COMBOS=${COMBOS:-"2:128:3333 2:256:3333 4:128:3333 4:256:3333 4:512:3333 \
-8:256:6667 8:256:3333 8:512:3333 16:512:16667 16:512:6667 16:512:3333 \
-8:1024:5333 16:1024:5333"}
+# N:BEAT_W:aclk period (ps) -- the v49_geometry rows with N >= 2 of both
+# boards (2:256, 4:512, 8:512, 16:512, 2:512) and the other (N, BEAT_W)
+# pairs the core accepts
+COMBOS=${COMBOS:-"2:128:3333 2:256:3333 2:512:3333 4:128:3333 4:256:3333 4:512:3333 \
+8:256:6667 8:256:3333 8:512:3333 16:512:16667 16:512:6667 16:512:3333"}
 
 fail=0
 for P in ${PIPES:-0 1}; do

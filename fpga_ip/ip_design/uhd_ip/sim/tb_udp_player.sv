@@ -48,7 +48,7 @@
 
 // FAST = 1 (xelab -generic_top): adc_clk at 300 MHz whatever M_WIDTH -- at
 // 512 bits that is the "max rate" geometry, one 16-slot group per cycle.
-// M_WIDTH 1024 (sc8max builds, sc8 only: run it with FMT 1) always runs its
+// M_WIDTH 1024 (the sc8-only wide beat no build uses: run it with FMT 1) always runs its
 // own max-rate geometry: adc_clk 187.5 MHz, one sc8 wire word per cycle.
 // TXBW (xelab -generic_top): TX_BUF_WORDS (default 256); above 256 the
 // metadata FIFO grows to 4096 and the overflow phase fills the buffer with
