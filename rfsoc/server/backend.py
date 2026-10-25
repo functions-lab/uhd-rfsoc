@@ -1,11 +1,12 @@
-"""Device backends of the ZCU216 UHD daemon.
+"""The device interface of the ZCU216 UHD daemon.
 
-`Backend` is the interface the control protocol (protocol.py) drives; its
+`Backend` is what the control protocol (protocol.py) drives; its
 implementation is `HwBackend` (hw_backend.py), the real board: pynq overlay,
-RfdcTask bring-up, eth100g streamer + CMAC. It follows the FPGA semantics (Protocol §4 "Granularity", §9, §10):
-spp is a whole number of 64-byte words of the OTW format (16 sc16, 32 sc8, 64
-sc12, 8 fc32 slots) and of N, num_done bursts are rounded UP to that granule,
-a timed start begins at the fabric beat containing the requested time.
+RfdcTask bring-up, eth100g streamer + CMAC. It follows the FPGA semantics
+(Protocol §4 "Granularity", §9, §10): spp is a whole number of 64-byte words
+of the OTW format (16 sc16, 32 sc8, 64 sc12, 8 fc32 slots) and of N,
+num_done bursts are rounded UP to that granule, a timed start begins at the
+fabric beat containing the requested time.
 
 Channels (§9): every build streams N channels (N = 1, 2, 4, 8, 16) as ONE
 stream of interleaved 32-bit slots; channel c is RFDC tile c // 4, block c % 4.
@@ -14,18 +15,19 @@ N is a block-design property, so each N is its own set of bitstreams, and
 sc16-max build). Every build has its own tick rate = aggregate slot rate x
 TICK_STEP (§8, §9), and the N >= 2 builds a TX and an RX beamformer (§11)
 whose state the Backend keeps across reloads.
+
+The base class holds the parts that need no hardware: rate selection, the
+NCO plan of a tune request (§3b), the beamformer state machine (§11), the
+sensor helpers. tests/test_protocol.py runs the protocol against a Backend
+with the hardware methods stubbed.
 """
 from __future__ import annotations
 
-import collections
 import glob
 import logging
 import math
 import os
-import socket
 import sys
-import threading
-import time
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Tuple
 
@@ -37,25 +39,14 @@ log = logging.getLogger("zcu216.backend")
 
 STREAM_MODES = ("start_cont", "stop_cont", "num_done", "num_more")
 
-# Converter capabilities common to both backends (ZU49DR, Gen3 RFDC).
+# Gen3 RFDC (ZU49DR / ZU48DR) converter capabilities
 DSA_MAX_DB, DSA_STEP_DB = 27.0, 1.0          # Gen3 production silicon DSA
 VOP_MIN_UA, VOP_MAX_UA = 2250, 40500         # Gen3 DAC VOP current range
 NCO_BITS = 48
-# The v49 build matrix: fpga_board/zcu216/block_designs/zcu216_uhd_v49/zcu216_uhd_v49.tcl
-# `v49_geometry`, N -> ((converter factor F, RFDC Data_Width), ...),
-# the unsuffixed bitstream (zcu216_v49_<N>ch_qsfp.bit) first, the others
-# zcu216_v49_<N>ch_qsfp_f<F>.bit. Every build samples at 2400 MS/s, so the
-# per-channel rate is 2400/F MS/s and one fabric beat is N x Data_Width/2
-# slots. HwBackend reads all of this from each .hwh; the table is what the
-# software device emulates and the fallback for a .hwh without the cores.
-V49_GEOMETRY = {
-    1: ((2, 8), (4, 8), (8, 8)),
-    2: ((4, 4), (2, 8)),
-    4: ((8, 2), (4, 4), (2, 8)),
-    8: ((16, 2), (8, 2), (4, 4)),
-    16: ((40, 2), (16, 2), (8, 2)),
-}
-MAX_CHANNELS = 16          # 4 tiles x 4 blocks
+# udp_streamer / udp_player TICK_STEP of every build (Protocol §8): one
+# timekeeper tick per 32-bit slot. HwBackend reads the real value from each
+# .hwh; this is the value for a .hwh without the cores.
+TICK_STEP = 1
 # udp_player FC_INTERVAL: an async flow-control update at least every 512
 # consumed 64-byte words (32 KiB) while a burst plays. Small against the
 # 2 MiB buffer (32752 words of credit), so the host's credit is never stale by
@@ -74,23 +65,6 @@ def default_fc_interval(tx_buf_words: int) -> int:
     if not tx_buf_words:
         return 0
     return min(DEFAULT_FC_INTERVAL, max(1, int(tx_buf_words) // 8))
-
-
-def v49_tick_step(nch: int, factor: int) -> int:  # noqa: ARG001 -- kept for callers
-    """Ticks per slot that v49_geometry compiles into udp_streamer/udp_player
-    (TICK_STEP): 1 on every build (tick_rate = the aggregate slot rate,
-    N x per-channel rate). Builds before the rate ladder had F/2 at one
-    channel; HwBackend takes the real value from each .hwh, this is only the
-    fallback."""
-    return 1
-
-
-def v49_data_width(nch: int, factor: int) -> int:
-    """RFDC Data_Width of the v49 build (N, F), or 0 if there is none."""
-    for f, dw in V49_GEOMETRY.get(int(nch), ()):
-        if f == int(factor):
-            return dw
-    return 0
 
 
 def link_problem(fmt: str, nch: int, rate: float, beat_bits: int = 0,
@@ -116,11 +90,6 @@ def link_problem(fmt: str, nch: int, rate: float, beat_bits: int = 0,
         return ("otw=fc32: RX fc32 is not supported on a 512-bit-beat build "
                 "(udp_streamer would need two FIFO words per clock)")
     return None
-
-
-def link_formats(nch: int, rate: float) -> List[str]:
-    """§10 formats whose aggregate wire rate fits 100GbE at `rate`."""
-    return [f for f in vrt.OTW_FORMATS if link_problem(f, nch, rate, direction="tx") is None]
 
 
 def default_rate(nch: int, rates: List[float]) -> float:
@@ -176,15 +145,12 @@ def steering_weights(nch: int, angle_deg: float, carrier_freq: float,
 
 
 # --------------------------------------------------------------------------
-# Helpers shared by both backends
+# Converter arithmetic
 # --------------------------------------------------------------------------
 
-def nco_resolution(fs_hz: float) -> float:
-    return fs_hz / float(1 << NCO_BITS)
-
-
 def coerce_nco(freq_hz: float, fs_hz: float) -> float:
-    step = nco_resolution(fs_hz)
+    """`freq_hz` on the 48-bit NCO grid of a converter at `fs_hz`."""
+    step = fs_hz / float(1 << NCO_BITS)
     return round(freq_hz / step) * step
 
 
@@ -211,11 +177,6 @@ def ticks_per_sample(tick_rate: float, rate: float) -> int:
         raise ValueError(f"rate {rate:.17g} is not tick_rate {tick_rate:.17g} / "
                          f"an integer (ticks per sample {r})")
     return n
-
-
-def channel_slice(c: int) -> Tuple[int, int]:
-    """UHD channel c -> RFDC (tile, block): tile c // 4, block c % 4 (§9)."""
-    return (int(c) // 4, int(c) % 4)
 
 
 def coerce_rate(rates: List[float], hz: float) -> float:
@@ -278,10 +239,11 @@ class Backend(ABC):
 
     fpga_name: str = "none"
     num_channels: int = 1         # N: channels in the loaded build (§9)
-    adc_rate: float = 2.4e9
-    dac_rate: float = 2.4e9
+    adc_rate: float = 2.5e9
+    dac_rate: float = 2.5e9
     rx_decim: int = 2
     tx_interp: int = 2
+    data_width: int = 8           # RFDC Data_Width (HwBackend: the build's)
 
     @property
     def num_rx(self) -> int:
@@ -295,7 +257,7 @@ class Backend(ABC):
     def tick_step(self) -> int:
         """Timekeeper ticks per 32-bit slot of the LOADED build (udp_streamer
         TICK_STEP; HwBackend reads it from the .hwh)."""
-        return v49_tick_step(self.num_channels, self.rx_decim)
+        return TICK_STEP
 
     @property
     def tick_rate(self) -> float:
@@ -334,11 +296,10 @@ class Backend(ABC):
 
     @property
     def beat_slots(self) -> int:
-        """Slots per converter fabric beat: N x Data_Width/2 (v49_geometry;
-        128 bit = 4 slots on the 1200/600/300 MS/s 1ch, 2ch F4, 4ch F8 builds,
-        up to 512 bit = 16 slots)."""
-        dw = v49_data_width(self.num_channels, self.rx_decim)
-        return self.num_channels * dw // 2 if dw else max(vrt.BEAT, self.num_channels)
+        """Slots per converter fabric beat: N x Data_Width/2 (128 bit = 4
+        slots on the 1ch builds, up to 512 bit = 16 slots; HwBackend: the
+        loaded build's)."""
+        return self.num_channels * self.data_width // 2
 
     @property
     def beat_bits(self) -> int:
@@ -348,12 +309,8 @@ class Backend(ABC):
         """What the build of the CURRENT channel count at `rate` (one of
         available_rates()) would give: tick_rate, beat_bits, bf / rbf (has a
         TX / RX beamformer). Used to vet a rate change before the reload."""
-        f = int(round(self.adc_rate / float(rate)))
-        dw = v49_data_width(self.num_channels, f)
-        beat = 32 * (self.num_channels * dw // 2 if dw else max(vrt.BEAT, self.num_channels))
-        return {"tick_rate": self.num_channels * float(rate) * v49_tick_step(self.num_channels, f),
-                "beat_bits": beat, "bf": self.num_channels > 1,
-                "rbf": self.num_channels > 1 and getattr(self, "rx_bf", True)}
+        return {"tick_rate": self.num_channels * float(rate) * self.tick_step,
+                "beat_bits": self.beat_bits, "bf": self.has_bf, "rbf": self.has_rbf}
 
     def default_rate(self, n: Optional[int] = None) -> float:
         """The per-channel rate set_channels(n) loads (sc16-max build)."""

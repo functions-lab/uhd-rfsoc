@@ -1,23 +1,21 @@
+"""The board's LMK04828 + LMX2594 clock chain: which TICS register files a
+build needs (clock_plan, no board access) and writing them through PYNQ's
+xrfclk (program_clocks, on the board)."""
 import os
 import re
 import logging
 # xrfclk (PYNQ) is imported where the chips are written: it needs $BOARD and
 # the board's I2C/SPI, and clock_plan() is used without either (the daemon's
 # bitstream scan, off the board)
-from abc import ABC, abstractmethod
 
 
-class ExternalClkConfig(ABC):
+class ExternalClkConfig:
     def __init__(self, chip, freq_in, freq_out):
         self.chip = chip
         self.freq_in, self.freq_out = freq_in, freq_out
         self.file = None
         self.loc = None
         self.reg = None
-
-    @abstractmethod
-    def find_matching_file(self, config_dir):
-        pass
 
     def read_registers(self):
         if not self.loc:
@@ -43,9 +41,15 @@ class ExternalClkConfig(ABC):
         for device in devices:
             write_func(self.reg, device)
 
-    @abstractmethod
     def to_dict(self):
-        pass
+        return {
+            'file': self.file,
+            'loc': self.loc,
+            'chip': self.chip,
+            'freq_in': self.freq_in,
+            'freq_out': self.freq_out,
+            'reg': self.reg
+        }
 
 
 class LMK04828ClkConfig(ExternalClkConfig):
@@ -54,50 +58,13 @@ class LMK04828ClkConfig(ExternalClkConfig):
         self.mts_pl_clk_freq = mts_pl_clk_freq
         self.mts_pl_sysref_freq = mts_pl_sysref_freq
 
-    def find_matching_file(self, config_dir):
-        expected_filename = f"{self.chip}_{self.freq_in}_{self.freq_out}_{self.mts_pl_clk_freq}_{self.mts_pl_sysref_freq}.txt"
-        for filename in os.listdir(config_dir):
-            if filename == expected_filename:
-                self.file = filename
-                self.loc = os.path.join(config_dir, filename)
-                return True
-        return False
-
     def to_dict(self):
-        return {
-            'file': self.file,
-            'loc': self.loc,
-            'chip': self.chip,
-            'freq_in': self.freq_in,
-            'freq_out': self.freq_out,
-            'mts_pl_clk_freq': self.mts_pl_clk_freq,
-            'mts_pl_sysref_freq': self.mts_pl_sysref_freq,
-            'reg': self.reg
-        }
+        return dict(super().to_dict(), mts_pl_clk_freq=self.mts_pl_clk_freq,
+                    mts_pl_sysref_freq=self.mts_pl_sysref_freq)
 
 
 class LMX2594ClkConfig(ExternalClkConfig):
-    def __init__(self, chip, freq_in, freq_out):
-        super().__init__(chip, freq_in, freq_out)
-
-    def find_matching_file(self, config_dir):
-        expected_filename = f"{self.chip}_{self.freq_in}_{self.freq_out}.txt"
-        for filename in os.listdir(config_dir):
-            if filename == expected_filename:
-                self.file = filename
-                self.loc = os.path.join(config_dir, filename)
-                return True
-        return False
-
-    def to_dict(self):
-        return {
-            'file': self.file,
-            'loc': self.loc,
-            'chip': self.chip,
-            'freq_in': self.freq_in,
-            'freq_out': self.freq_out,
-            'reg': self.reg
-        }
+    pass
 
 
 _LMK_RE = re.compile(r"LMK04828_([0-9.]+)_([0-9.]+)_([0-9.]+)_([0-9.]+)\.txt")
@@ -164,37 +131,5 @@ def program_clocks(lmk_config, lmx_config):
     lmx_config.read_registers()
     lmk_config.program_clock()
     lmx_config.program_clock()
-    return lmk_config.to_dict(), lmx_config.to_dict()
-
-
-def find_and_program_clocks(lmk_config, lmx_config, config_dir):
-    """
-    Find matching configuration files and program the clocks.
-
-    :param lmk_config: LMK04828ClkConfig object
-    :param lmx_config: LMX2594ClkConfig object
-    :param config_dir: Directory containing clock configuration files
-    :return: Dictionary containing updated LMK and LMX configurations
-    """
-    # Ensure LMK and LMX devices are known
-    if not xrfclk.lmk_devices and not xrfclk.lmx_devices:
-        xrfclk.xrfclk._find_devices()
-
-    # Find matching files
-    if not lmk_config.find_matching_file(config_dir):
-        raise FileNotFoundError(
-            "Could not find matching LMK configuration file.")
-    if not lmx_config.find_matching_file(config_dir):
-        raise FileNotFoundError(
-            "Could not find matching LMX configuration file.")
-
-    # Read registers
-    lmk_config.read_registers()
-    lmx_config.read_registers()
-
-    # Program clocks
-    lmk_config.program_clock()
-    lmx_config.program_clock()
-
-    # Return configurations as a dictionary
+    logging.info(f"clocks programmed: {lmk_config.file} + {lmx_config.file}")
     return lmk_config.to_dict(), lmx_config.to_dict()

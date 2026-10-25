@@ -86,7 +86,6 @@ from __future__ import annotations
 
 import ctypes
 import fcntl
-import glob
 import os
 import re
 import time
@@ -146,20 +145,6 @@ class PageWriteRequired(RuntimeError):
 # --------------------------------------------------------------------------
 # sysfs (no bus access)
 # --------------------------------------------------------------------------
-def list_i2c() -> Dict[str, object]:
-    """Adapters and bound client devices, from sysfs only (no bus access)."""
-    adapters, clients = {}, {}
-    for d in sorted(glob.glob("/sys/bus/i2c/devices/*")):
-        base = os.path.basename(d)
-        try:
-            with open(os.path.join(d, "name")) as f:
-                name = f.read().strip()
-        except OSError:
-            name = "?"
-        (adapters if base.startswith("i2c-") else clients)[base] = name
-    return {"adapters": adapters, "clients": clients}
-
-
 def find_bus(mux: str = MUX_DEVICE, channel: int = MUX_CHANNEL) -> int:
     """/dev/i2c-N of the kernel's muxed adapter for `mux` channel `channel`."""
     link = f"/sys/bus/i2c/devices/{mux}/channel-{channel}"
@@ -169,12 +154,6 @@ def find_bus(mux: str = MUX_DEVICE, channel: int = MUX_CHANNEL) -> int:
         raise FileNotFoundError(f"{link} does not resolve to an i2c adapter "
                                 f"(pca954x driver not bound?)")
     return int(m.group(1))
-
-
-def find_8a34001() -> List[str]:
-    """Bound kernel devices that look like the ClockMatrix (sysfs only)."""
-    return [f"{dev} {name}" for dev, name in list_i2c()["clients"].items()
-            if any(s in name.lower() for s in ("8a3400", "idt", "clockmatrix", "rsmu"))]
 
 
 # --------------------------------------------------------------------------
@@ -420,17 +399,6 @@ def read_status(bus: Optional[int] = None, addr: int = I2C_ADDR,
     finally:
         if own:
             dev.close()
-
-
-def report() -> Dict[str, object]:
-    """sysfs view plus a read-only status (no bus writes)."""
-    out: Dict[str, object] = {"cmac_refclk_choices_mhz": CMAC_REFCLK_CHOICES_MHZ,
-                              "bound_8a34001": find_8a34001()}
-    try:
-        out["status"] = read_status()
-    except Exception as e:  # noqa: BLE001 - report, don't raise
-        out["status"] = f"unavailable: {e!r}"
-    return out
 
 
 # --------------------------------------------------------------------------

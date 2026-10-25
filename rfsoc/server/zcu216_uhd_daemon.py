@@ -33,13 +33,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
-import vrt  # noqa: E402
 from protocol import (ControlCore, DISC_REQUEST, MAX_LINE, Session)  # noqa: E402
 
 log = logging.getLogger("zcu216.daemon")
 
-# the default build of each board: boards.BOARDS[...].default_bitstream
-# (ZCU216: zcu216_v49_1ch_qsfp_f2_fs2500.bit, 1 channel at 1250 MS/s)
 # Linux <netinet/in.h>; Python's socket module does not always export it
 IP_PKTINFO = getattr(socket, "IP_PKTINFO", 8)
 
@@ -362,8 +359,12 @@ def main(argv=None) -> int:
         log.error("%s", e)
         return 2
     log.info("board %s", board.name)
+    from hw_backend import SetupError
     try:
         be = make_backend(args, board)
+    except SetupError as e:
+        log.error("not serving: %s", e)
+        return 2
     except Exception:
         log.exception("backend bring-up failed; not serving")
         return 1

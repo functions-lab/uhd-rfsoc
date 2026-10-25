@@ -8,7 +8,9 @@
 # Enable it (systemctl enable) only on a board dedicated to the daemon: starting
 # it downloads the default bitstream and re-runs the RFDC/clock bring-up.
 # The FPGA data IP/MAC and the name come from zcu216_uhd.conf in the working
-# directory (see zcu216_uhd.conf.example); no address is set here.
+# directory (rfsoc/setup_board.sh creates it); no address is set here. The
+# WorkingDirectory below is the checkout location rfsoc/README.md uses:
+# change it if the board's clone is elsewhere.
 [Unit]
 Description=rfsoc-uhd: RFSoC UHD device daemon (zcu216_uhd_daemon.py)
 After=network-online.target

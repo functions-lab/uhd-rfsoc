@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Step-by-step 100G link bring-up of zcu216_v49_1ch_qsfp, printing everything.
+"""Step-by-step 100G link bring-up of a v49 build, printing everything.
 
-Run ON THE BOARD as root in the PYNQ venv. Modes:
+Run ON THE BOARD as root in the PYNQ venv (the daemon runs the same steps;
+this is for debugging the link by hand). Modes:
 
   --status        read and decode only (no writes): CMAC ctl/status, clock
                   meters, streamer/player registers, 8A34001 status. Refuses
-                  unless PYNQ says zcu216_v49_1ch_qsfp is the loaded bitstream
+                  unless PYNQ says a <board>_v49_<N>ch_qsfp build is loaded
                   (reading an unmapped AXI address can hang the PS).
   --link-only     bitstream already loaded: skip overlay + RFDC, do steps b-f.
   (default)       a) load overlay + RFDC bring-up (hw_backend, the RfdcTask
@@ -28,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import re
 import sys
@@ -40,6 +42,7 @@ if HERE not in sys.path:
 
 import eth100g as E  # noqa: E402
 import vrt  # noqa: E402
+from boards import BOARDS, DEFAULT_BOARD  # noqa: E402
 
 
 def _gt_refclk():
@@ -52,7 +55,7 @@ def _gt_refclk():
     from rfsoc_lib import gt_refclk
     return gt_refclk
 
-BITSTREAM_NAME = "zcu216_v49_1ch_qsfp"
+
 Printer = Callable[[str], None]
 
 
@@ -245,7 +248,9 @@ def main(argv=None) -> int:
                     help="bitstream already loaded: skip overlay + RFDC")
     ap.add_argument("--force", action="store_true",
                     help="skip the loaded-bitstream check (--status/--link-only)")
-    ap.add_argument("--bitstream", default=os.path.join(HERE, BITSTREAM_NAME + ".bit"))
+    ap.add_argument("--bitstream",
+                    default=os.path.join(HERE, BOARDS[DEFAULT_BOARD].default_bitstream),
+                    help="the build to load [%(default)s]")
     ap.add_argument("--no-load", action="store_true",
                     help="attach to the loaded bitstream (still runs RFDC bring-up)")
     ap.add_argument("--allow-unlocked", action="store_true")
@@ -264,6 +269,7 @@ def main(argv=None) -> int:
     s.add_argument("--spp", type=int, default=2048)
     s.add_argument("--seconds", type=float, default=10.0)
     args = ap.parse_args(argv)
+    logging.basicConfig(level=logging.INFO)     # rfsoc_lib's bring-up log
     pr = lambda m: print(m, flush=True)  # noqa: E731
     if not args.status:
         import board_config
@@ -278,9 +284,9 @@ def main(argv=None) -> int:
     if args.status or args.link_only:
         bit = loaded_bitstream()
         pr(f"loaded bitstream (PYNQ): {bit or '<none>'}")
-        if not re.search(r"zcu216_v49_[0-9]+ch_qsfp", bit or "") and not args.force:
-            pr(f"refusing: no zcu216_v49_<N>ch_qsfp build is loaded (--force to override; "
-               f"an unmapped AXI read can hang the board)")
+        if not re.search(r"_v49_[0-9]+ch_qsfp", bit or "") and not args.force:
+            pr("refusing: no <board>_v49_<N>ch_qsfp build is loaded (--force to override; "
+               "an unmapped AXI read can hang the board)")
             return 2
         eth = E.Eth100G(None)          # fallback addresses; constructor only reads
         if args.status:

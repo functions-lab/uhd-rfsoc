@@ -1,24 +1,30 @@
+"""The RFDC configuration dict rfdc.py and rfdc_task.py read.
+
+ZCU216_CONFIG is the module-global configuration on every board (the daemon
+copies the other board's clock limits into it, then its NEW_CONFIG: the
+geometry compiled into the loaded bitstream). The keys:
+
+    RefClockForPLL          MHz the LMX2594 makes for the tiles (= fs, PLLs bypassed)
+    MTSPLClockFreq          MHz the LMK04828 gives the MTS clocking wizard (300 or 122.88)
+    DACSampleRate, ADCSampleRate        MS/s
+    DACInterpolationRate, ADCInterpolationRate   the factor (the ADC's is its DECIMATION)
+    DACNCO, ADCNCO          MHz (ADC NCO <= 0: real -> I/Q convention)
+    DACNyquistZone, ADCNyquistZone, InvSincFIR
+    RefClock*Min / *Max     the converters' clock limits (ZCU216_MIN_MAX_CONFIG,
+                            RFSOC4X2_MIN_MAX_CONFIG)
+"""
 import re
-
-
-def merge_dict(dict1, dict2):
-    dict2.update(dict1)
-    return dict2
 
 
 class RfdcConfig(dict):
     """The board config dict, readable in both key styles.
 
-    Two styles meet here. The flat one (DACSampleRate, DACNCO,
-    DACInterpolationRate, ...) is what NEW_CONFIG dicts (the daemon's
-    bring-up) set. The per-tile/per-block one (DACSampleRate<t>,
-    DACNCO<t><b>, DACInterpFactor<t><b>, ADCDecimFactor<t><b>) addresses one
-    converter tile or block. A
-    per-tile/per-block key that was never set reads its flat counterpart, so
-    code in either style sees one configuration.
-
-    LOGGER (the shared TxtLogger) is created on first use, so importing the
-    config does not create a wave_files directory.
+    The flat style (DACSampleRate, DACNCO, DACInterpolationRate, ...) is what
+    the daemon's NEW_CONFIG sets. The per-tile / per-block style
+    (DACSampleRate<t>, DACNCO<t><b>, DACInterpFactor<t><b>,
+    ADCDecimFactor<t><b>) addresses one converter tile or block; a key of
+    that style that was never set reads its flat counterpart, so code in
+    either style sees one configuration.
     """
 
     _FALLBACK = (
@@ -29,10 +35,6 @@ class RfdcConfig(dict):
     )
 
     def __missing__(self, key):
-        if key == "LOGGER":
-            from rfsoc_lib.txt_logger import TxtLogger
-            self["LOGGER"] = TxtLogger(log_dir="wave_files")
-            return self["LOGGER"]
         if isinstance(key, str):
             for pat, flat in self._FALLBACK:
                 m = pat.match(key)
@@ -41,6 +43,8 @@ class RfdcConfig(dict):
         raise KeyError(key)
 
 
+# Gen3 RFDC clock limits (MHz): the tile PLL's reference range, and the
+# converter rate when the PLL is bypassed and the tile samples its reference
 ZCU216_MIN_MAX_CONFIG = {
     "RefClockForPLLMin": 102.40625,
     "RefClockForPLLMax": 615.0,
@@ -50,36 +54,11 @@ ZCU216_MIN_MAX_CONFIG = {
     "RefClockNoPLLAdcMax": 2500.0
 }
 
-ZCU216_DEMO3_CONFIG = {
-    "RefClockForPLL": 500.0,
-    "DACSampleRate": 4000.0,
-    "DACInterpolationRate": 4,
-    "DACNCO": 1000,
-    "ADCSampleRate": 2000.0,
-    "ADCInterpolationRate": 2,
-    "ADCNCO": -1000
-}
+# RFSoC 4x2 (ZU48DR): dual-tile RF-ADCs sample at up to 5 GS/s, so a bypassed
+# ADC tile takes up to 5000 MHz (the quad-tile ZU49DR's limit is 2500)
+RFSOC4X2_MIN_MAX_CONFIG = dict(ZCU216_MIN_MAX_CONFIG, RefClockNoPLLAdcMax=5000.0)
 
-ZCU216_DEMO2_CONFIG = {
-    "RefClockForPLL": 500.0,
-    "DACSampleRate": 5000.0,
-    "DACInterpolationRate": 20,
-    "DACNCO": 425,
-    "ADCSampleRate": 2500.0,
-    "ADCInterpolationRate": 10,
-    "ADCNCO": -425
-}
-
-ZCU216_DEMO1_CONFIG = {
-    "RefClockForPLL": 500.0,
-    "DACSampleRate": 4000.0,
-    "DACInterpolationRate": 40,
-    "DACNCO": 350,
-    "ADCSampleRate": 2000.0,
-    "ADCInterpolationRate": 20,
-    "ADCNCO": -350
-}
-
+# placeholders until the daemon writes the loaded build's geometry
 ZCU216_DEFAULT_CONFIG = {
     "RefClockForPLL": 500.0,
     "DACSampleRate": 2000.0,
@@ -93,73 +72,4 @@ ZCU216_DEFAULT_CONFIG = {
     "ADCNyquistZone": 1
 }
 
-GLOBAL_VAR = {
-    "CONFIG_NAME": "default_config",
-    "BB_GAIN": 1.0  # Baseband gain
-}
-
-EXP_CONFIG = {
-    "QAM": "16QAM",
-    "OFDM_ATTEN_DB": 0,
-    "UsrpNameIfAny": "X310_322A005",
-    "UsrpRx": "RFA_RX2",
-    "ExternalAtten": 0.0,
-    "UseSplitter": False,
-    "SplitterType": "1-to-2",
-    "BalunMode": "BALH0006",
-    "BalunMin": 0.2,
-    "BalunMax": 60,
-}
-
-ZCU216_CONFIG = merge_dict(ZCU216_MIN_MAX_CONFIG, ZCU216_DEFAULT_CONFIG)
-ZCU216_CONFIG = merge_dict(ZCU216_CONFIG, GLOBAL_VAR)
-ZCU216_CONFIG = RfdcConfig(merge_dict(ZCU216_CONFIG, EXP_CONFIG))
-
-# RFSoC4x2 has 2 DAC tiles (228, 230) and 2 ADC tiles (224, 226) physically
-# wired to SMA. Sample-rate / NCO defaults mirror ZCU216 — override per design.
-RFSOC4X2_MIN_MAX_CONFIG = {
-    "RefClockForPLLMin": 102.40625,
-    "RefClockForPLLMax": 615.0,
-    "RefClockNoPLLDacMin": 500.0,
-    "RefClockNoPLLDacMax": 10000.0,
-    "RefClockNoPLLAdcMin": 500.0,
-    # dual-tile RF-ADC (ZU48DR): 5 GS/s, so a bypassed tile takes up to
-    # 5000 MHz (the quad-tile ZU49DR's limit is 2500)
-    "RefClockNoPLLAdcMax": 5000.0,
-}
-
-RFSOC4X2_DEFAULT_CONFIG = {
-    "RefClockForPLL": 500.0,
-    "DACSampleRate": 2000.0,
-    "DACInterpolationRate": 2,
-    "DACNCO": 0,
-    "DACNyquistZone": 1,
-    "InvSincFIR": 1,
-    "ADCSampleRate": 2000.0,
-    "ADCInterpolationRate": 2,
-    "ADCNCO": -0,
-    "ADCNyquistZone": 1,
-}
-
-RFSOC4X2_CONFIG = merge_dict(RFSOC4X2_MIN_MAX_CONFIG, RFSOC4X2_DEFAULT_CONFIG)
-RFSOC4X2_CONFIG = merge_dict(RFSOC4X2_CONFIG, GLOBAL_VAR)
-RFSOC4X2_CONFIG = RfdcConfig(merge_dict(RFSOC4X2_CONFIG, EXP_CONFIG))
-
-
-BOARD_CONFIGS = {
-    "ZCU216": ZCU216_CONFIG,
-    "RFSoC4x2": RFSOC4X2_CONFIG,
-}
-
-
-def get_board_config(board: str) -> dict:
-    """Return the RFDC config dict for the named board.
-
-    Raises KeyError if the board is unsupported.
-    """
-    try:
-        return BOARD_CONFIGS[board]
-    except KeyError:
-        raise KeyError(
-            f"Unsupported board '{board}'. Choose from: {list(BOARD_CONFIGS)}"
-        )
+ZCU216_CONFIG = RfdcConfig({**ZCU216_DEFAULT_CONFIG, **ZCU216_MIN_MAX_CONFIG})

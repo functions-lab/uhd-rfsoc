@@ -34,7 +34,8 @@ set_rx_rate/set_tx_rate (within one N) retune the loaded template in place
 (`_retune_to`) or reload another bitstream, and set_channels (that N's
 sc16-max build) reloads; a reload redoes the WHOLE bring-up above
 (`_switch_to`).
-The DAC is always fed by the UDP player (the DRAM/DMA path is gone).
+The DAC is always fed by the UDP player (udp_player's other input is tied
+idle in every build).
 
 The same daemon serves the RFSoC 4x2 (rfsoc4x2_v49_<N>ch_qsfp*, N = 1, 2;
 dual RF-ADC tiles, channel map in boards.py). Everything board-specific -- the
@@ -55,11 +56,10 @@ import xml.etree.ElementTree as ET
 from typing import Dict, List, Optional, Tuple
 
 from backend import (Backend, BackendError, default_fc_interval, DSA_MAX_DB,
-                     DSA_STEP_DB, bool_sensor,
+                     DSA_STEP_DB, TICK_STEP, bool_sensor,
                      coerce_nco, default_rate, find_lib_root, gain_for_vop_ua,
                      link_problem,
-                     nyquist_plan, read_sysmon_temp, v49_tick_step,
-                     vop_ua_for_gain)
+                     nyquist_plan, read_sysmon_temp, vop_ua_for_gain)
 from boards import Board, board_of_bitstream, get_board
 from rx_beamformer import RxBeamformer, default_shift
 from tx_beamformer import TxBeamformer
@@ -69,6 +69,11 @@ log = logging.getLogger("zcu216.hw")
 
 PLL_LOCKED = 2            # XRFDC_PLL_LOCKED; 1 = XRFDC_PLL_UNLOCKED
 TILE_STATE_DONE = 15
+
+
+class SetupError(RuntimeError):
+    """The board is missing a one-time setup step (rfsoc/setup_board.sh):
+    reported as one line, not a traceback."""
 
 
 # --------------------------------------------------------------------------
@@ -218,10 +223,8 @@ GEN3_FACTORS = (1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 40)
 FABRIC_MIN_MHZ = 10.0
 # MTS attempts before refusing to serve. An attempt can fail its DAC alignment
 # ("Alignment correction delay 31 required exceeds maximum (31) for DAC Tile
-# n", any Target_Latency): F4 on the 1ch and 2ch templates ~35 % of attempts,
-# an earlier fs 2250 4ch F3 template's bring-up up to twice in a row (on a
-# ZCU216).
-# The next attempt locks; each is ~0.3 s.
+# n", any Target_Latency; on a ZCU216 ~35 % of attempts at F4 on the 1ch and
+# 2ch templates) and the next one locks; each is ~0.3 s.
 MTS_ATTEMPTS = 10
 
 
@@ -294,27 +297,12 @@ def _module_params(m) -> Dict[str, str]:
             (params if params is not None else []) if p.get("NAME")}
 
 
-def hwh_rfdc_params(hwh_path: str) -> Dict[str, str]:
-    """RFDC PARAMETERs of a .hwh (see hwh_params)."""
-    return hwh_params(hwh_path)[0]
-
-
 # --------------------------------------------------------------------------
 # Bitstream variants (one per channel count and converter factor)
 # --------------------------------------------------------------------------
 
 # <board>_v49_<N>ch_qsfp[_<variant>]: N channels streamed over the 100G path
 # (Board.bitstream_glob / bitstream_re, boards.py)
-
-
-def name_channels(name: str, board: Optional[Board] = None) -> Optional[int]:
-    """N from a <board>_v49_<N>ch_qsfp* name (of `board`, else of any board),
-    None for any other name."""
-    if board is not None:
-        return board.name_channels(name)
-    b = board_of_bitstream(name)
-    return b.name_channels(name) if b is not None else None
-
 
 def stream_slices(geo: Geometry, nch: int, board: Board
                   ) -> Tuple[List[Tuple[int, int]], List[Tuple[int, int]]]:
@@ -360,10 +348,9 @@ class Variant:
     against udp_streamer S_WIDTH), TICK_STEP (udp_streamer, = udp_player's)
     and so the UHD tick rate = aggregate slot rate x TICK_STEP, the TX buffer
     depth, and whether it has a TX beamformer (tx_beamformer, N_CH = N) and
-    an RX beamformer (rx_beamformer, N_CH = N; not in the older builds). Two
-    rates of one N can have different tick rates (4ch: 2.5 GHz at 625 MS/s,
-    5.0 GHz at 1250 MS/s). A .hwh without the cores (a synthetic test file)
-    gets v49_geometry's TICK_STEP (backend.v49_tick_step)."""
+    an RX beamformer (rx_beamformer, N_CH = N). Two rates of one N can have
+    different tick rates (4ch: 2.5 GHz at 625 MS/s, 5.0 GHz at 1250 MS/s).
+    A .hwh without the cores gets backend.TICK_STEP."""
 
     def __init__(self, bitstream: str, geo: Geometry, nch: Optional[int] = None,
                  cores: Optional[Dict[str, Dict[str, str]]] = None,
@@ -409,12 +396,8 @@ class Variant:
             raise RuntimeError(f"TICK_STEP differs: udp_streamer {ts}, udp_player {tp}")
         if ts is None:
             ts = tp
-        self.tick_step_from = "hwh" if ts is not None else "v49_geometry"
-        if ts is None and self.nch == 1 and self.factor % 2:
-            raise RuntimeError(f"F={self.factor}: a 1-channel build needs an even "
-                               f"factor (TICK_STEP F/2 ticks per sample)")
-        self.tps = self.tick_step = int(ts if ts is not None
-                                        else v49_tick_step(self.nch, self.factor))
+        self.tick_step_from = "hwh" if ts is not None else "default"
+        self.tps = self.tick_step = int(ts if ts is not None else TICK_STEP)
         if self.tick_step < 1:
             raise RuntimeError(f"TICK_STEP {self.tick_step}")
         self.tick_rate = self.slot_rate * self.tick_step
@@ -697,6 +680,14 @@ class HwBackend(Backend):
         from rfsoc_lib.rfdc_task import RfdcTask
         import rfsoc_lib.rfdc_config as rfdc_config
         import xrfdc
+        # PYNQ 2.7's xrfdc wrapper has no multi-tile-sync bindings; MTS is
+        # not optional here (_mts_lock), so say so before anything is loaded
+        if not all(hasattr(xrfdc.RFdc, m) for m in ("mts_dac", "mts_adc")):
+            raise SetupError(
+                "this board's PYNQ xrfdc has no multi-tile-sync bindings "
+                "(RFdc.mts_dac / mts_adc): run 'sudo rfsoc/setup_board.sh' once "
+                "on the board (it adds them to the PYNQ venv's xrfdc), then start "
+                "the daemon again")
         self._xrfdc = xrfdc
         self._RFSoCOverlay, self._RfdcTask = RFSoCOverlay, RfdcTask
         # rfdc.py and rfdc_task.py read the module-global ZCU216_CONFIG
@@ -792,8 +783,7 @@ class HwBackend(Backend):
         threading.excepthook = hook
         try:
             # MTS is run below, not inside the task: it must end LOCKED
-            self.rfdc_t = self._RfdcTask(self.ol, mts_enable=False,
-                                         debug_mode=False, board=self.board.name)
+            self.rfdc_t = self._RfdcTask(self.ol, debug_mode=False, board=self.board.name)
             for task in [self.rfdc_t]:
                 task.start()
                 task.join()
@@ -850,9 +840,8 @@ class HwBackend(Backend):
         self.link = link_bringup(self.eth, refclk=refclk, pr=pr, **self._link)
         pr(f"[e] MAC/IP {self.data_mac} {self.data_ip} -> streamer + player (ARP on)")
         self.eth.set_addresses(self.data_mac, self.data_ip)
-        # the DAC is fed by the UDP player, always: the DRAM/DMA DAC path is
-        # gone from every v49 build (dac_src = 0 would select a tied-off
-        # stream), and an idle player outputs zeros
+        # the DAC is fed by the UDP player, always (dac_src = 0 would select
+        # udp_player's tied-off s_axis_dma input); an idle player outputs zeros
         self.eth.player_enable()
         # §10: which OTW formats this bitstream converts (FMT read-back; a
         # build from before §10 has no FMT register and offers only sc16)

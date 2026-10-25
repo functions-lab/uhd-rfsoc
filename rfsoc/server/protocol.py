@@ -2,7 +2,8 @@
 
 Transport-free: `ControlCore.handle_line(session, line)` takes one request line
 and returns one reply line (without the newline). The TCP/UDP servers in
-zcu216_uhd_daemon.py feed it, and the unit tests call it directly.
+zcu216_uhd_daemon.py feed it; tests/test_protocol.py drives it directly
+against a fake backend.
 
 Every reply is `OK [values]` or `ERR <message>`; no request can raise out of
 handle_line.
@@ -266,7 +267,6 @@ class ControlCore:
         return [("type", "zcu216"), ("product", getattr(self.be, "product", "zcu216")),
                 ("serial", self.serial), ("name", self.name),
                 ("addr", mgmt_ip or self.mgmt_ip),
-                # no data IP (sim): the data plane lives on the management IP
                 ("data_ip", self.data_ip or mgmt_ip or self.mgmt_ip),
                 ("claimed", 1 if self.owner is not None else 0),
                 ("fpga", self.be.fpga_name), ("version", PROTO_VERSION)]

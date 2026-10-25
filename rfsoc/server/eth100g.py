@@ -2,13 +2,13 @@
 
 EVERY FPGA ADDRESS THE DAEMON USES FOR THE 100G PATH LIVES IN THIS FILE.
 
-Sources of truth (under fpga_ip/ and fpga_board/):
-  ZCU216/block_designs/zcu216_uhd_v49/zcu216_uhd_v49.tcl          IP names and addresses (AXI-Lite on pl_clk0)
-  ip_design/uhd_ip/src/udp_streamer.v     streamer map (header table)   -- FINAL
-  ip_design/uhd_ip/src/udp_player.v       player map (header table)     -- FINAL
-  ip_design/uhd_ip/src/tx_beamformer.v    TX beamformer map (header)
-  ip_design/uhd_ip/src/rx_beamformer.v    RX beamformer map (header)
-  ip_design/cmac_100g/cmac_100g.v         CMAC ctl/status bit layout (header)
+Sources of truth:
+  fpga_board/<board>/block_designs/<board>_uhd_v49*/   IP names and addresses (AXI-Lite on pl_clk0)
+  fpga_ip/ip_design/uhd_ip/src/udp_streamer.v    streamer map (header table)
+  fpga_ip/ip_design/uhd_ip/src/udp_player.v      player map (header table)
+  fpga_ip/ip_design/uhd_ip/src/tx_beamformer.v   TX beamformer map (header)
+  fpga_ip/ip_design/uhd_ip/src/rx_beamformer.v   RX beamformer map (header)
+  fpga_ip/ip_design/cmac_100g/cmac_100g.v        CMAC ctl/status bit layout (header)
 
   0x8002_0000  eth100g/udp_streamer  ADC -> UDP/VRT
   0x8003_0000  eth100g/udp_player    UDP/VRT -> DAC, ARP, async status, flow control
@@ -19,11 +19,10 @@ Sources of truth (under fpga_ip/ and fpga_board/):
   0x8006_0000  eth100g/tx_beamformer N >= 2 builds only: tx_beamformer.py
   0x8007_0000  eth100g/rx_beamformer N >= 2 builds that have it: rx_beamformer.py
 
-No DRAM path: no v49 build has an ADC -> PL-DDR4 capture or a PS-DDR -> DAC
-DMA playback. udp_streamer's m_axis_adc copy is
-unused and udp_player's s_axis_dma input is tied idle, so the DAC source is
-ALWAYS the player (CTRL dac_src = 1): set at bring-up (`player_enable`) and
-kept by every later write; an idle or flushed player outputs zeros.
+udp_streamer's m_axis_adc copy is unused and udp_player's s_axis_dma input
+is tied idle in every build, so the DAC source is ALWAYS the player (CTRL
+dac_src = 1): set at bring-up (`player_enable`) and kept by every later
+write; an idle or flushed player outputs zeros.
 
 There is NO cmac_usplus AXI4-Lite in this build: the CMAC is the example-design
 core in the RTL top, and an RTL controller does RX + RS-FEC on, send RFI until

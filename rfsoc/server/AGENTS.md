@@ -1,337 +1,210 @@
-# AGENTS.md — rfsoc/server (the board side)
+# AGENTS.md — rfsoc/server (the board daemon)
 
-Read the top `AGENTS.md` first (rules, and the Protocol this daemon serves).
-This file is the detailed reference of the daemon; `README.md` is the short
-version.
+Read the top `AGENTS.md` first: its Protocol is the contract this daemon
+serves, and a behaviour change here is a change there. `README.md` is the
+short version for people; this file is the reference for the code.
 
-## Rules for this directory
-- Runs ON THE BOARD (PYNQ venv, root). Every FPGA address lives in
-  `eth100g.py`, `tx_beamformer.py`, `rx_beamformer.py` (sources of truth: the
-  RTL headers in `fpga_ip/ip_design/uhd_ip/src`). Never add a fallback
-  address: blocks are found by name in the `.hwh`.
-- Reuse `rfsoc_lib`: RFDC bring-up (`RfdcTask`, `rfdc_config`), clocks
-  (`xrfclk/ZCU216`, `gt_refclk.py` for the 8A34001), beamformer weights
-  (`dsp/beamformer.py`). Do not copy their logic here.
-- No IP address in code: the FPGA data IP comes from the board's
-  `zcu216_uhd.conf` (gitignored; template `zcu216_uhd.conf.example`), the
-  management address from the incoming request.
-- Tests: `tests/client_check.py` against a running daemon, and the board
-  tests in `host/benchmark/` (driven from the host PC). A behaviour change
-  also goes into the Protocol (top `AGENTS.md`).
-- Never leave the daemon running, or load bitstreams, on a board unasked.
+## Rules
+- Runs ON THE BOARD (PYNQ venv, root). Every FPGA address of the data plane
+  lives in `eth100g.py`, `tx_beamformer.py`, `rx_beamformer.py` (sources
+  of truth: the RTL headers in `fpga_ip/ip_design/uhd_ip/src`). Blocks are
+  found by name in the overlay's `ip_dict`; the beamformers are never
+  mapped from a fallback address (an AXI access to an unmapped address can
+  hang the PS).
+- Reuse `../rfsoc_lib` (its rules: `../rfsoc_lib/AGENTS.md`): the RFDC
+  comes up only through `RfdcTask` at the factor compiled into the build,
+  then MTS (`_mts_lock`, which must end locked), then the NCOs. The one
+  place that changes the factor afterwards is `HwBackend._retune_hw`.
+- No address in code: the FPGA data IP / MAC come from `zcu216_uhd.conf`
+  (`board_config.py`), the management address from each incoming request.
+- `hw_backend.py` names no board: everything board-specific (bitstream
+  prefix, channel map, dual-ADC slice numbering, unpowered tiles, GT refclk
+  source, default build) is a `Board` in `boards.py`.
+- Tests: `python3 -m unittest discover -s tests` must pass without a board
+  (`test_protocol.py` drives `protocol.py` against a `Backend` with the
+  hardware stubbed; add a case for every new command or rule);
+  `tests/client_check.py` against a running daemon; `host/benchmark/` from
+  the host. Never leave the daemon running or load a bitstream on a board
+  unasked.
 
----
-
-## Reference
-
-`zcu216_uhd_daemon.py` makes a ZCU216 running a `zcu216_v49_<N>ch_qsfp` build
-(N = 1, 2, 4, 8, 16 channels, Protocol §9) look like a USRP to the UHD host
-module (`type=zcu216`). The contract is the Protocol (top `AGENTS.md`).
-The rules in `fpga_board/zcu216/AGENTS.md` bind this code, in particular: the
-RFDC comes up only through the proven `RfdcTask` pattern, at the factor
-compiled into the block design. A **template** build (its `MTS_clk_wiz` has
-dynamic reconfiguration) then changes the factor at run time, in one place
-only: `HwBackend._retune_hw` (Protocol §8). It must end with MTS locked,
-the factor read back on every enabled block and the converter clock measured
-within 1 %, or it is undone. Two resets inside MTS undo a retune and are put
-back there: the clocking-wizard reset (MMCM -> build frequency) and the DAC
-tile reset (interpolation -> build factor); ADC tiles keep theirs.
-
+## Files
 | file | what |
 |---|---|
-| `zcu216_uhd_daemon.py` | entry point: TCP control server (49710), UDP discovery (49700) |
-| `protocol.py` | transport-free command parser/dispatcher, claim ownership, reply formats, §10 `otw=` options and the 100GbE rate cap (also vetting a rate change), §11 TX (`*_bf*`) and RX (`*_rbf*`) beamformer commands |
-| `boards.py` | the boards served (ZCU216, RFSoC 4x2): bitstream prefix, GT refclk source, channel map (IP slices vs xrfdc blocks on a dual ADC tile), tiles RfdcTask leaves unpowered, default build; `detect_board` (`--board`, `$UHD_BOARD`, bitstream names) |
-| `board_config.py` | the board's settings file `zcu216_uhd.conf` (FPGA data IP/MAC, name): search path, parsing, the eth0-derived default MAC |
-| `zcu216_uhd.conf.example` | template of that file (placeholders only; the real file is git-ignored) |
-| `backend.py` | `Backend` interface; the v49 build table (`V49_GEOMETRY`), link checks (`link_problem`, `default_rate`), FC interval policy, TX/RX beamformer state and `steering_weights` (rfsoc_lib `Beamformer`) |
-| `hw_backend.py` | `HwBackend`: build scan (`.hwh`: factor, beat, TICK_STEP, TX buffer, TX/RX beamformers), overlay, compiled-geometry bring-up, NCO/DSA/VOP, sensors |
-| `tx_beamformer.py` | `eth100g/tx_beamformer` registers (0x80060000, N >= 2 builds; Protocol §11), mapped only from the overlay's ip_dict |
-| `rx_beamformer.py` | `eth100g/rx_beamformer` registers (0x80070000, the N >= 2 builds that carry it; §11), mapped only from the ip_dict; `beam_payload`, the bit-exact reference of the RX beam |
-| `eth100g.py` | the 100G FPGA addresses (final, from `eth100g.tcl` + RTL headers): `udp_streamer` 0x80020000, `udp_player` 0x80030000, `cmac_gpio` 0x80040000 (ctl/status of `cmac_100g.v`), `cmac_freq` 0x80050000 (refclk / user clock kHz). Resolved by ip_dict name, addresses as fallback. No PG203 AXI4-Lite in this build. No DRAM path: the player is always the DAC source |
-| `bringup.py` | step-by-step link bring-up for manual use (prints everything), `--status` read-only dump; its steps are also what `HwBackend` runs |
-| `rx_cmdq.py` | the RX stream-command queue (Protocol §4a) over the streamer's one command slot: FIFO, late markers, `num_more` chains, for `HwBackend` |
-| `cmd_timer.py` | timed commands (§3c): `set_*_freq` / `set_*_gain` / `set_time` with `at=<ticks>`, grouped by time, run by the FPGA timekeeper |
-| `vrt.py` | wire format of §4-7 packets, test pattern, async packets, the §10 reference conversions (`sc16_to_wire`, `wire_to_sc16`, `pack_sc12`) |
-| `../rfsoc_lib/gt_refclk.py` | 8A34001 (U409, `/dev/i2c-10` @0x5B) GT refclk for Q7/Q11: `read_status()` (read-only by default), `program_gt_refclk(156.25, dry_run=...)` applies a register file after checking it gives the target on Q7/Q11 |
-| `zcu216-uhd.service` | systemd unit template (hardware mode; not installed by anything) |
-| `../push_bitstreams.sh` | run on the build machine: copies `*_v49_*ch_qsfp*.bit` + `.hwh` into this directory on the board, md5-checked; never loads or starts anything |
-| `../../run_daemon.sh` | start / stop / status / log of the daemon on the board (root, PYNQ venv, log `/tmp/uhd_daemon.log`) |
-| `tests/client_check.py` | end-to-end protocol check against a running daemon on the board (discovery, claim, RX/TX streams, OTW formats, beamformer registers) |
+| `zcu216_uhd_daemon.py` | entry point: argument parsing, board detection, backend bring-up, the TCP control server (49710) and UDP discovery server (49700); a missing board setup step (`SetupError`) is one log line, any other bring-up failure a traceback |
+| `protocol.py` | `ControlCore`: the §3 command parser / dispatcher, claim ownership, the §10 `otw=` options and the rate / format vetting before any reload, the §11 commands; transport-free |
+| `backend.py` | the `Backend` interface and everything that needs no hardware: rate selection (`coerce_rate`, `default_rate`), link checks (`link_problem`), the §3b tune plan, the §11 beamformer state, sensor helpers, `find_lib_root` |
+| `hw_backend.py` | `HwBackend`: the `.hwh` scan (`scan_bitstreams`, `Variant`, `Geometry`), the full bring-up, run-time retune (`_retune_hw`) and reload (`_switch_to`), NCO / DSA / VOP, streaming, sensors |
+| `boards.py` | `Board` (ZCU216, RFSoC 4x2) and `detect_board` |
+| `board_config.py` | `zcu216_uhd.conf`: search path, parsing, the eth0-derived default MAC |
+| `eth100g.py` | `Eth100G`: udp_streamer, udp_player, CMAC ctl / status GPIO, clock meters |
+| `tx_beamformer.py`, `rx_beamformer.py` | the §11 register files (`eth100g/tx_beamformer` 0x8006_0000, `eth100g/rx_beamformer` 0x8007_0000); `rx_beamformer.beam_payload` is the bit-exact reference of the RX beam |
+| `bringup.py` | the 100G link steps (`link_bringup`, shared with `HwBackend`) and a CLI to run them by hand or dump the status |
+| `rx_cmdq.py` | the §4a RX stream-command queue over the streamer's one command slot |
+| `cmd_timer.py` | the §3c timed commands, run by the FPGA timekeeper |
+| `vrt.py` | the §4-7 packet formats, the §5 pattern, the §10 reference conversions; also imported by `host/tools/check_pattern_file.py` |
+| `zcu216_uhd.conf.example` | template of the board's settings file (the real one is gitignored) |
+| `zcu216-uhd.service` | systemd unit template; nothing installs it |
+| `tests/` | `test_protocol.py`, `test_xrfdc_mts_patch.py` (no board), `client_check.py` (against a daemon) |
 
-### RFSoC 4x2
+## Bring-up (every load: at start and after a reload)
 
-`HwBackend` names no board; `boards.py` does. An RFSoC 4x2 (`rfsoc4x2_v49_<N>ch_qsfp`,
-N = 1, 2, fs 5000; design in fpga_board/rfsoc4x2) differs in four ways the code handles from the `Board`
-and the `.hwh` (`C_High_Speed_ADC`): its RF-ADC tiles are dual, so one ADC
-slice carries I or Q alone at Data_Width samples per clock (the fabric check
-and the beat use that); a channel's ADC is two IP slices but ONE xrfdc block
-(ch1 = `adc_tiles[0].blocks[1]`); and tiles 1 and 3 are left unpowered by
-RfdcTask, so the readback lists their blocks without reading them. `rx_chans`
-and `tx_chans` are therefore different lists. rfdc.py reads the global
-`ZCU216_CONFIG` on every board, so `HwBackend` copies the board's clock limits
-(`RFSOC4X2_MIN_MAX_CONFIG`: a bypassed ADC tile takes up to 5000 MHz) and
-NEW_CONFIG into it. And its 100G refclk is a Si570 running from power-up
-(`Board.gt_refclk` "si570"): the 8A34001 programming of the ZCU216 is
-skipped. Discovery reports `product=rfsoc4x2` (type stays `zcu216`, the
-protocol).
+`HwBackend._bring_up`, printed step by step (`[c]`, `[m]`, `[b]` ... lines
+in the log):
 
-## Addresses (Protocol §1)
+1. `RFSoCOverlay(bitstream)`; the compiled RFDC geometry from the overlay's
+   parameters (`Geometry`): refused if factors differ between enabled
+   slices, if ADC and DAC want different LMX frequencies, or if
+   `Fabric_Freq != fs / F / (samples per clock)`.
+2. `NEW_CONFIG` (fs, reference, PL clock, factor, initial NCOs) into
+   `rfsoc_lib`'s `ZCU216_CONFIG`; `RfdcTask.start()` / `join()` (an
+   exception on the task thread is captured and re-raised). The clock plan
+   programmed is logged: `[c] clocks: LMK... + LMX...`.
+3. MTS on every DAC and ADC tile (`_mts_lock`: `MyMTS.init()` up to
+   `MTS_ATTEMPTS` = 10 times; an attempt can fail its DAC alignment and the
+   next locks). Must end locked or the daemon refuses to serve. The
+   compiled fabric word counts are read first and held across retunes.
+4. NCOs of every streamed channel, then one phase reset per direction
+   (§3d). The readback is printed: factor of EVERY enabled block against
+   the compiled one (a block at the wrong factor resamples silently),
+   NyquistZone, NCO, and the tile clock of every tile with a streamed
+   channel ("good" = PLL locked, or with the PLL bypassed `TileState` 15).
+   A factor mismatch refuses; a tile clock not good refuses unless
+   `--allow-unlocked` (`run_daemon.sh` passes it: the test pattern works
+   without converter clocks).
+5. The 100G path (`bringup.link_bringup`): the ZCU216's 8A34001 GT refclk
+   (programmed only if its status says unconfigured; the RFSoC 4x2's Si570
+   is fixed), the clock meters (refclk 156250 kHz, user clock 322266 kHz),
+   GT reset with the ctl bits (RS-FEC, polarities, LPM / DFE, loopback),
+   wait for rx aligned (status decoded every 0.5 s). A link that does not
+   align is NOT fatal: the daemon serves and reports it (`cmac_aligned`).
+   Then FPGA MAC / IP into streamer and player, the player enabled and
+   selected as the DAC source (ARP answered from the start), the §10 FMT
+   registers probed, both beamformers put in bypass with unity weights.
 
-Nothing in the code holds an IP address. The board's LAN address is learned
-per request: a discovery reply carries the address the request arrived on
-(IP_PKTINFO, else the route back to the asker), an `info` reply the local
-address of its TCP connection, so a DHCP change needs no restart (`--mgmt-ip`
-overrides both). The FPGA's 100G identity is configuration, in
-`zcu216_uhd.conf` (searched: `$ZCU216_UHD_CONF`, this directory,
-`/etc/zcu216_uhd.conf`; `--config FILE`):
+### Builds and rates (Protocol §8, §9)
 
-    data_ip  = <fpga-data-ip>    # required in hardware mode: on the subnet of the PC's 100G port
-    data_mac = <fpga-data-mac>   # optional: default = the eth0 MAC, locally administered
-    name     = <device-name>     # optional: default the board's (zcu216, rfsoc4x2)
+`scan_bitstreams` reads every `<board>_v49_<N>ch_qsfp*.bit` with a `.hwh`
+in `--bitstream-dir` (default: this directory): N from the name; from the
+`.hwh` F, fs and its reference, the fabric clock and Data_Width of every
+enabled slice (the ADC and DAC slices of channels 0..N-1 must be enabled),
+the beat (checked against udp_streamer `S_WIDTH`), `TICK_STEP`,
+`TX_BUF_WORDS`, the beamformers, and whether the MTS clocking wizard has
+dynamic reconfiguration (a template: one `Variant` per run-time factor,
+`run_factors`, those whose converter clock the MMCM makes exactly and that
+is >= 10 MHz). A build without the register files of its clock plan in
+`../rfsoc_lib/xrfclk/<board>/` is skipped. Two builds of one (N, rate)
+resolve to the one carrying more wire formats; the loaded bitstream's own
+run-time rates always win (they retune instead of reloading). The rate
+tables are the top `README.md` and Protocol §9.
 
-`--data-ip` / `--data-mac` / `--name` override the file. Without a data IP
-the hardware daemon exits with a message saying where to put it.
-`cp zcu216_uhd.conf.example zcu216_uhd.conf` and edit. The file is
-gitignored, so a `git pull` on the board leaves it alone, and
-`push_bitstreams.sh` copies only bitstreams.
+The build loaded at start: `--bitstream`, else the board's default
+(`Board.default_bitstream`: the 1ch template) if present, else the
+highest-rate build with the fewest channels. `set_channels N` loads N's
+sc16-max build (`backend.default_rate`). `set_rx_rate` / `set_tx_rate`
+pick, among the loaded N's builds that carry the client's formats, the
+highest rate at or below the request (`coerce_rate`, `protocol._set_rate`);
+a request for the rate in effect does nothing; a rate no installed build
+can carry in the client's formats is refused before anything is reloaded.
 
-## Running
+* **Retune in place** (`_retune_to` / `_retune_hw`, a run-time factor of
+  the loaded template, ~1-1.5 s): quiesce, MMCM to fs/F/spc over clk_wiz
+  DRP, the factor on every enabled block with the compiled fabric words put
+  back, MTS with its clock-wizard and DAC-tile resets undone inside it
+  (`after_clkwiz_reset`, `after_dac_reset`), NCOs re-programmed and
+  phase-reset, then checked: factor readback, MMCM locked, converter clock
+  measured by the timekeeper within 1 %. Failure: the old factor is retuned
+  back, else the old build reloaded, else the device is `_Unusable` until
+  the daemon is restarted; the reply is `ERR ... restored`.
+* **Reload** (`_switch_to` / `_reload`, another bitstream or channel
+  count): quiesce, the whole bring-up above (a template's non-built factor
+  is then retuned), restore, then `ZCU216_RELOAD_SETTLE_S` (4 s) for the
+  far-end NIC to relink before replying. Failure: the previous build is
+  reloaded (`ERR ... restored`); if that fails too, `_Unusable`.
+* **Restored after both** (`_restore`): per-channel NCOs (and §3b DSP
+  parts) and client-set gains for the channels the new build has,
+  `stream_setup` and `stream_setup_tx` (the TX consumed-word baseline is
+  new: the reply's third token), the beamformer state (§11), the time (0,
+  or carried over in the new tick rate if a client had called `set_time`).
+  Not restored: a running stream, the RX command queue, pending timed
+  commands.
 
-Usually `../../run_daemon.sh` (start in the background, `stop`, `status`,
-`log`, `fg`; extra arguments go to the daemon). By hand -- hardware, root,
-PYNQ venv; downloads the bitstream unless `--no-load`:
+## Choices made where the Protocol is silent
 
-    sudo bash -c 'source /etc/profile.d/pynq_venv.sh && \
-        python3 zcu216_uhd_daemon.py [--bitstream-dir DIR] [--bitstream X.bit]'
+* `set_rx_freq`: NCO = `-(f mod fs)` (rfsoc_lib's real -> I/Q convention),
+  Nyquist zone parity from f vs fs/2, the driver folds and handles the
+  even-zone inversion; the value reported is f on the 48-bit NCO grid; the
+  range is the first Nyquist zone of the loaded build, 0 .. fs/2, a request
+  outside is clamped. After every NCO change the phases of the direction's
+  channels are reset together (§3d; `--nco-phase-reset`).
+* `get_*_lo_locked`: the channel's tile judged like the bring-up readback.
+  `ref_locked` = ADC and DAC tile clocks good (the LMK04828 / LMX2594 are
+  write-only through xrfclk). `temp` / `pl_temp` without the AMS sysmon
+  read `string n/a -`. `pps_present` is always false. `mts_locked` =
+  bring-up locked it and the MTS MMCM is still locked.
+* RX gain = -DSA attenuation, 0 .. 27 dB in 1 dB steps, read back after
+  writing; fixed 0 if the DSA is unreadable. TX gain = 20 log10(VOP uA /
+  40500) in [-25.1, 0] only on a build with `C_DAC_VOP_Mode = 1`
+  (the RFSoC 4x2's), otherwise range `0 0 0`.
+* `set_clock_source external` is refused: no LMK04828 register file selects
+  CLKin0 (the CLK104's REF IN) yet.
+* `stream_setup` refuses while streaming; `spp` (slots) is floored to whole
+  64-byte words of the format and a multiple of N, at most 8192 payload
+  bytes; `num_done` / `num_more` counts (slots) are rounded up to that
+  granule; `num_samps = 0` is an error for those modes. The streamer's
+  destination-port counter is brought back to 0 at every setup (one
+  16-slot packet to UDP port 9). `stream_cmd` / `stream_setup*` accept any
+  valid `<ch>` and ignore it; the SIDs are always `0x5A160000` /
+  `0x5A170000`.
+* `otw=` on `stream_setup` / `stream_setup_tx` writes the FMT register
+  while idle and verifies the readback; refused for a format the bitstream
+  does not convert, whose aggregate wire rate exceeds 12.38 GB/s, or RX
+  fc32 on a 512-bit-beat build. The client's current otw is the last one
+  it sent (any of the three commands), `sc16` after a claim.
+* `set_channels N` to the loaded N reloads only if the loaded build cannot
+  carry the current otw (an sc8-only rate left by a previous client); a
+  stream setup the new build cannot carry is dropped after a build change.
+* Stream commands are queued (`rx_cmdq.py`, §4a): the next is issued when
+  the streamer is idle (STATUS bit 0, counted busy for 2 ms after a command
+  was accepted, since it crosses from adc_clk); a running `start_cont` is
+  stopped by the next start once it has sent a packet; a late timed
+  command becomes a one-granule `num_done` marker; an open `num_more`
+  chain streams as `start_cont` and is stopped past its end +
+  `--chain-grace-ms`. Acceptance = the streamer's CMDS counter advancing.
+* `stream_setup_tx` replies the free-running consumed-word count as its
+  third token (the host's flow-control baseline); `stream_stop_tx` flushes
+  and leaves the player as the DAC source, so the DAC outputs zeros. The
+  untimed-start gate (USTART / UTIMEOUT, §6) is written at every setup.
+  `fc_interval` = 512 words (1/8 of a smaller buffer);
+  `ZCU216_FC_INTERVAL` overrides it.
+* The claim's release (unclaim or disconnect) stops RX streaming and TX
+  playback, resets both beamformers and the client's formats and `spp`.
+* `set_bf_angle` / `set_rbf_angle` use `rfsoc_lib/dsp/beamformer.py`
+  (the same weights for RX, no conjugate); the kept state and the reset
+  rules are Protocol §11.
 
-Builds (Protocol §8, §9): every `zcu216_v49_<N>ch_qsfp*.bit` with a `.hwh`
-next to it in `--bitstream-dir` (default: this directory) is one (channel
-count, rate). N comes from the name; from the `.hwh`: F, the converter rate
-fs and its reference clock, the fabric clock and data width (every enabled
-slice; the ADC and DAC slices of channels 0..N-1 -- channel c = tile c//4,
-block c%4 -- must be enabled), the fabric beat (N x Data_Width/2 slots,
-checked against udp_streamer `S_WIDTH`), `TICK_STEP` of udp_streamer (=
-udp_player's), `TX_BUF_WORDS` and whether a `tx_beamformer` and an
-`rx_beamformer` (each N_CH = N) are present. TICK_STEP is 1 on every build,
-so **a build's tick rate is its aggregate slot rate** (N x per-channel rate);
-it differs per build, never one value per N. Files that are inconsistent,
-lack a `.hwh` or duplicate an (N, rate) are logged and skipped.
+## Flags worth knowing
 
-The builds (`fpga_board/zcu216/scripts/v49_ladder.sh`; the full list, with
-the wire formats each carries, is `host/benchmark/oracle_builds.txt`; names
-`zcu216_v49_<N>ch_qsfp_f<F>[_fs<fs>]`, `_fs` when fs != 2400):
+Hardware: `--bitstream`, `--bitstream-dir`, `--board` (else `$UHD_BOARD`,
+else the bitstream names), `--no-load` (attach to the loaded bitstream),
+`--allow-unlocked`, `--rx-freq` / `--tx-freq` (initial NCOs, 600 MHz),
+`--nco-phase-reset all|tuned|off`, `--lib-root`. Link (daemon and
+`bringup.py`): `--no-refclk`, `--rsfec 0|1` (must match the NIC, default
+1), `--rxpol` / `--txpol` (lane masks), `--dfe`, `--loopback` (near-end PMA
+loopback, aligns without a NIC), `--cmac-timeout`. Protocol: `--port`,
+`--disc-port`, `--bind`, `--mgmt-ip`, `--chain-grace-ms`, `--config`,
+`--data-ip` / `--data-mac` / `--name`, `--serial`. Environment:
+`ZCU216_UHD_CONF`, `ZCU216_RELOAD_SETTLE_S`, `ZCU216_FC_INTERVAL`,
+`RFSOC_MTS_TARGET` (`../rfsoc_lib/AGENTS.md`).
 
-| family | N | fs (MS/s) | factors F | per-channel rate | beat | wire formats |
-|---|---|---|---|---|---|---|
-| normal | 1 | 2500 | 2 3 4 5 6 8 10 12 16 20 24 40 | 1250 .. 62.5 MS/s | 128 b | sc16 sc12 sc8 fc32 |
-| normal | 2 | 2500 | 2 3 4 5 6 8 10 12 16 20 24 40 | 1250 .. 62.5 | 256 b | sc16 sc12 sc8; fc32 from F4 |
-| normal | 4 | 2500 | 2 3 4 5 6 8 10 12 16 20 24 40 | 1250 .. 62.5 | 512 b | sc8 at F2, sc12 sc8 at F3, sc16 from F4 |
-| normal | 8 | 2500 | 4 5 6 8 10 12 16 20 24 40 | 625 .. 62.5 | 512 b | sc8 at F4, sc12 sc8 at F5 F6, sc16 from F8 |
-| normal | 16 | 2500 | 8 10 12 16 20 24 40 | 312.5 .. 62.5 | 512 b | sc8 at F8, sc12 sc8 at F10 F12, sc16 from F16 |
-| 245m76 | 1 / 2 / 4 | 2457.6 | template F2, run-time 2 .. 40 | 1228.8 .. 61.44 | 128 / 256 / 512 b | 4ch: sc8 at F2, sc12 sc8 at F3, sc16 from F4 |
-| 245m76 | 8 / 16 | 2457.6 | template F4 / F8, run-time .. 40 | 614.4 / 307.2 .. 61.44 | 512 b | sc8 at the top, sc16 from 307.2 / 153.6 |
+## RFSoC 4x2
 
-Each template's factor is the highest rate whose stream fits the link in
-some wire format at a beat of at most 512 bits (5.0 GS/s of sc8, 81 % of
-it, at 4-16 channels; sc16 from 2.5 GS/s, also 81 %). A wire format is
-offered when N x rate x bytes/sample fits the 100GbE payload rate (`backend.link_problem`); RX fc32 is never offered on a
-512-bit-beat build (udp_streamer would need two FIFO words per clock), and a
-1024-bit-beat build (none ships) would carry sc8 only. The
-board's clock chips are programmed per build (Protocol §8a): the `.hwh`
-reference clock (= fs) and the MTS clocking wizard's input (300 or 122.88
-MHz) pick the LMK04828 + LMX2594 register files in `rfsoc_lib/xrfclk/<board>/`
-(`rfsoc_lib.clocks.clock_plan`, called by `RfdcTask.set_external_clocks`;
-the scan skips a build without exactly one matching pair). A build of the
-other clock family is a reload; `RfdcTask.relock_pl_mmcm` resets the MTS
-clocking wizard when the new PL clock left it unlocked.
-
-The one loaded at start is `--bitstream`, else `<dir>/zcu216_v49_1ch_qsfp.bit`
-(not part of the ladder), else the highest-rate build with the fewest channels
-(1ch F2 fs2500). `set_channels N` loads N's default build = the highest rate
-whose sc16 stream fits the link. `set_rx_rate`/`set_tx_rate` pick, among the
-loaded N's builds that carry the client's OTW formats, **the highest rate at
-or below the request** (1 ppm tolerance; below every rate, the lowest) --
-`backend.coerce_rate`, `protocol._set_rate`; if no build carries them the
-request is refused before any reload (Protocol §3, §10). A request for the
-rate in effect never reloads. Otherwise both stop streaming, reload that
-overlay and redo the FULL bring-up below (8A34001 only if its status says
-unconfigured), wait `ZCU216_RELOAD_SETTLE_S` (4 s) for the far-end NIC, then
-restore per-channel NCOs and client-set gains (for the channels the new build
-has), `stream_setup`/`stream_setup_tx`, the TX and RX beamformer state and the
-time (0, or carried over and converted to the new build's tick rate if a
-client had called `set_time`) -- `HwBackend._switch_to`. Both replies carry
-the new tick rate. If the new build fails, the previous one is reloaded; if
-that fails too the backend refuses every PL access until the daemon is
-restarted.
-
-TX flow control: the v49 buffer is 2 MiB (`tx_buf_words` 32752). The daemon
-programs `fc_interval` = 512 words (an async credit update every 32 KiB
-consumed, 1.6 % of the credit; 1/8 of the buffer if that is smaller);
-`ZCU216_FC_INTERVAL=<words>` in the daemon's environment overrides it.
-
-MTS is not optional: every bitstream load runs multi-tile sync on all DAC and
-ADC tiles (`HwBackend._mts_lock`: rfsoc_lib `MyMTS.init()` -- tile-sync reset,
-MTS clocking-wizard MMCM lock, `mts_dac`, `mts_adc`) after the RfdcTask
-bring-up and before the NCOs. It must end locked or the daemon refuses to
-serve; it runs up to `MTS_ATTEMPTS` (10) times, because an attempt can fail
-(the first after a board reboot on a ZCU216; on the templates, DAC alignment
-"delay 31 exceeds maximum" at some factors) and the next locks. The log line `[m] MTS LOCKED
-(attempt n)` carries the per-tile latency and offset; the mboard sensor
-`mts_locked` reports it (and that the MMCM is still locked) to the host.
-
-Useful hardware flags: `--allow-unlocked` (serve even if a converter tile
-clock is not good — enough for `pattern=1` tests), `--rx-freq/--tx-freq` (initial NCOs, default
-600 MHz), `--lib-root` (dir holding `rfsoc_lib/`;
-searched upward from this file by default), `--nco-phase-reset all|tuned|off`
-(default `all`: after NCOs change, reset the NCO phase of every streamed
-channel of that direction together, one update event per tile -- Protocol §3d; `off` if it misbehaves). Both backends: `--chain-grace-ms` (default 1:
-how long an open `num_more` chain streams past its end before the daemon
-stops it, §4a).
-
-100G link flags (daemon and `bringup.py`): `--no-refclk` (skip the 8A34001),
-`--rsfec 0|1` (must match the NIC, default 1), `--rxpol MASK` / `--txpol MASK`
-(lane 0 = bit 0 = SFP0), `--dfe` (DFE instead of LPM), `--loopback` (near-end
-PMA loopback, aligns without the NIC), `--cmac-timeout S`.
-
-Manual bring-up on the board (root, PYNQ venv):
-
-    python3 bringup.py --status                 # read-only; refuses unless v49 is loaded
-    python3 bringup.py                          # overlay + RFDC + link, prints everything
-    python3 bringup.py --link-only --rsfec 0    # v49 already loaded: redo steps b-e only
-    python3 bringup.py --stream-host-ip <host-data-ip> --stream-host-mac <cx5 mac> --seconds 10
-        # + on the PC: watch the NIC count it (nothing needs to receive it):
-        #   ethtool -S <100g-iface> | grep -E "rx_vport_unicast_(packets|bytes)|rx_out_of_buffer"
-        # for a byte-level check use the daemon and host/benchmark/dpdk_rx_test.sh
-
-Board setup: the board holds a git clone of the repository
-(`/home/xilinx/jupyter_notebooks/rfsoc-uhd`); code changes reach it with
-`git pull` there, bitstreams with `../push_bitstreams.sh <bit_dir>
-<user@board> [remote_checkout]` from the build machine.
-
-Tests:
-
-    python3 tests/client_check.py --addr <board-ip> [--tx] [--rate 6e8] [--channels N] \
-        [--otw sc16|sc8|sc12|fc32] [--bf]
-
-## Hardware bring-up, step by step
-
-1. `RFSoCOverlay(bitstream)` (xrfdc imported first so the RFDC driver binds).
-2. Compiled geometry from the hwh (`C_ADC_Decimation_Modetb`,
-   `C_DAC_Interpolation_Modetb`, `C_ADCt_Sampling_Rate`, `C_ADCt_Refclk_Freq`,
-   `C_ADC_Data_Widthtb`, `C_ADCt_Fabric_Freq`, … for every enabled slice).
-   Refused if factors differ between slices, if DAC/ADC ask for different LMX
-   frequencies, or if `Fabric_Freq != fs/factor/(Data_Width/2)`.
-3. `NEW_CONFIG` = that geometry → `ZCU216_CONFIG.update()` → `RfdcTask(...)`
-   `.start()/.join()` (exceptions from the task thread are captured, not lost).
-4. NCOs for the initial frequencies (per streamed channel), then the readback
-   is PRINTED: EVERY enabled block's interpolation/decimation vs. compiled
-   (streamed or not), NyquistZone, NCO, and the `TileState`,
-   `PLLConfig.Enabled`, `PLLLockStatus` of every tile holding a streamed
-   channel. Refused if any factor differs or cannot be read. Tile clock "good" = `PLLLockStatus == 2` for a tile whose PLL
-   is enabled; for a bypassed tile (fs fed straight from the LMX2594,
-   `PLL_Enable false`) there is no PLL, so `TileState == 15` is the
-   only on-chip evidence. Not good → refuse unless `--allow-unlocked`.
-5. `Eth100G`: ID checks (`ZS01`, `ZP01`; the constructor only reads). Then
-   `bringup.link_bringup()`:
-   b. `gt_refclk.program_gt_refclk(156.25)` (unless `--no-refclk`); a failure
-      is printed and bring-up continues so the rest can be debugged;
-   c. `cmac_freq`: refclk must read 156250 ± 50 kHz; if not, the ratio
-      measured/156.25 MHz is printed (= the 8A34001 crystal assumption error);
-      user clock 322266 kHz once the GT TX PLL runs;
-   d. write ctl (RS-FEC, polarities, LPM/DFE, loopback) with GT sys_reset held,
-      release it, wait up to `--cmac-timeout` for status bit0 (rx aligned),
-      printing the status decoded field by field every 0.5 s (RS-FEC AM lock
-      per lane, power-good, reset-dones, local/remote fault, hi BER, ...) and
-      hints if it fails. The RTL controller does RX/RS-FEC on, send RFI, TX enable.
-   e. FPGA MAC/IP (from `zcu216_uhd.conf`) into streamer and player; player
-      enabled AND selected as the DAC source (`dac_src = 1`: the DRAM/DMA path
-      no longer exists; an idle player outputs zeros), so ARP is answered
-      from the start. Then the §10 FMT registers are probed (write each code,
-      read back; a bitstream from before §10 reads 0): `info otw_formats=`.
-      On an N >= 2 build the `tx_beamformer` (ID `ZB01`, NCH = N) is put in
-      bypass with unity weights, and the `rx_beamformer` (ID `ZR01`, NCH = N;
-      only if the `.hwh` lists it) in bypass with unity weights and SHIFT
-      log2(N); then the kept §11 state is re-applied.
-   A link that does not align is reported (`get_sensor cmac_aligned` = status
-   bit0, `refclk_khz`, `usrclk_khz`), not fatal.
-
-## Semantics chosen where the Protocol is silent
-
-* Rates: the highest build rate at or below the request among the builds
-  that carry the client's OTW formats (else the lowest); RX and TX are one
-  rate. A request for the current rate never reloads.
-* `set_rx_freq`: RF frequency f → Nyquist zone parity from f vs fs/2; NCO =
-  `-(f mod fs)` (rfsoc_lib real→I/Q convention, `config_adc_nco`), the driver
-  folds and handles even-zone inversion. Reported value = f rounded to the
-  48-bit NCO step. RX and TX range 0–fs/2 (first Nyquist zone only: 0–1250 MHz
-  at fs 2500, 0–1228.8 MHz at 2457.6; RFSoC 4x2 0–2500
-  MHz at 5000, 0–2457.6 MHz at 4915.2), of the loaded build, so a rate
-  change to the other clock family moves it; a request outside is clamped. With `dsp=` (§3b) the NCO is
-  rf − dsp (RX) / rf + dsp (TX), clamped the same way. After every NCO change
-  (and after the bring-up's) the NCO phases are reset per §3d.
-* `get_rx_lo_locked <ch>`: the tile of channel ch, judged like the bring-up
-  readback (PLL locked, or PLL bypassed and `TileState == 15`). `temp` /
-  `pl_temp` without the AMS sysmon read `string n/a -`; `pps_present` is
-  always false (no PPS input in any build).
-* RX gain = −DSA attenuation, 0…27 dB in 1 dB (Gen3 production silicon), read
-  back after writing. TX gain = 20·log10(VOP µA / 40500) in [−25.1, 0] only if
-  the IP has `C_DAC_VOP_Mode=1`; otherwise range `0 0 0` and fixed 0.
-* `get_sensor` bool replies carry a unit word (`locked`/`unlocked`,
-  `aligned`/`unaligned`); an empty unit would be sent as `-`.
-* `stream_setup` refuses while streaming; `spp` (slots) floored to whole
-  64-byte words of the OTW format (16 sc16, 32 sc8, 64 sc12, 8 fc32 slots)
-  and a multiple of N, at most 8192 payload bytes (the hw reply is the SPP
-  register read back, FMT written first). `num_done`/`num_more` (slots: the
-  host multiplies by N) are rounded up to that granule by the daemon before
-  the FPGA sees them; `num_samps=0` is an error for those modes.
-* `otw=<fmt>` (§10) on `stream_setup` / `stream_setup_tx` writes the
-  streamer's / player's FMT register (idle: before SPP, during the player's
-  flush) and verifies it reads back; refused for a format the bitstream does
-  not convert, whose wire rate (N × rate × bytes/slot) exceeds 12.38 GB/s, or
-  (RX) fc32 on a 512-bit-beat build. `info` lists `otw_formats` (both
-  directions), `rx_otw_formats`, `tx_otw_formats` and, per rate of this N,
-  `rate_otw=<rate>:<fmt>+<fmt>,...`.
-  Stream commands accept any valid `<ch>` and ignore
-  it; the SIDs are always `0x5A160000` / `0x5A170000`.
-* `set_channels N` to the loaded N does not reload unless the loaded build
-  cannot carry the current OTW format (e.g. an sc8-only build left by the
-  previous client, whose format was reset to sc16 on release): then N's
-  default build is loaded. Another N loads that N's sc16-max build.
-  `get_channels` -> `OK <N> <tick_rate>`.
-* The client's current OTW format is the last `otw=` it sent (`stream_setup`,
-  `stream_setup_tx`, or `set_rx_rate <ch> <hz> otw=<fmt>`), sc16 after a claim.
-  A rate change must fit it and the format of every stream setup a reload
-  re-applies; after `set_channels`, a setup the new build cannot carry is
-  dropped (the next `stream_cmd` asks for a new `stream_setup`).
-* Beamformers (§11): `set_bf_angle` / `set_rbf_angle` compute the weights with
-  `rfsoc_lib/dsp/beamformer.py` (`Beamformer(num_channels=N, element_spacing,
-  carrier_freq).compute_weights_fixed_point(angle)`; the same weights for RX,
-  no conjugate) and write W[0..N-1], (RX) SHIFT, LOAD, CTRL. TX and RX keep
-  separate state, which survives reloads (an angle is recomputed for a new N;
-  raw weights of another N fall back to unity, an RX SHIFT set for another N
-  to log2(N)) and is reset to bypass, unity weights, SHIFT log2(N) and the
-  default geometry (135 GHz, 1.07 mm) when the claim is released. On N = 1
-  every `*_bf*` command is `ERR`; every `*_rbf*` command is `ERR` on a build
-  without the RX beamformer (N = 1, or an older bitstream: `info rbf=0`).
-* Stream commands are queued (`rx_cmdq.py`, Protocol §4a): the next one is
-  issued when the streamer is idle (STATUS bit 0, which counts as busy for
-  2 ms after a command was accepted, so a short burst is not taken for
-  finished before its status bit crossed from adc_clk); a running `start_cont`
-  is stopped by the next start once it has sent a packet (STR_PKTS advanced);
-  a late timed command becomes a 16-slot `num_done` marker issued now; an
-  open `num_more` chain streams as `start_cont` and is stopped once the
-  timekeeper passes its end + `--chain-grace-ms`. Acceptance is checked by
-  the streamer's CMDS counter advancing. No EOB is emitted on `stop_cont`
-  between packets; `num_more` ends without EOB. A reload forgets the queue.
-* `stream_setup_tx` replies `OK <tx_buf_words> <fc_interval> <consumed>`: the
-  third token is the player's consumed-word count, which is free-running (only
-  a reset clears it, `fpga_ip/ip_design/uhd_ip/src/udp_player.v`), so the host must use it as its
-  flow-control baseline. Hosts that read only two tokens still parse it.
-  `stream_stop_tx` flushes (flushed words count as consumed) and leaves the
-  player as the DAC source, idle, so the DAC outputs zeros.
-* Owner disconnect or `unclaim` stops RX streaming and TX playback and resets
-  both beamformers.
-* `ref_locked`: the LMK04828/LMX2594 are write-only through xrfclk, so it is
-  the AND of the ADC and DAC tile-clock checks. `set_clock_source external` is
-  refused (no LMK register file selecting CLKin0 exists yet).
+Served by the same code through its `Board`: `rfsoc4x2_v49_<N>ch_qsfp*`,
+N = 1 or 2, fs 5000 / 4915.2. Its RF-ADC tiles are dual (`.hwh`
+`C_High_Speed_ADC`): a converter's I and Q are two IP slices of Data_Width
+samples per clock each but ONE xrfdc block (`Board.adc_slices` /
+`adc_block` / `api_block`), ch1's ADC is `adc_tiles[0].blocks[1]`, tiles 1
+and 3 are left unpowered (`masked_tiles`: the readback lists their blocks
+without reading them), a bypassed ADC tile takes up to 5000 MHz
+(`RFSOC4X2_MIN_MAX_CONFIG`), and the 100G GT refclk is a Si570 running
+from power-up (`gt_refclk = "si570"`: never programmed). Discovery reports
+`product=rfsoc4x2`; `type` stays `zcu216`.

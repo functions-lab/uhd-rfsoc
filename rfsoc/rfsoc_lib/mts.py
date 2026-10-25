@@ -4,8 +4,11 @@ import logging
 
 
 class MyMTS:
+    """Multi-tile synchronisation of the RF-DAC and RF-ADC tiles (xrfdc's
+    XRFdc_MultiConverter_Sync through PYNQ's RFdc.mts_dac / mts_adc), with
+    the MTS clocking wizard (overlay MTS_block/MTS_clk_wiz) checked locked."""
 
-    def __init__(self, rfdc_ip, overlay, board="ZCU216", debug=False,
+    def __init__(self, rfdc_ip, overlay, board="ZCU216",
                  after_clkwiz_reset=None, after_dac_reset=None):
         """after_clkwiz_reset / after_dac_reset: called in init_tile_sync right
         after the MTS clocking-wizard reset and after the DAC tile resets.
@@ -15,7 +18,6 @@ class MyMTS:
         self.after_clkwiz_reset = after_clkwiz_reset
         self.after_dac_reset = after_dac_reset
         self.mts_monitor = overlay.MTS_block.MTS_clk_wiz
-        self.debug = debug
         self.board = board
         self.CLOCKWIZARD_LOCK_ADDRESS = 0x0004
         self.CLOCKWIZARD_RESET_ADDRESS = 0x0000
@@ -31,48 +33,16 @@ class MyMTS:
             self.ACTIVE_ADC_TILES = 0b1111
             self.DAC_REF_TILE = 1
             self.ADC_REF_TILE = 1
-        # MTS related
         self.mts_latency_min = 16
-        self.mts_latency_margin = 16
-
-    def debug_info(self):
-        """Print debug information"""
-        mts_attr = ['RefTile', 'Tiles', 'Target_Latency',
-                    'Offset', 'Latency', 'Marker_Delay', 'SysRef_Enable']
-
-        for attr in mts_attr:
-            val = getattr(self.rfdc.mts_dac_config, attr, None)
-            if attr == "Offset" or attr == "Latency":
-                for i in range(4):
-                    logging.info(
-                        f"DAC MTS {attr} Tile[{i}] : {val[i]}")
-            else:
-                logging.info(
-                    f"DAC MTS {attr} : {val}")
-
-        for attr in mts_attr:
-            val = getattr(self.rfdc.mts_adc_config, attr, None)
-            if attr == "Offset" or attr == "Latency":
-                for i in range(4):
-                    logging.info(
-                        f"ADC MTS {attr} Tile[{i}] : {val[i]}")
-            else:
-                logging.info(
-                    f"ADC MTS {attr} : {val}")
 
     def init(self):
-        """Initialize MTS"""
+        """Reset the tile-sync engines, check the MTS clock tree, sync the tiles."""
         try:
             self.init_tile_sync()
         except ValueError as e:
             logging.warning(f"{e}")
-
-        if self.debug:
-            self.debug_info()
         # Verify PL_CLK and PL_SYSREF are synced
         self.verify_clock_tree()
-        # Actually sync tiles with measured latency
-        latency = self.mts_latency_margin + 144  # from experiment
         # Target latency: -1 aligns every tile to the slowest one, and that
         # latency can move by a fabric clock from one sync to the next; a
         # fixed target pads every tile up to it. $RFSOC_MTS_TARGET =
@@ -83,8 +53,6 @@ class MyMTS:
             self.sync_tiles(dac_target_latency=dac_t, adc_target_latency=adc_t)
         else:
             self.sync_tiles()
-        # TODO: Figure out how to set target latency for DACs and ADCs
-        # self.sync_tiles(dac_target_latency=latency, adc_target_latency=latency)
 
     def sync_tiles(self, dac_target_latency=-1, adc_target_latency=-1):
         """ Configures RFSoC MTS alignment"""
@@ -94,7 +62,7 @@ class MyMTS:
                 f"DAC target latency {dac_target_latency} shall be >= than {latency_min}.")
         if adc_target_latency < latency_min and adc_target_latency != -1:
             raise RuntimeError(
-                f"ADC target latency {dac_target_latency} shall be >= than {latency_min}.")
+                f"ADC target latency {adc_target_latency} shall be >= than {latency_min}.")
 
         # Set which RF tiles use MTS and turn MTS off
         if self.ACTIVE_DAC_TILES > 0:

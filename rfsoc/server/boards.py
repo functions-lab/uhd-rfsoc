@@ -38,16 +38,15 @@ Slice = Tuple[int, int]
 class Board:
     def __init__(self, name: str, dual_adc: bool, max_channels: int,
                  masked_tiles: Tuple[int, ...], default_bitstream: str,
-                 lib_config: str, mts_note: str, gt_refclk: str = "8a34001"):
+                 lib_config: str, gt_refclk: str = "8a34001"):
         self.name = name                    # rfsoc_lib board name (RfdcTask, MyMTS, xrfclk/<name>)
         self.prefix = name.lower()          # bitstream prefix: <prefix>_v49_<N>ch_qsfp*
         self.dual_adc = dual_adc
         self.max_channels = max_channels
         # tiles RfdcTask leaves unpowered on this board (set_board_rules)
         self.masked_tiles = masked_tiles
-        self.default_bitstream = default_bitstream
-        self.lib_config = lib_config        # rfdc_config name of its limits
-        self.mts_note = mts_note
+        self.default_bitstream = default_bitstream  # loaded at start when present (the 1ch template)
+        self.lib_config = lib_config        # rfdc_config name of its clock limits
         # the 100G GT refclk: "8a34001" (programmed at bring-up) or "si570"
         # (fixed, runs from power-up: never programmed)
         self.gt_refclk = gt_refclk
@@ -100,12 +99,10 @@ class Board:
 BOARDS = {
     "ZCU216": Board("ZCU216", dual_adc=False, max_channels=16, masked_tiles=(),
                     default_bitstream="zcu216_v49_1ch_qsfp_f2_fs2500.bit",   # 1 ch, 1250 MS/s
-                    lib_config="ZCU216_MIN_MAX_CONFIG",
-                    mts_note="the first attempt after a reboot can fail"),
+                    lib_config="ZCU216_MIN_MAX_CONFIG"),
     "RFSOC4X2": Board("RFSoC4x2", dual_adc=True, max_channels=2, masked_tiles=(1, 3),
                       default_bitstream="rfsoc4x2_v49_1ch_qsfp_f2_fs5000.bit",   # 1 ch, 2500 MS/s
                       lib_config="RFSOC4X2_MIN_MAX_CONFIG",
-                      mts_note="locks at the first attempt",
                       gt_refclk="si570"),
 }
 DEFAULT_BOARD = "ZCU216"

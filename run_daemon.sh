@@ -11,7 +11,8 @@
 # Daemon options go to rfsoc/server/zcu216_uhd_daemon.py (e.g. --bitstream X.bit;
 # its --help lists them); --allow-unlocked is always given. It loads the
 # bitstreams in rfsoc/server/ (rfsoc/push_bitstreams.sh puts them there) and
-# reads rfsoc/server/zcu216_uhd.conf (from zcu216_uhd.conf.example). Root via
+# reads rfsoc/server/zcu216_uhd.conf (`sudo rfsoc/setup_board.sh` creates it
+# from zcu216_uhd.conf.example and prepares the PYNQ image, once). Root via
 # sudo, Python from the PYNQ venv. Log: /tmp/uhd_daemon.log (the previous
 # run's: /tmp/uhd_daemon.log.1).
 set -euo pipefail
@@ -24,14 +25,14 @@ OUT=/tmp/uhd_daemon.out
 pids() { pgrep -f '[z]cu216_uhd_daemon[.]py' || true; }
 
 # PYNQ's board name (its xrfclk needs $BOARD set), as /etc/profile.d/boardname.sh sets it
-pynq_board() { [ -n "${BOARD:-}" ] && echo "$BOARD" || tr -d '\0' < /proc/device-tree/chosen/pynq_board 2>/dev/null || echo ZCU216; }
+pynq_board() { [ -n "${BOARD:-}" ] && echo "$BOARD" || tr -d '\0' 2>/dev/null < /proc/device-tree/chosen/pynq_board || echo ZCU216; }
 
 addr() { ip -4 -br addr show eth0 2>/dev/null | awk '{print $3}' | cut -d/ -f1; }
 
 check() {
     [ -x "$PY" ] || { echo "no PYNQ Python at $PY: run this on the board (or set UHD_DAEMON_PYTHON)" >&2; exit 1; }
-    [ -f "$SRV/zcu216_uhd.conf" ] || { echo "no $SRV/zcu216_uhd.conf: cp $SRV/zcu216_uhd.conf.example $SRV/zcu216_uhd.conf and set data_ip" >&2; exit 1; }
-    compgen -G "$SRV/*_v49_*ch_qsfp*.bit" > /dev/null || { echo "no bitstreams in $SRV: copy them from the build machine with rfsoc/push_bitstreams.sh <bit_dir> xilinx@<board> (or the .bit/.hwh files of a release)" >&2; exit 1; }
+    [ -f "$SRV/zcu216_uhd.conf" ] || { echo "no $SRV/zcu216_uhd.conf: run 'sudo rfsoc/setup_board.sh' once (it creates it from zcu216_uhd.conf.example), then set data_ip in it" >&2; exit 1; }
+    compgen -G "$SRV/*_v49_*ch_qsfp*.bit" > /dev/null || { echo "no bitstreams in $SRV: copy them from the build machine with rfsoc/push_bitstreams.sh <bit_dir> <user>@<board> (or the .bit/.hwh files of a release)" >&2; exit 1; }
 }
 
 # the channel counts of the bitstreams here (<board>_v49_<N>ch_qsfp*.bit), e.g. 1/2/4/8/16

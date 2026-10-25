@@ -1,15 +1,12 @@
 import logging
 import xrfdc
-import numpy as np
 import time
 import contextlib
 
 from xrfdc import RFdcDacTile, RFdcAdcTile
 
 from rfsoc_lib.rfdc_config import ZCU216_CONFIG
-# defined PYNQ-free in their own modules; re-exported for existing importers
-from rfsoc_lib.rfdc_type import MyRFdcType  # noqa: F401
-from rfsoc_lib.dsp.unit_convt import dB2Amp, amp2dB  # noqa: F401
+from rfsoc_lib.rfdc_type import MyRFdcType
 
 
 def nco_on_sysref():
@@ -31,14 +28,10 @@ class MyRFdcStatus:
     """Status of RF Data Converter"""
 
     def __init__(self, rfdc):
-        # Keep the rfdc handle: IPStatus must be RE-READ for anything dynamic.
-        # This used to snapshot IPStatus once at construction, so TileState was
-        # frozen at whatever it was when the task object was built -- measured
-        # on a ZCU216: state read 15 on every tile immediately after
-        # tile.ShutDown(), and is_ready() therefore returned True on any warm
-        # board, silently skipping set_external_clocks() + init() (the only
-        # path to DynamicPLLConfig). Enable masks are static configuration and
-        # stay snapshotted; the STATES are properties of the running hardware.
+        # Keep the rfdc handle: IPStatus must be RE-READ for anything dynamic
+        # (TileState is a property of the running hardware; measured on a
+        # ZCU216, a snapshot read 15 on every tile right after ShutDown()).
+        # Enable masks are static configuration and stay snapshotted.
         self._rfdc = rfdc
         self.dac_tile_status = rfdc.IPStatus['DACTileStatus']
         self.adc_tile_status = rfdc.IPStatus['ADCTileStatus']
@@ -65,12 +58,6 @@ class MyRFdcStatus:
     def get_dac_tile_state(self, tile_id):
         return self._rfdc.IPStatus['DACTileStatus'][tile_id]['TileState']
 
-    def get_dac_powerup_state(self, tile_id):
-        return self.dac_tile_status[tile_id]['PowerUpState']
-
-    def get_dac_pll_state(self, tile_id):
-        return self.dac_tile_status[tile_id]['PLLState']
-
     def get_dac_block_enb(self, tile_id, block_id):
         if self.dac_block_mask_out[block_id]:
             return False
@@ -85,12 +72,6 @@ class MyRFdcStatus:
 
     def get_adc_tile_state(self, tile_id):
         return self._rfdc.IPStatus['ADCTileStatus'][tile_id]['TileState']
-
-    def get_adc_powerup_state(self, tile_id):
-        return self.adc_tile_status[tile_id]['PowerUpState']
-
-    def get_adc_pll_state(self, tile_id):
-        return self.adc_tile_status[tile_id]['PLLState']
 
     def get_adc_block_enb(self, tile_id, block_id):
         if self.adc_block_mask_out[block_id]:
@@ -166,8 +147,7 @@ class MyRFdcFreqConfig:
             err_msg = f"Reference clock frequency shall be above DAC:{ref_clk_min_for_dac} or ADC:{ref_clk_min_for_adc} Hz if on-chip PLL is bypassed."
             assert self.ref_clk >= ref_clk_min_for_dac and self.ref_clk >= ref_clk_min_for_adc, err_msg
             # The bypassed tile samples at its reference, so this bound is the
-            # converter's own rate limit -- 2400 MHz sits inside both and must
-            # not warn, which the old max/min mix-up made it do on every run.
+            # converter's own rate limit (fs 2500 sits inside both)
             err_msg = f"Reference clock frequency shall fall below DAC:{ref_clk_max_for_dac} or ADC:{ref_clk_max_for_adc} Hz if on-chip PLL is bypassed."
             if self.ref_clk > ref_clk_max_for_dac or self.ref_clk > ref_clk_max_for_adc:
                 logging.warning(err_msg)
@@ -202,12 +182,10 @@ class MyRFdcConfig:
     def clock_src_for(ref_clk):
         """Pick the tile clock source the reference frequency implies.
 
-        The MTS-enabled shells bypass the in-tile PLL and take the sample clock
-        straight from the LMX2594 (Refclk_Freq 2400, PLL_Enable false), so their
-        reference sits far above RefClockForPLLMax.  Hard-wiring CLK_SRC_PLL
-        made those references fail the PLL range assertion, and the only way to
-        get past it was to program the LMX to 300 MHz -- which a bypassed tile
-        then samples at directly, running 8x slow with nothing reporting it.
+        The builds bypass the in-tile PLL and take the sample clock straight
+        from the LMX2594 (Refclk_Freq = fs, PLL_Enable false), so their
+        reference sits far above RefClockForPLLMax: CLK_SRC_EXT. A reference
+        inside the PLL's range is a PLL design: CLK_SRC_PLL.
         """
         if ref_clk > ZCU216_CONFIG['RefClockForPLLMax']:
             return xrfdc.CLK_SRC_EXT
@@ -271,36 +249,6 @@ class MyRFdc:
         self.clock_src = self.rfdc_cfg.freq_cfg.clock_src
         self.debug_mode = debug_mode
 
-    def debug(self):
-        # Attributes for both DAC and ADC blocks
-        block_attr = ['BlockStatus', 'MixerSettings', 'QMCSettings',
-                      'CoarseDelaySettings', 'NyquistZone', 'EnabledInterrupts', 'PwrMode']
-        # Attributes for DAC block only
-        dac_only_attr = ['InterpolationFactor', 'DecoderMode',  # 'OutputCurr',
-                         'InvSincFIR', 'FabRdVldWords', 'FabWrVldWords', 'DataPathMode', 'IMRPassMode', 'DACCompMode']
-        # Attributes for ADC block only
-        adc_only_attr = ['DecimationFactor', 'CalibrationMode', 'FabRdVldWords',
-                         'FabWrVldWords', 'DecimationFactorObs', 'FabRdVldWordsObs', 'FabWrVldWordsObs', 'Dither', 'CalFreeze', 'DSA']
-
-        for tile in self.dac_tiles:
-            if self.rfdc_status.get_dac_tile_enb(tile.tile_id):
-                for block_id, block in enumerate(tile.blocks):
-                    if self.rfdc_status.get_dac_block_enb(
-                            tile.tile_id, block_id):
-                        for attr in block_attr:
-                            logging.info(attr+": "+str(getattr(block, attr)))
-                        for attr in dac_only_attr:
-                            logging.info(attr+": "+str(getattr(block, attr)))
-        for tile in self.adc_tiles:
-            if self.rfdc_status.get_adc_tile_enb(tile.tile_id):
-                for block_id, block in enumerate(tile.blocks):
-                    if self.rfdc_status.get_adc_block_enb(
-                            tile.tile_id, block_id):
-                        for attr in block_attr:
-                            logging.info(attr+": "+str(getattr(block, attr)))
-                        for attr in adc_only_attr:
-                            logging.info(attr+": "+str(getattr(block, attr)))
-
     def init(self):
         """Power on DAC/ADC tiles"""
         # Power on DAC tiles
@@ -334,83 +282,16 @@ class MyRFdc:
         time.sleep(1)  # wait for a SYSREF edge to be detected
         mts_config.SysRef_Enable = 0
 
-    def is_ready(self):
-        """Check if all tiles are powered up AND clocked as configured.
-
-        Power alone is not readiness: the tiles self-start from whatever clock
-        the boot left on the LMK, report state 15, and RfdcTask.run() then
-        skipped init() -- so DynamicPLLConfig never ran, the tile PLL stayed
-        disabled, and the converters sampled at the raw LMX frequency while
-        every rate register read back correctly. When the configuration asks
-        for the on-chip PLL (CLK_SRC_PLL), a tile whose PLL is not enabled is
-        NOT ready, whatever its power state says.
-        """
-        for tile in self.dac_tiles:
-            if not self.is_dac_tile_ready(tile):
-                return False
-        for tile in self.adc_tiles:
-            if not self.is_adc_tile_ready(tile):
-                return False
-        if self.clock_src == xrfdc.CLK_SRC_PLL:
-            for tile in self.dac_tiles:
-                if self.rfdc_status.get_dac_tile_enb(tile.tile_id) and                         not int(tile.PLLConfig.get('Enabled', 0)):
-                    return False
-            for tile in self.adc_tiles:
-                if self.rfdc_status.get_adc_tile_enb(tile.tile_id) and                         not int(tile.PLLConfig.get('Enabled', 0)):
-                    return False
-            # ENABLED IS A PROGRAMMED FLAG, NOT A LOCK. Measured on a ZCU216:
-            # every ADC tile read PLLConfig Enabled=1 while PLLLockStatus was 1
-            # (XRFDC_PLL_UNLOCKED) -- the tile free-ran at an arbitrary rate and
-            # the fabric interface FIFO emitted 48-sample stale pages (both FIFO
-            # flags asserted). A tile whose PLL is claimed enabled but not
-            # actually locked (PLLLockStatus != 2) is NOT ready.
-            for tiles, get_enb in ((self.dac_tiles,
-                                    self.rfdc_status.get_dac_tile_enb),
-                                   (self.adc_tiles,
-                                    self.rfdc_status.get_adc_tile_enb)):
-                for tile in tiles:
-                    if not get_enb(tile.tile_id):
-                        continue
-                    if not int(tile.PLLConfig.get('Enabled', 0)):
-                        continue
-                    try:
-                        locked = int(tile.PLLLockStatus)
-                    except Exception:
-                        continue
-                    if locked != 2:
-                        logging.warning(
-                            f"tile {tile.tile_id}: PLL enabled but "
-                            f"PLLLockStatus={locked} (2=locked) -- not ready")
-                        return False
-        return True
-
-    def shutdown_tiles(self):
-        """Safely shutdown all tiles."""
-        for tile in self.dac_tiles:
-            if self.rfdc_status.get_dac_tile_enb(tile.tile_id):
-                tile.ShutDown()
-        for tile in self.adc_tiles:
-            if self.rfdc_status.get_adc_tile_enb(tile.tile_id):
-                tile.ShutDown()
-        logging.info(f"All tiles has been safely shutdown!")
-
-    def is_dac_tile_ready(self, tile):
-        tile_state = self.rfdc_status.get_dac_tile_state(tile.tile_id)
-        if self.rfdc_status.get_dac_tile_enb(tile.tile_id):
-            return False if tile_state < 15 else True
-        else:
-            return True
-
     def _dynamic_pll_config(self, kind, tile, samp_rate):
         """DynamicPLLConfig, tolerating a tile that receives a distributed clock.
 
-        With the tile PLL bypassed (CLK_SRC_EXT) on a shell that distributes the
-        sample clock from one tile to its neighbours (e.g. zcu216_v45_rt_1ch_mts:
-        DAC1/ADC1 distribute to tiles 0,2,3), the driver refuses a source setting
-        on the receiving tiles ("Invalid Source value (2) for DAC 0"): their clock
-        is set by the distributing tile. That refusal is not an error. Whether
-        the tile really has a clock is decided by the TileState == 15 check that
-        follows, unchanged -- a tile without one still fails loudly.
+        With the tile PLL bypassed (CLK_SRC_EXT) on a design that distributes
+        the sample clock from one tile to its neighbours, the driver refuses a
+        source setting on the receiving tiles ("Invalid Source value (2) for
+        DAC 0"): their clock is set by the distributing tile. That refusal is
+        not an error. Whether the tile really has a clock is decided by the
+        TileState == 15 check that follows -- a tile without one still fails
+        loudly.
         """
         try:
             tile.DynamicPLLConfig(
@@ -439,13 +320,6 @@ class MyRFdc:
                 raise Exception(err_msg)
             logging.info(
                 f"DAC tile {tile.tile_id} ({tile.tile_phy_id}) is fully powered up!")
-
-    def is_adc_tile_ready(self, tile):
-        tile_state = self.rfdc_status.get_adc_tile_state(tile.tile_id)
-        if self.rfdc_status.get_adc_tile_enb(tile.tile_id):
-            return False if tile_state < 15 else True
-        else:
-            return True
 
     def power_on_adc_tile(self, tile):
         """Power on ADC tiles."""
@@ -564,14 +438,11 @@ class MyRFdc:
                 self.rfdc_cfg.adc_block_mixer_cfg, 'ADC', tile.tile_id, block_id)
             # WRITE THE DECIMATION ONLY IF IT DIFFERS FROM WHAT THE BITSTREAM
             # COMPILED. XRFdc_SetDecimationFactor is not an idempotent register
-            # write: even when the value is unchanged (16 == 16) the driver
-            # re-derives the fabric interface width from its own defaults,
-            # which clobbers the compiled Data_Width gearbox. Measured on the
-            # zcu216 4x4 overlay (Data_Width 8, four complex per 128-bit beat):
-            # after this write the ADC handed the fabric TWO complex per clock
-            # instead of four -- every frame captured 2x time-compressed (CP
-            # correlation 0.92 at N=128 against 0.29 at the design's N=256)
-            # with the missing half padded by stale FIFO re-reads.
+            # write: even when the value is unchanged the driver re-derives the
+            # fabric interface width from its own defaults, which clobbers the
+            # compiled Data_Width gearbox (measured on a ZCU216 with Data_Width
+            # 8: the ADC then handed the fabric two complex samples per clock
+            # instead of four, every capture 2x time-compressed).
             decim = ZCU216_CONFIG[f'ADCDecimFactor{tile.tile_id}{block_id}']
             if block.DecimationFactor != decim:
                 block.DecimationFactor = decim

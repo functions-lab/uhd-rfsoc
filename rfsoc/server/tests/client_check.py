@@ -36,7 +36,6 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import vrt  # noqa: E402
 
 FAILS = []
@@ -105,7 +104,7 @@ def main():
     ap.add_argument("--channels", type=int, default=None,
                     help="set_channels N first (may reload the FPGA) [keep loaded]")
     ap.add_argument("--no-bcast", action="store_true",
-                    help="skip the broadcast discovery (loopback sim)")
+                    help="skip the broadcast discovery check")
     ap.add_argument("--tx-port", type=int, default=vrt.TX_PORT,
                     help="FPGA UDP port for TX samples")
     ap.add_argument("--src-port", type=int, default=vrt.FPGA_SRC_PORT,
@@ -160,9 +159,9 @@ def main():
         check(kv["num_tx"] == kv["num_rx"], f"num_rx == num_tx == {nch}")
         rates = [float(x) for x in kv["rx_rates"].split(",")]
         ticks = [float(x) for x in kv["tick_rates"].split(",")]
-        # tick rate per build: aggregate slot rate x TICK_STEP (1 for N > 1,
-        # F/2 = 1.2 GHz for every 1-channel build)
-        want_ticks = [1.2e9 if nch == 1 else nch * r for r in rates]
+        # tick rate per build: aggregate slot rate x TICK_STEP (1 on every
+        # build, Protocol §8): N x the per-channel rate
+        want_ticks = [nch * r for r in rates]
         check(rates == sorted(rates, reverse=True) and ticks == want_ticks
               and tick in ticks, f"rates {rates} descending, tick_rates {ticks} == "
               f"{want_ticks}, tick_rate {tick:.17g}")

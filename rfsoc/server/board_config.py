@@ -112,13 +112,13 @@ def derived_mac(ifaces=("eth0", "end0", "enp0s0")) -> Optional[str]:
 
 
 def resolve(data_ip: Optional[str], data_mac: Optional[str], name: Optional[str],
-            config: Optional[str] = None, need_data_ip: bool = True
-            ) -> Tuple[Optional[str], Optional[str], Optional[str], str]:
+            config: Optional[str] = None
+            ) -> Tuple[str, str, Optional[str], str]:
     """Command line over config file over derivation.
     -> (data_ip, data_mac, name, how: a one-line description for the log);
     name is None when neither gives one (the daemon then names the device
     after the board).
-    ConfigError when hardware needs a data IP and none is configured."""
+    ConfigError when no data IP is configured, or no data MAC can be derived."""
     cfg, where = load(config)
     src = []
     ip = data_ip or cfg.get("data_ip")
@@ -127,13 +127,12 @@ def resolve(data_ip: Optional[str], data_mac: Optional[str], name: Optional[str]
         src.append("data_ip from --data-ip")
     elif ip:
         src.append(f"data_ip from {where}")
-    elif need_data_ip:
+    else:
         raise ConfigError(
             "no FPGA data IP configured: put 'data_ip = <fpga data ip>' (an "
             "address on the subnet of the PC's 100G port) into "
-            f"{' or '.join(config_paths()[-2:])} (see {CONF_NAME}.example), "
-            "or pass --data-ip")
-    mac = None
+            f"{' or '.join(config_paths()[-2:])} (see {CONF_NAME}.example; "
+            "rfsoc/setup_board.sh creates it), or pass --data-ip")
     if data_mac:
         mac = check_mac(data_mac, "--data-mac")
         src.append("data_mac from --data-mac")
@@ -142,10 +141,9 @@ def resolve(data_ip: Optional[str], data_mac: Optional[str], name: Optional[str]
         src.append(f"data_mac from {where}")
     else:
         mac = derived_mac()
-        if mac:
-            src.append("data_mac derived from the eth0 MAC")
-        elif need_data_ip:
+        if not mac:
             raise ConfigError("no FPGA data MAC: set 'data_mac' in the config file or "
                               "pass --data-mac (no eth0 MAC to derive one from)")
+        src.append("data_mac derived from the eth0 MAC")
     nm = name or cfg.get("name") or None
-    return ip, mac, nm, "; ".join(src) or "no data-plane address (sim)"
+    return ip, mac, nm, "; ".join(src)

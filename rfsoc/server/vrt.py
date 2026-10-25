@@ -1,4 +1,4 @@
-"""VITA-49-style packets of the uhd_zcu216 data plane (Protocol §4-7).
+"""VITA-49-style packets of the zcu216 data plane (Protocol §4-7, §10).
 
 Pure Python (numpy optional). Used by the daemon and by the host-side
 checkers (host/tools/check_pattern_file.py, tests/client_check.py), so they
@@ -38,9 +38,8 @@ TX_SID_BASE = 0x5A170000       # TX (host -> FPGA) stream IDs
 ASYNC_MAGIC = 0x5A17A5C0
 TX_PORT = 49900                # FPGA UDP port receiving TX samples
 TX_SRC_PORT = 49801            # FPGA source port of async status / FC packets
-WORD_SAMPS = 16                # one 64-byte TX buffer word = 16 sc16 samples
 
-# async event codes = uhd::async_metadata_t::event_code_t
+# async event codes (§7) = uhd::async_metadata_t::event_code_t
 EVENT_FC_UPDATE = 0x0
 EVENT_BURST_ACK = 0x1
 EVENT_UNDERFLOW = 0x2
@@ -52,8 +51,7 @@ HDR_WORDS = 4
 HDR_BYTES = 4 * HDR_WORDS
 FPGA_SRC_PORT = 49800
 GRANULE = 16           # FPGA works in 16-slot units (one 512-bit CMAC word)
-BEAT = 4               # slots per 128-bit ADC beat (a wider fabric beat has more)
-MAX_SPP = 2048
+MAX_SPP = 2048         # sc16 slots per packet (8192-byte payload)
 DEFAULT_SPP = 2048
 
 _W0_SID = 1 << 28
@@ -90,13 +88,6 @@ def round_spp(spp: int, granule: int = GRANULE, max_spp: int = MAX_SPP) -> int:
 def ceil_granule(n: int, granule: int = GRANULE) -> int:
     n = int(n)
     return ((n + granule - 1) // granule) * granule
-
-
-def floor_beat(t: int, tps: int = 1, beat: int = BEAT) -> int:
-    """Start of the fabric beat containing tick `t` (a beat is beat*tps ticks;
-    `beat` slots per beat, 4 for a 128-bit beat)."""
-    span = int(beat) * int(tps)
-    return int(t) - (int(t) % span)
 
 
 def pack_header(ch: int, tsf: int, nsamps: int, pkt_count: int,
@@ -160,76 +151,11 @@ def pattern_payload(tsf: int, n: int, tps: int = 1) -> bytes:
     return struct.pack("<%dI" % n, *(pattern_word(tsf + k * tps) for k in range(n)))
 
 
-def tone_payload(tsf: int, n: int, freq_hz: float, tick_rate_hz: float,
-                 amp: int = 8192, tps: int = 1) -> bytes:
-    """Complex exponential keyed to the timestamp in ticks (phase-continuous);
-    sample k is at tick tsf + k*tps."""
-    w = 2.0 * math.pi * freq_hz / tick_rate_hz
-    if _np is not None:
-        t = _times(tsf, n, tps).astype(_np.float64)
-        ph = _np.mod(t * w, 2 * math.pi)
-        iq = _np.empty(2 * n, dtype="<i2")
-        iq[0::2] = _np.round(amp * _np.cos(ph)).astype(_np.int16)
-        iq[1::2] = _np.round(amp * _np.sin(ph)).astype(_np.int16)
-        return iq.tobytes()
-    out = []
-    for k in range(n):
-        ph = math.fmod((tsf + k * tps) * w, 2 * math.pi)
-        out.append(int(round(amp * math.cos(ph))))
-        out.append(int(round(amp * math.sin(ph))))
-    return struct.pack("<%dh" % (2 * n), *out)
-
-
-def tone_payload_multi(tsf: int, n: int, nch: int, freq_hz: float,
-                       tick_rate_hz: float, amp: int = 8192, tps: int = 1) -> bytes:
-    """n slots of an nch-channel stream (§9 interleave): channel c carries a
-    tone at (c + 1) * freq_hz, sampled at its sample's time TSF + (i - c)*tps
-    (all channels of one sample share its time)."""
-    nch = max(1, int(nch))
-    if nch == 1:
-        return tone_payload(tsf, n, freq_hz, tick_rate_hz, amp=amp, tps=tps)
-    if _np is not None:
-        i = _np.arange(n, dtype=_np.int64)
-        c = i % nch
-        t = (tsf + (i - c) * int(tps)).astype(_np.float64)
-        ph = _np.mod(t * (2.0 * math.pi * freq_hz / tick_rate_hz) * (c + 1), 2 * math.pi)
-        iq = _np.empty(2 * n, dtype="<i2")
-        iq[0::2] = _np.round(amp * _np.cos(ph)).astype(_np.int16)
-        iq[1::2] = _np.round(amp * _np.sin(ph)).astype(_np.int16)
-        return iq.tobytes()
-    out = []
-    for i in range(n):
-        c = i % nch
-        ph = math.fmod((tsf + (i - c) * tps) * 2.0 * math.pi * freq_hz
-                       / tick_rate_hz * (c + 1), 2 * math.pi)
-        out.append(int(round(amp * math.cos(ph))))
-        out.append(int(round(amp * math.sin(ph))))
-    return struct.pack("<%dh" % (2 * n), *out)
-
-
-def check_pattern(payload: bytes, tsf: int, tps: int = 1) -> int:
-    """Return the number of samples that do NOT match the §5 pattern."""
-    n = len(payload) // 4
-    if _np is not None:
-        got = _np.frombuffer(payload[:4 * n], dtype="<u4")
-        i = (_times(tsf, n, tps) & _np.uint64(0xFFFF)).astype(_np.uint32)
-        exp = i | ((~i & 0xFFFF) << 16)
-        return int(_np.count_nonzero(got != exp))
-    got = struct.unpack("<%dI" % n, payload[:4 * n])
-    return sum(1 for k, w in enumerate(got) if w != pattern_word(tsf + k * tps))
-
-
 # --------------------------------------------------------------------------
 # Async status packets (§7)
 # --------------------------------------------------------------------------
 _ASYNC = struct.Struct("<6I")
 ASYNC_BYTES = _ASYNC.size
-
-
-def pack_async(ch: int, tsf: int, event: int, consumed_words: int) -> bytes:
-    return _ASYNC.pack(ASYNC_MAGIC, tx_sid_for(ch), (tsf >> 32) & 0xFFFFFFFF,
-                       tsf & 0xFFFFFFFF, event & 0xFFFFFFFF,
-                       consumed_words & 0xFFFFFFFF)
 
 
 def unpack_async(buf: bytes) -> dict:
@@ -249,16 +175,9 @@ OTW_CODE = {"sc16": 0, "sc8": 1, "sc12": 2, "fc32": 3}    # FPGA FMT register
 OTW_SLOT_BYTES = {"sc16": 4, "sc8": 2, "sc12": 3, "fc32": 8}
 OTW_GRANULE = {"sc16": 16, "sc8": 32, "sc12": 64, "fc32": 8}   # slots / whole 64-B words
 MAX_PAYLOAD_BYTES = 8192
-TX_WORD_BYTES = 64                 # flow-control credit unit (§6)
 # 100GbE: what is left for UDP payload of ~8 KB frames after Ethernet
 # preamble/IFG/header/FCS, IPv4, UDP and the 16-byte VRT header
 LINK_PAYLOAD_BYTES_PER_S = 12.38e9
-
-
-def otw_check(fmt: str) -> str:
-    if fmt not in OTW_CODE:
-        raise ValueError(f"unknown otw format {fmt!r} (want {'|'.join(OTW_FORMATS)})")
-    return fmt
 
 
 def otw_granule(fmt: str = "sc16", nch: int = 1) -> int:
@@ -272,10 +191,6 @@ def otw_max_spp(fmt: str = "sc16") -> int:
     """Most slots one packet carries: an 8192-byte payload (sc16 2048, sc8
     4096, sc12 2730 -> 2688 after the granule, fc32 1024)."""
     return MAX_PAYLOAD_BYTES // OTW_SLOT_BYTES[fmt]
-
-
-def otw_payload_bytes(fmt: str, slots: int) -> int:
-    return int(slots) * OTW_SLOT_BYTES[fmt]
 
 
 def otw_wire_rate(fmt: str, aggregate_slots_per_s: float) -> float:

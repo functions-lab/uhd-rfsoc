@@ -20,7 +20,8 @@ Beam (per sample, exact complex products and sum):
   y   = sat16((acc + 2^(14+SHIFT)) >> (15+SHIFT))   per real / imag part
 The weights are those of the TX beamformer for the same direction (no
 conjugate: by reciprocity the propagation phase of element c is the same).
-`beam_payload` is the bit-exact reference the software device and the tests use.
+`beam_payload` is the bit-exact reference of the beam (Protocol §11), for
+host-side checks of a capture.
 """
 from __future__ import annotations
 
@@ -28,7 +29,7 @@ import logging
 import struct
 from typing import List, Optional, Sequence, Tuple
 
-from tx_beamformer import pack_weight, unpack_weight, UNITY  # noqa: F401  (re-exported)
+from tx_beamformer import pack_weight, unpack_weight
 
 try:
     import numpy as _np
