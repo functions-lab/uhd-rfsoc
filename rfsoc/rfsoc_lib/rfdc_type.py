@@ -24,7 +24,10 @@ class MyRFdcType:
     # TileState -> index into POWER_ON_STATES / POWER_ON_DESC
     _STATE_OF = [0, 0, 0, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 4, 5]
 
-    POWER_ON_SEQUENCE_STEPS = [
-        {"Sequence Number": n, "State": POWER_ON_STATES[i], "Description": POWER_ON_DESC[i]}
-        for n, i in enumerate(_STATE_OF)
-    ]
+    # a loop, not a comprehension: a comprehension in a class body cannot see
+    # the class's own names (POWER_ON_STATES, POWER_ON_DESC)
+    POWER_ON_SEQUENCE_STEPS = []
+    for _n, _i in enumerate(_STATE_OF):
+        POWER_ON_SEQUENCE_STEPS.append(
+            {"Sequence Number": _n, "State": POWER_ON_STATES[_i], "Description": POWER_ON_DESC[_i]})
+    del _n, _i
