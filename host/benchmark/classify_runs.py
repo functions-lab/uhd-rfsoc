@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """classify_runs.py -- sort full-rate benchmark_rate runs by WHEN they lost data.
 
-  python3 benchmark/classify_runs.py [log root ...]     (default /tmp/zcu216_oracle)
+  python3 benchmark/classify_runs.py [log root ...]     (default /tmp/uhd_rfsoc_oracle)
 
 Reads every per-run log `bench_strict.sh` wrote under the roots (oracle.sh keeps
 one directory per run: <OUT>/bench/<bitstream>_r<N>/*.log) and prints, per
@@ -30,7 +30,7 @@ import sys
 COLD_S = 1.0          # s of device time: a gap before this is a start-up loss
 SMALL_UNDR = 1000     # TX underruns below this are "small"
 
-roots = sys.argv[1:] or ["/tmp/zcu216_oracle"]
+roots = sys.argv[1:] or ["/tmp/uhd_rfsoc_oracle"]
 logs = []
 for r in roots:
     logs += glob.glob(os.path.join(r, "**", "*.log"), recursive=True)

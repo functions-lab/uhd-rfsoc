@@ -8,31 +8,23 @@ class MyMTS:
     XRFdc_MultiConverter_Sync through PYNQ's RFdc.mts_dac / mts_adc), with
     the MTS clocking wizard (overlay MTS_block/MTS_clk_wiz) checked locked."""
 
-    def __init__(self, rfdc_ip, overlay, board="ZCU216",
+    def __init__(self, rfdc_ip, overlay, tiles=0b1111, ref_tile=1,
                  after_clkwiz_reset=None, after_dac_reset=None):
-        """after_clkwiz_reset / after_dac_reset: called in init_tile_sync right
-        after the MTS clocking-wizard reset and after the DAC tile resets.
-        Both resets restore the BUILD setting (MMCM frequency, DAC
-        interpolation); a run-time rate change puts its own back there."""
+        """tiles: the DAC and ADC tiles to synchronise (bit t = tile t);
+        ref_tile: their reference tile. after_clkwiz_reset / after_dac_reset:
+        called in init_tile_sync right after the MTS clocking-wizard reset and
+        after the DAC tile resets. Both resets restore the BUILD setting (MMCM
+        frequency, DAC interpolation); a run-time rate change puts its own
+        back there."""
         self.rfdc = rfdc_ip
         self.after_clkwiz_reset = after_clkwiz_reset
         self.after_dac_reset = after_dac_reset
         self.mts_monitor = overlay.MTS_block.MTS_clk_wiz
-        self.board = board
         self.CLOCKWIZARD_LOCK_ADDRESS = 0x0004
         self.CLOCKWIZARD_RESET_ADDRESS = 0x0000
         self.CLOCKWIZARD_RESET_TOKEN = 0x000A
-        if self.board == "RFSoC4x2":
-            # only tiles 228/230 (DAC) and 224/226 (ADC) are used: 2-of-4 mask
-            self.ACTIVE_DAC_TILES = 0b0101
-            self.ACTIVE_ADC_TILES = 0b0101
-            self.DAC_REF_TILE = 2
-            self.ADC_REF_TILE = 2
-        else:
-            self.ACTIVE_DAC_TILES = 0b1111
-            self.ACTIVE_ADC_TILES = 0b1111
-            self.DAC_REF_TILE = 1
-            self.ADC_REF_TILE = 1
+        self.ACTIVE_DAC_TILES = self.ACTIVE_ADC_TILES = tiles
+        self.DAC_REF_TILE = self.ADC_REF_TILE = ref_tile
         self.mts_latency_min = 16
 
     def init(self):

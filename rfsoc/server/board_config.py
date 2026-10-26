@@ -1,4 +1,4 @@
-"""Board-local configuration of the ZCU216 UHD daemon (Protocol §1).
+"""Board-local configuration of the uhd-rfsoc daemon (Protocol §1).
 
 No IP address is written into the code. What the daemon needs to know:
 
@@ -17,8 +17,8 @@ No IP address is written into the code. What the daemon needs to know:
                                     e.g. zcu216 or rfsoc4x2)
 
   `key = value` lines, `#` comments. Searched in this order:
-  $ZCU216_UHD_CONF, <this directory>/zcu216_uhd.conf, /etc/zcu216_uhd.conf.
-  zcu216_uhd.conf is git-ignored; zcu216_uhd.conf.example documents it.
+  $UHD_RFSOC_CONF, <this directory>/uhd_rfsoc.conf, /etc/uhd_rfsoc.conf.
+  uhd_rfsoc.conf is git-ignored; uhd_rfsoc.conf.example documents it.
   Command-line `--data-ip` / `--data-mac` / `--name` override the file.
 
 The host learns all of it from discovery / `info` (data_ip=, data_mac=).
@@ -31,7 +31,7 @@ import re
 from typing import Dict, List, Optional, Tuple
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-CONF_NAME = "zcu216_uhd.conf"
+CONF_NAME = "uhd_rfsoc.conf"
 KEYS = ("data_ip", "data_mac", "name")
 _MAC_RE = re.compile(r"^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
 
@@ -42,8 +42,8 @@ class ConfigError(ValueError):
 
 def config_paths() -> List[str]:
     out = []
-    if os.environ.get("ZCU216_UHD_CONF"):
-        out.append(os.environ["ZCU216_UHD_CONF"])
+    if os.environ.get("UHD_RFSOC_CONF"):
+        out.append(os.environ["UHD_RFSOC_CONF"])
     out += [os.path.join(HERE, CONF_NAME), os.path.join("/etc", CONF_NAME)]
     return out
 

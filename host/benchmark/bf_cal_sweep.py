@@ -22,7 +22,7 @@ the beam is swept over steering angles (Beamformer weights, -90..90 deg)
 without and with the measured calibration (w_c * exp(-j offset_c)): the
 calibrated array adds in phase at the steering angle 0 (all weights equal).
 
-    zcu216-uhd python3 benchmark/bf_cal_sweep.py --args type=zcu216,addr=<board-ip>,channels=4 --mode both
+    uhd-rfsoc python3 benchmark/bf_cal_sweep.py --args type=rfsoc,addr=<board-ip>,channels=4 --mode both
 """
 import argparse
 import math

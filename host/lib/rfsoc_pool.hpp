@@ -1,6 +1,6 @@
 //
-// uhd_zcu216 -- a small pool of pinned worker threads for the per-sample work
-// of recv()/send() (de-interleave + format conversion, zcu216_kernels.hpp).
+// uhd_rfsoc -- a small pool of pinned worker threads for the per-sample work
+// of recv()/send() (de-interleave + format conversion, rfsoc_kernels.hpp).
 //
 // run(n, fn, ctx) hands tasks 0..n-1 to the workers AND the calling thread
 // and returns when every task has finished. The work is split by the caller
@@ -26,7 +26,7 @@
 #include <thread>
 #include <vector>
 
-namespace zcu216 {
+namespace rfsoc {
 
 class worker_pool
 {
@@ -79,4 +79,4 @@ private:
     std::vector<std::thread> _threads;
 };
 
-} // namespace zcu216
+} // namespace rfsoc

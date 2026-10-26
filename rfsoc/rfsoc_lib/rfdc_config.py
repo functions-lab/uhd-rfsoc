@@ -1,6 +1,6 @@
 """The RFDC configuration dict rfdc.py and rfdc_task.py read.
 
-ZCU216_CONFIG is the module-global configuration on every board (the daemon
+RFDC_CONFIG is the module-global configuration on every board (the daemon
 copies the other board's clock limits into it, then its NEW_CONFIG: the
 geometry compiled into the loaded bitstream). The keys:
 
@@ -59,7 +59,7 @@ ZCU216_MIN_MAX_CONFIG = {
 RFSOC4X2_MIN_MAX_CONFIG = dict(ZCU216_MIN_MAX_CONFIG, RefClockNoPLLAdcMax=5000.0)
 
 # placeholders until the daemon writes the loaded build's geometry
-ZCU216_DEFAULT_CONFIG = {
+DEFAULT_CONFIG = {
     "RefClockForPLL": 500.0,
     "DACSampleRate": 2000.0,
     "DACInterpolationRate": 2,
@@ -72,4 +72,4 @@ ZCU216_DEFAULT_CONFIG = {
     "ADCNyquistZone": 1
 }
 
-ZCU216_CONFIG = RfdcConfig({**ZCU216_DEFAULT_CONFIG, **ZCU216_MIN_MAX_CONFIG})
+RFDC_CONFIG = RfdcConfig({**DEFAULT_CONFIG, **ZCU216_MIN_MAX_CONFIG})

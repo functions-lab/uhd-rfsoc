@@ -4,38 +4,31 @@ from rfsoc_lib.rfdc import MyRFdc
 import os
 import time
 import logging
-from rfsoc_lib.rfdc_config import ZCU216_CONFIG
+from rfsoc_lib.rfdc_config import RFDC_CONFIG
 
 
 class RfdcTask(OverlayTask):
-    """Bring the RF data converters up as ZCU216_CONFIG describes: program
+    """Bring the RF data converters up as RFDC_CONFIG describes: program
     the board's clock chips, power the tiles up, configure every block, set
     the NCOs. Run on its own thread (start() / join()); MTS is the caller's
     (rfsoc_lib.mts.MyMTS, run by the daemon after this task)."""
 
-    def __init__(self, overlay, debug_mode=False, board="ZCU216"):
+    def __init__(self, overlay, debug_mode=False, board="ZCU216", masked_tiles=()):
+        """board: the xrfclk/<board>/ register files; masked_tiles: the DAC
+        and ADC tiles left unpowered (tiles the board does not wire: init()
+        skips them instead of timing out on their PLLs)."""
         super().__init__(overlay, name="RfdcTask")
         self.debug_mode = debug_mode
         rfdc_ip = overlay.rfdc.usp_rf_data_converter
         self.my_rfdc = MyRFdc(rfdc_ip, debug_mode=debug_mode)
         self.board = board
-        self.set_board_rules()
-
-    def set_board_rules(self):
-        if self.board == "RFSoC4x2":
-            # The board wires only 2 DAC tiles (228, 230) and 2 ADC tiles
-            # (224, 226) to SMA; mask out the unused middle tiles (#1, #3)
-            # so init() skips powering them and avoids PLL timeout.
-            self.my_rfdc.rfdc_status.dac_tile_mask_out[1] = True
-            self.my_rfdc.rfdc_status.dac_tile_mask_out[3] = True
-            self.my_rfdc.rfdc_status.adc_tile_mask_out[1] = True
-            self.my_rfdc.rfdc_status.adc_tile_mask_out[3] = True
+        for t in masked_tiles:
+            self.my_rfdc.rfdc_status.dac_tile_mask_out[t] = True
+            self.my_rfdc.rfdc_status.adc_tile_mask_out[t] = True
 
     def set_external_clocks(self):
-        # ZCU216 and RFSoC4x2 share the LMK04828 + LMX2594 chain; only the
-        # xrfclk TICS data subdirectory differs per board.
-        if self.board not in ("ZCU216", "RFSoC4x2"):
-            raise RuntimeError(f"RFSoC board {self.board} unsupported.")
+        # Every board has the LMK04828 + LMX2594 chain; only the xrfclk TICS
+        # register files differ per board.
 
         # The clock plan is the build's: the LMX2594 makes the tiles'
         # reference (RefClockForPLL = the .hwh Refclk_Freq, fs with the tile
@@ -47,9 +40,11 @@ class RfdcTask(OverlayTask):
         config_dir = os.getcwd()
         for sub_dir in ["rfsoc_lib", "xrfclk", self.board]:
             config_dir = os.path.join(config_dir, sub_dir)
+        if not os.path.isdir(config_dir):
+            raise RuntimeError(f"RFSoC board {self.board}: no clock register files in {config_dir}")
         lmk_config, lmx_config = clock_plan(
-            config_dir, lmx_out=ZCU216_CONFIG['RefClockForPLL'],
-            pl_clk=ZCU216_CONFIG.get('MTSPLClockFreq', 300.0))
+            config_dir, lmx_out=RFDC_CONFIG['RefClockForPLL'],
+            pl_clk=RFDC_CONFIG.get('MTSPLClockFreq', 300.0))
         self.clock_files = (lmk_config.file, lmx_config.file)
         logging.info(f"clock plan: {lmk_config.file} + {lmx_config.file}")
 
@@ -94,13 +89,13 @@ class RfdcTask(OverlayTask):
         for tile in self.my_rfdc.dac_tiles:
             if self.my_rfdc.rfdc_status.get_dac_tile_enb(tile.tile_id):
                 for block_id, block in enumerate(tile.blocks):
-                    dac_nco_mhz = ZCU216_CONFIG[f'DACNCO{tile.tile_id}{block_id}']
+                    dac_nco_mhz = RFDC_CONFIG[f'DACNCO{tile.tile_id}{block_id}']
                     self.my_rfdc.config_dac_nco(tile, block_id, dac_nco_mhz)
         # Set all ADCs to their respective ADCNCO
         for tile in self.my_rfdc.adc_tiles:
             if self.my_rfdc.rfdc_status.get_adc_tile_enb(tile.tile_id):
                 for block_id, block in enumerate(tile.blocks):
-                    adc_nco_mhz = ZCU216_CONFIG[f'ADCNCO{tile.tile_id}{block_id}']
+                    adc_nco_mhz = RFDC_CONFIG[f'ADCNCO{tile.tile_id}{block_id}']
                     self.my_rfdc.config_adc_nco(tile, block_id, adc_nco_mhz)
 
     def run(self):

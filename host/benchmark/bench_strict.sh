@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# bench_strict.sh -- one strict UHD benchmark_rate run against the ZCU216, as one
+# bench_strict.sh -- one strict UHD benchmark_rate run against a board, as one
 # result line. "Strict" means every error threshold is 0, so benchmark_rate's own
 # exit status is the verdict (without the thresholds it exits 0 whatever happens),
 # and every direction run must have moved >= 99 % of the nominal sample count:
@@ -11,19 +11,19 @@
 #   benchmark/bench_strict.sh tx 625e6 4 sc16 sc8
 #
 # Environment: ADDR (board LAN address) [discovery], DEV_ARGS (extra device args,
-# e.g. "otw=sc8" on an sc8-only build), DUR (10 s), LOG (/tmp/zcu216_bench).
-# Runs as root through zcu216-uhd (DPDK). Prints:
+# e.g. "otw=sc8" on an sc8-only build), DUR (10 s), LOG (/tmp/uhd_rfsoc_bench).
+# Runs as root through uhd-rfsoc (DPDK). Prints:
 #   PASS|FAIL <dir> <nchan>x<rate> cpu=<> otw=<>  rx=<samples> drop=<> ovr=<> seq=<> tx=<> undr=<> late=<>  (<% of nominal>)
 set -u
 DIR=${1:?rx|tx|rxtx}; RATE=${2:?rate}; NCH=${3:-1}; CPU=${4:-fc32}; OTW=${5:-sc16}
-DUR=${DUR:-10}; LOG=${LOG:-/tmp/zcu216_bench}; mkdir -p "$LOG"
+DUR=${DUR:-10}; LOG=${LOG:-/tmp/uhd_rfsoc_bench}; mkdir -p "$LOG"
 HERE=$(cd "$(dirname "$0")" && pwd)
-if command -v zcu216-uhd >/dev/null; then RUN=$(command -v zcu216-uhd); else RUN=$HERE/../tools/zcu216-uhd; fi
+if command -v uhd-rfsoc >/dev/null; then RUN=$(command -v uhd-rfsoc); else RUN=$HERE/../tools/uhd-rfsoc; fi
 if [ -z "${ADDR:-}" ]; then
-    ADDR=$(uhd_find_devices --args type=zcu216 2>/dev/null | awk '/^ +addr: /{print $2; exit}')
-    [ -n "$ADDR" ] || { echo "no ZCU216 found by discovery; set ADDR=<board-ip>" >&2; exit 2; }
+    ADDR=$(uhd_find_devices --args type=rfsoc 2>/dev/null | awk '/^ +addr: /{print $2; exit}')
+    [ -n "$ADDR" ] || { echo "no board found by discovery; set ADDR=<board-ip>" >&2; exit 2; }
 fi
-A="type=zcu216,addr=$ADDR,nports=4${DEV_ARGS:+,$DEV_ARGS}"
+A="type=rfsoc,addr=$ADDR,nports=4${DEV_ARGS:+,$DEV_ARGS}"
 CH=$(seq -s, 0 $((NCH - 1)))
 OPTS=()
 case $DIR in

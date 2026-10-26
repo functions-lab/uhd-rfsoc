@@ -32,8 +32,8 @@ applied (Protocol §11), over the air, through stock UHD calls.
       calibration holds for its reference antenna, the over-the-air geometry
       differs for the others.
 
-    zcu216-uhd python3 benchmark/phase_cal.py calibrate --args type=zcu216,addr=<board-ip>,channels=4 --out cal.json
-    zcu216-uhd python3 benchmark/phase_cal.py verify    --args type=zcu216,addr=<board-ip>,channels=4 --cal cal.json
+    uhd-rfsoc python3 benchmark/phase_cal.py calibrate --args type=rfsoc,addr=<board-ip>,channels=4 --out cal.json
+    uhd-rfsoc python3 benchmark/phase_cal.py verify    --args type=rfsoc,addr=<board-ip>,channels=4 --cal cal.json
 """
 import argparse
 import json

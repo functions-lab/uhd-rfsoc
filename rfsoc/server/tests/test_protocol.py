@@ -151,7 +151,7 @@ class ProtocolBasics(unittest.TestCase):
         be, c, s = core()
         self.assertEqual(c.handle_line(s, "ping"), "OK pong")
         d = kv(c.handle_line(s, "info"))
-        self.assertEqual(d["type"], "zcu216")
+        self.assertEqual(d["type"], "rfsoc")
         self.assertEqual(d["addr"], "192.0.2.1")
         self.assertEqual((d["num_rx"], d["num_tx"], d["claimed"]), ("1", "1", "0"))
         self.assertEqual(float(d["tick_rate"]), 1.25e9)          # N x rate, TICK_STEP 1
@@ -161,8 +161,12 @@ class ProtocolBasics(unittest.TestCase):
         self.assertEqual(d["otw_formats"], "sc16,sc8,sc12,fc32")
         self.assertEqual((d["bf"], d["rbf"]), ("0", "0"))
         disc = c.discovery_reply("192.0.2.9")
-        self.assertTrue(disc.startswith("ZCU216-DISC type=zcu216;product=zcu216;serial=FAKE-1;"))
+        self.assertTrue(disc.startswith("UHD-RFSOC-DISC type=rfsoc;product=zcu216;serial=FAKE-1;"))
         self.assertIn(";addr=192.0.2.9;data_ip=192.0.2.2;claimed=0;fpga=fake_v49_1ch_qsfp;version=1", disc)
+        # hosts from before the rename probe with ZCU216-DISC? and want type=zcu216
+        old = c.discovery_reply("192.0.2.9", "ZCU216-DISC?")
+        self.assertTrue(old.startswith("ZCU216-DISC type=zcu216;product=zcu216;serial=FAKE-1;"))
+        self.assertIsNone(c.discovery_reply("192.0.2.9", "HELLO?"))
 
     def test_claim(self):
         be, c, s = core()

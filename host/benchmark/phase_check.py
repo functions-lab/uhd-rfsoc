@@ -12,7 +12,7 @@ phase is the SAME in every trial for channels of one ADC tile (spread ~ a
 degree, the noise); without it, it is uniformly random. Channels of other
 tiles (N = 8, 16) are expected to vary (no SYSREF-timed event).
 
-    zcu216-uhd python3 benchmark/phase_check.py --args type=zcu216,addr=<board-ip>,channels=4 \\
+    uhd-rfsoc python3 benchmark/phase_check.py --args type=rfsoc,addr=<board-ip>,channels=4 \\
         --freq 1e9 --tone-offset 1e6 [--tx] [--trials 20] [--timed]
 
 Exit code 0 if every channel of tile 0 has a circular spread < --max-spread-deg.

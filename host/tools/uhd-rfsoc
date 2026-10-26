@@ -1,48 +1,48 @@
 #!/usr/bin/env bash
-# zcu216-uhd -- run a UHD application with the ZCU216 module (DPDK data plane).
+# uhd-rfsoc -- run a UHD application with the uhd-rfsoc module (DPDK data plane).
 #
-#   zcu216-uhd <uhd app> [args...]
-#   zcu216-uhd rx_samples_to_file --args type=zcu216,addr=<board-ip>,pattern=1 \
+#   uhd-rfsoc <uhd app> [args...]
+#   uhd-rfsoc rx_samples_to_file --args type=rfsoc,addr=<board-ip>,pattern=1 \
 #       --rate 1.25e9 --nsamps 100000000 --file /dev/shm/x.dat
-#   zcu216-uhd python3 my_script.py
+#   uhd-rfsoc python3 my_script.py
 #
 # What it does, and why:
 #   root        DPDK needs CAP_NET_ADMIN/NET_RAW/IPC_LOCK and hugepages: the app
 #               runs under `sudo -E` (not when already root).
-#   module      UHD_MODULE_PATH = the installed libuhd_zcu216.so (set by
-#               `cmake --install`), or $ZCU216_MODULE if set (e.g. a build tree
+#   module      UHD_MODULE_PATH = the installed libuhd_rfsoc.so (set by
+#               `cmake --install`), or $UHD_RFSOC_MODULE if set (e.g. a build tree
 #               copy; do not mix two different copies in one process).
 #   affinity    by default none here: the module places itself by the CPU
 #               topology (host/AGENTS.md "CPU placement") and pins the
 #               application to the CPUs its lcores and workers leave free.
-#               ZCU216_APP_CPUS=<list> pins the app to that list instead (=all:
+#               UHD_RFSOC_APP_CPUS=<list> pins the app to that list instead (=all:
 #               no pinning). When the lcores or workers are moved with the
 #               device args dpdk_*_core(s)= / worker_cpus=, also export
-#               ZCU216_LCORE_CPUS / ZCU216_WORKER_CPUS (and ZCU216_RX_WORKERS)
+#               UHD_RFSOC_LCORE_CPUS / UHD_RFSOC_WORKER_CPUS (and UHD_RFSOC_RX_WORKERS)
 #               to match: the app then gets every online CPU they leave free.
 #   app lookup  a bare name that is not on PATH is looked up in UHD's example
 #               directory (/usr/libexec/uhd/examples, or $UHD_EXAMPLES_DIR), so
-#               `zcu216-uhd benchmark_rate ...` works. Resolved before sudo
+#               `uhd-rfsoc benchmark_rate ...` works. Resolved before sudo
 #               resets PATH.
 set -euo pipefail
 
-MODULE_DEFAULT='@ZCU216_MODULE_FILE@'
+MODULE_DEFAULT='@UHD_RFSOC_MODULE_FILE@'
 EXAMPLES=${UHD_EXAMPLES_DIR:-/usr/libexec/uhd/examples}
-LCORE_CPUS=${ZCU216_LCORE_CPUS:-}
+LCORE_CPUS=${UHD_RFSOC_LCORE_CPUS:-}
 
 usage() { sed -n '2,/^set -e/p' "$0" | grep '^#' | sed 's/^# \{0,1\}//'; }
 [ $# -ge 1 ] || { usage >&2; exit 2; }
 case "$1" in -h|--help) usage; exit 0 ;; esac
 
 # ---- module
-if [ -n "${ZCU216_MODULE:-}" ]; then
-    MOD=$ZCU216_MODULE
+if [ -n "${UHD_RFSOC_MODULE:-}" ]; then
+    MOD=$UHD_RFSOC_MODULE
 elif [ "${MODULE_DEFAULT#@}" = "$MODULE_DEFAULT" ]; then
     MOD=$MODULE_DEFAULT                                  # configured by CMake at install
 else
-    MOD=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)/build/libuhd_zcu216.so   # source tree
+    MOD=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)/build/libuhd_rfsoc.so   # source tree
 fi
-[ -f "$MOD" ] || { echo "zcu216-uhd: no module at $MOD (build and install it, or set ZCU216_MODULE)" >&2; exit 1; }
+[ -f "$MOD" ] || { echo "uhd-rfsoc: no module at $MOD (build and install it, or set UHD_RFSOC_MODULE)" >&2; exit 1; }
 MOD=$(readlink -f "$MOD")
 
 # ---- application
@@ -50,7 +50,7 @@ APP=$1; shift
 if [[ $APP != */* ]]; then
     if P=$(command -v -- "$APP" 2>/dev/null) && [ -x "$P" ]; then APP=$P
     elif [ -x "$EXAMPLES/$APP" ]; then APP=$EXAMPLES/$APP
-    else echo "zcu216-uhd: $APP not found on PATH or in $EXAMPLES" >&2; exit 127; fi
+    else echo "uhd-rfsoc: $APP not found on PATH or in $EXAMPLES" >&2; exit 127; fi
 fi
 
 # ---- CPUs for the application: online CPUs minus the lcores and the workers
@@ -76,9 +76,9 @@ default_lcores() {
     if [[ $c1 == *,* ]] || [ -z "$c2" ]; then echo "$c1"; else echo "$c1,${c2%%,*}"; fi
 }
 TASKSET=()
-CPUS=${ZCU216_APP_CPUS:-}
+CPUS=${UHD_RFSOC_APP_CPUS:-}
 if [ "$CPUS" != all ]; then
-    if [ -z "$CPUS" ] && [ -z "$LCORE_CPUS" ] && [ -z "${ZCU216_WORKER_CPUS:-}" ]; then
+    if [ -z "$CPUS" ] && [ -z "$LCORE_CPUS" ] && [ -z "${UHD_RFSOC_WORKER_CPUS:-}" ]; then
         CPUS=all                              # the module's default layout places the app
     fi
     if [ -z "$CPUS" ]; then
@@ -87,14 +87,14 @@ if [ "$CPUS" != all ]; then
         for c in $(expand "$LCORE_CPUS"); do busy[$c]=1; done
         online=$(expand "$(cat /sys/devices/system/cpu/online)")
         # the module's worker CPUs when the lcores are given explicitly: the
-        # last ZCU216_RX_WORKERS online CPUs that are neither lcores nor the
+        # last UHD_RFSOC_RX_WORKERS online CPUs that are neither lcores nor the
         # EAL main core (0)
-        if [ -n "${ZCU216_WORKER_CPUS:-}" ]; then
-            workers=$(expand "$ZCU216_WORKER_CPUS")
+        if [ -n "${UHD_RFSOC_WORKER_CPUS:-}" ]; then
+            workers=$(expand "$UHD_RFSOC_WORKER_CPUS")
         else
             cand=()
             for c in $online; do [ -n "${busy[$c]:-}" ] || [ "$c" = 0 ] || cand+=("$c"); done
-            nw=${ZCU216_RX_WORKERS:-4}
+            nw=${UHD_RFSOC_RX_WORKERS:-4}
             workers=$(printf '%s\n' "${cand[@]}" | tail -n "$nw")
         fi
         for c in $workers; do busy[$c]=1; done

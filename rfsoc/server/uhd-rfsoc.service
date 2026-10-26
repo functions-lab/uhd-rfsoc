@@ -1,18 +1,18 @@
 # systemd unit TEMPLATE for the UHD daemon (hardware mode; ZCU216 or RFSoC 4x2).
 # Nothing installs or enables it; ./run_daemon.sh is the usual way to start the
 # daemon. To use it instead:
-#   sudo cp zcu216-uhd.service /etc/systemd/system/
+#   sudo cp uhd-rfsoc.service /etc/systemd/system/
 #   sudo systemctl daemon-reload
-#   sudo systemctl start zcu216-uhd        # loads the bitstream!
-#   journalctl -u zcu216-uhd -f
+#   sudo systemctl start uhd-rfsoc        # loads the bitstream!
+#   journalctl -u uhd-rfsoc -f
 # Enable it (systemctl enable) only on a board dedicated to the daemon: starting
 # it downloads the default bitstream and re-runs the RFDC/clock bring-up.
-# The FPGA data IP/MAC and the name come from zcu216_uhd.conf in the working
+# The FPGA data IP/MAC and the name come from uhd_rfsoc.conf in the working
 # directory (rfsoc/setup_board.sh creates it); no address is set here. The
 # WorkingDirectory below is the checkout location rfsoc/README.md uses:
 # change it if the board's clone is elsewhere.
 [Unit]
-Description=rfsoc-uhd: RFSoC UHD device daemon (zcu216_uhd_daemon.py)
+Description=uhd-rfsoc: RFSoC UHD device daemon (uhd_rfsoc_daemon.py)
 After=network-online.target
 Wants=network-online.target
 # a refusal (bad geometry, unlocked tiles) exits 1; do not hammer the board
@@ -22,9 +22,9 @@ StartLimitBurst=3
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/home/xilinx/jupyter_notebooks/rfsoc-uhd/rfsoc/server
+WorkingDirectory=/home/xilinx/jupyter_notebooks/uhd-rfsoc/rfsoc/server
 # PYNQ needs its venv + XILINX_XRT/BOARD env, which pynq_venv.sh sets up.
-ExecStart=/bin/bash -c 'source /etc/profile.d/boardname.sh && source /etc/profile.d/pynq_venv.sh && exec python3 -u zcu216_uhd_daemon.py --allow-unlocked'
+ExecStart=/bin/bash -c 'source /etc/profile.d/boardname.sh && source /etc/profile.d/pynq_venv.sh && exec python3 -u uhd_rfsoc_daemon.py --allow-unlocked'
 KillSignal=SIGTERM
 TimeoutStopSec=10
 Restart=on-failure

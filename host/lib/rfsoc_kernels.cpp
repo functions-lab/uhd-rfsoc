@@ -1,20 +1,20 @@
 //
-// uhd_zcu216 -- sample kernels (see zcu216_kernels.hpp).
+// uhd_rfsoc -- sample kernels (see rfsoc_kernels.hpp).
 //
-#include "zcu216_kernels.hpp"
+#include "rfsoc_kernels.hpp"
 #include <uhd/exception.hpp>
 // Two SIMD implementations of the same kernels: AVX-512 (F + BW) on x86,
 // picked at run time (cpu_has_simd), and NEON on aarch64. The scalar loops
-// give the same bits (ZCU216_NO_SIMD=1, or an x86 CPU without AVX-512).
+// give the same bits (UHD_RFSOC_NO_SIMD=1, or an x86 CPU without AVX-512).
 #if defined(__x86_64__) || defined(__i386__)
-#    define ZCU216_X86 1
+#    define UHD_RFSOC_X86 1
 #    include <immintrin.h>
 #    define Z_SIMD __attribute__((target("avx512f,avx512bw")))
 #elif defined(__aarch64__)
 #    include <arm_neon.h>
 #    define Z_SIMD
 #else
-#    error "uhd_zcu216 kernels: x86 (AVX-512) or aarch64 (NEON) only"
+#    error "uhd_rfsoc kernels: x86 (AVX-512) or aarch64 (NEON) only"
 #endif
 #include <algorithm>
 #include <climits>
@@ -23,11 +23,11 @@
 #include <cstring>
 
 #if !defined(__BYTE_ORDER__) || __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
-#    error "uhd_zcu216 kernels assume a little-endian host (the wire is little-endian)"
+#    error "uhd_rfsoc kernels assume a little-endian host (the wire is little-endian)"
 #endif
 
 
-namespace zcu216 {
+namespace rfsoc {
 
 cpu_t cpu_lookup(const std::string& name)
 {
@@ -39,7 +39,7 @@ cpu_t cpu_lookup(const std::string& name)
         return cpu_t::sc16;
     if (name == "sc8")
         return cpu_t::sc8;
-    throw uhd::value_error("ZCU216: cpu_format '" + name + "' is not supported (use fc32, fc64, sc16, or sc8 with otw sc8)");
+    throw uhd::value_error("rfsoc: cpu_format '" + name + "' is not supported (use fc32, fc64, sc16, or sc8 with otw sc8)");
 }
 
 size_t cpu_bytes(cpu_t c)
@@ -75,10 +75,10 @@ const char* cpu_name(cpu_t c)
 bool cpu_has_simd()
 {
     static const bool have = [] {
-        const char* e = std::getenv("ZCU216_NO_SIMD"); // force the scalar loops
+        const char* e = std::getenv("UHD_RFSOC_NO_SIMD"); // force the scalar loops
         if (e and *e and *e != '0')
             return false;
-#if ZCU216_X86
+#if UHD_RFSOC_X86
         __builtin_cpu_init();
         return __builtin_cpu_supports("avx512f") != 0 and __builtin_cpu_supports("avx512bw") != 0;
 #else
@@ -90,7 +90,7 @@ bool cpu_has_simd()
 
 const char* simd_name()
 {
-#if ZCU216_X86
+#if UHD_RFSOC_X86
     return "AVX-512";
 #else
     return "NEON";
@@ -116,7 +116,7 @@ const char* otw_nm(otw_t o)
 void check_pair(const char* dir, otw_t otw, cpu_t cpu)
 {
     if (cpu == cpu_t::sc8 and otw != otw_t::sc8)
-        throw uhd::value_error(std::string("ZCU216: ") + dir + " cpu_format sc8 needs otw_format sc8 (otw "
+        throw uhd::value_error(std::string("rfsoc: ") + dir + " cpu_format sc8 needs otw_format sc8 (otw "
                                + otw_nm(otw) + " supports cpu_format fc32, fc64, sc16)");
 }
 
@@ -302,7 +302,7 @@ void sc12_unpack(const uint8_t* pay, size_t slot0, size_t n, int16_t* out)
 // NaN or out of range -> INT32_MIN; saturating narrowing): NEON's own
 // conversion saturates, so it gets the integer-indefinite fix-up.
 // ---------------------------------------------------------------------------
-#if ZCU216_X86
+#if UHD_RFSOC_X86
 using V             = __m512i;
 using VF            = __m512;
 constexpr int kL    = 16;
@@ -976,12 +976,12 @@ bool simd_n(size_t N)
 void check_chans(size_t N, const std::vector<size_t>& chans)
 {
     if (N == 0 or N > 16)
-        throw uhd::value_error("ZCU216: kernel for N = " + std::to_string(N) + " channels");
+        throw uhd::value_error("rfsoc: kernel for N = " + std::to_string(N) + " channels");
     if (chans.size() > N)
-        throw uhd::value_error("ZCU216: more channels requested than the stream carries");
+        throw uhd::value_error("rfsoc: more channels requested than the stream carries");
     for (size_t c : chans)
         if (c >= N)
-            throw uhd::index_error("ZCU216: channel " + std::to_string(c) + " not in the stream");
+            throw uhd::index_error("rfsoc: channel " + std::to_string(c) + " not in the stream");
 }
 
 } // namespace
@@ -1056,7 +1056,7 @@ rx_kernel::rx_kernel(otw_t otw_, cpu_t cpu_, size_t nchan, const std::vector<siz
         }
     }
     if (not _fn)
-        throw uhd::value_error("ZCU216: no RX kernel for this format pair");
+        throw uhd::value_error("rfsoc: no RX kernel for this format pair");
     _desc = std::string(otw_nm(otw)) + " -> " + cpu_name(cpu) + " (" + rule + ")"
             + (N > 1 ? ", de-interleave ch " + chan_list(ch, M) + " of " + std::to_string(N) : "")
             + (_simd ? std::string(", ") + simd_name() : (_fn == &rx_copy ? "" : ", scalar"));
@@ -1104,7 +1104,7 @@ tx_kernel::tx_kernel(cpu_t cpu_, otw_t otw_, size_t nchan, const std::vector<siz
         }
     }
     if (not f)
-        throw uhd::value_error("ZCU216: no TX kernel for this format pair");
+        throw uhd::value_error("rfsoc: no TX kernel for this format pair");
     if (otw == otw_t::sc12) {
         sc16_fn = f;
         _fn     = &tx_sc12;
@@ -1152,4 +1152,4 @@ void pack_sc12(const uint32_t* in, uint8_t* out, size_t n)
     }
 }
 
-} // namespace zcu216
+} // namespace rfsoc

@@ -9,7 +9,7 @@ pseudo-random QPSK pulse (sharp autocorrelation) at T0 + OFFSET; the
 cross-correlation peak gives its delay (whole TX->RX latency, in samples) and
 its height over the median.
 
-    zcu216-uhd python3 benchmark/rate_loopback.py --args type=zcu216,addr=<ip>,channels=N --rate 312.5e6
+    uhd-rfsoc python3 benchmark/rate_loopback.py --args type=rfsoc,addr=<ip>,channels=N --rate 312.5e6
 A request between two rates is met from below (Protocol §8):
 --expect names the rate that must be served (default: --rate).
 
@@ -23,7 +23,7 @@ import uhd
 
 T = uhd.types
 ap = argparse.ArgumentParser()
-ap.add_argument("--args", default="type=zcu216")
+ap.add_argument("--args", default="type=rfsoc")
 ap.add_argument("--rate", type=float, required=True, help="rate requested")
 ap.add_argument("--expect", type=float, help="rate that must be served (default: --rate)")
 ap.add_argument("--chan", type=int, default=0, help="TX and RX channel")

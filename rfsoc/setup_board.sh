@@ -11,7 +11,7 @@
 #      lacks the multi-tile-sync API the daemon needs; rfsoc/xrfdc_mts_patch.py
 #      adds it to the venv's copy (originals kept as *.stock) and the import
 #      is verified. Images whose xrfdc already has it (PYNQ 3.x) are left alone.
-#   2. rfsoc/server/zcu216_uhd.conf from zcu216_uhd.conf.example, if there is
+#   2. rfsoc/server/uhd_rfsoc.conf from uhd_rfsoc.conf.example, if there is
 #      none (never overwritten): then set data_ip in it.
 #   3. Reports the bitstreams in rfsoc/server/ (rfsoc/push_bitstreams.sh or a
 #      release's .bit/.hwh files put them there).
@@ -56,19 +56,19 @@ else
     fi
 fi
 
-echo "[2] board settings $SRV/zcu216_uhd.conf"
-if [ -f "$SRV/zcu216_uhd.conf" ]; then
-    if grep -qE '^\s*data_ip\s*=\s*<' "$SRV/zcu216_uhd.conf"; then
+echo "[2] board settings $SRV/uhd_rfsoc.conf"
+if [ -f "$SRV/uhd_rfsoc.conf" ]; then
+    if grep -qE '^\s*data_ip\s*=\s*<' "$SRV/uhd_rfsoc.conf"; then
         echo "    exists, but data_ip is still the placeholder: set the FPGA's 100G address in it"; rc=1
     else
-        echo "    exists ($(grep -E '^\s*data_ip' "$SRV/zcu216_uhd.conf" | tr -s ' ' || true))"
+        echo "    exists ($(grep -E '^\s*data_ip' "$SRV/uhd_rfsoc.conf" | tr -s ' ' || true))"
     fi
 elif [ "$CHECK" = 1 ]; then
-    echo "    MISSING: 'sudo $0' creates it from zcu216_uhd.conf.example"; rc=1
+    echo "    MISSING: 'sudo $0' creates it from uhd_rfsoc.conf.example"; rc=1
 else
-    cp "$SRV/zcu216_uhd.conf.example" "$SRV/zcu216_uhd.conf"
-    chown --reference="$SRV/zcu216_uhd.conf.example" "$SRV/zcu216_uhd.conf" 2>/dev/null || true
-    echo "    created from zcu216_uhd.conf.example: set data_ip (the FPGA's address on the PC's 100G subnet) in it"; rc=1
+    cp "$SRV/uhd_rfsoc.conf.example" "$SRV/uhd_rfsoc.conf"
+    chown --reference="$SRV/uhd_rfsoc.conf.example" "$SRV/uhd_rfsoc.conf" 2>/dev/null || true
+    echo "    created from uhd_rfsoc.conf.example: set data_ip (the FPGA's address on the PC's 100G subnet) in it"; rc=1
 fi
 
 echo "[3] bitstreams in $SRV"

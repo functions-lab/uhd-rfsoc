@@ -3,12 +3,12 @@
 EVERY FPGA ADDRESS THE DAEMON USES FOR THE 100G PATH LIVES IN THIS FILE.
 
 Sources of truth:
-  fpga_board/<board>/block_designs/<board>_uhd_v49*/   IP names and addresses (AXI-Lite on pl_clk0)
-  fpga_ip/ip_design/uhd_ip/src/udp_streamer.v    streamer map (header table)
-  fpga_ip/ip_design/uhd_ip/src/udp_player.v      player map (header table)
-  fpga_ip/ip_design/uhd_ip/src/tx_beamformer.v   TX beamformer map (header)
-  fpga_ip/ip_design/uhd_ip/src/rx_beamformer.v   RX beamformer map (header)
-  fpga_ip/ip_design/cmac_100g/cmac_100g.v        CMAC ctl/status bit layout (header)
+  fpga/boards/<board>/block_designs/<board>_uhd_v49*/   IP names and addresses (AXI-Lite on pl_clk0)
+  fpga/ip/src/uhd_ip/src/udp_streamer.v    streamer map (header table)
+  fpga/ip/src/uhd_ip/src/udp_player.v      player map (header table)
+  fpga/ip/src/uhd_ip/src/tx_beamformer.v   TX beamformer map (header)
+  fpga/ip/src/uhd_ip/src/rx_beamformer.v   RX beamformer map (header)
+  fpga/ip/src/cmac_100g/cmac_100g.v        CMAC ctl/status bit layout (header)
 
   0x8002_0000  eth100g/udp_streamer  ADC -> UDP/VRT
   0x8003_0000  eth100g/udp_player    UDP/VRT -> DAC, ARP, async status, flow control
@@ -38,7 +38,7 @@ import time
 from collections import OrderedDict
 from typing import Callable, Dict, Optional, Tuple
 
-log = logging.getLogger("zcu216.eth100g")
+log = logging.getLogger("uhd_rfsoc.eth100g")
 
 # --------------------------------------------------------------------------
 # IP names (ip_dict key suffixes) and fallback addresses

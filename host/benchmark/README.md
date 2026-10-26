@@ -1,14 +1,14 @@
 # benchmark — tests on the real board + PC
 
 Everything here needs a board with its daemon serving and the 100G link up;
-the scripts run on the PC through the wrapper (`zcu216-uhd`, root), except
+the scripts run on the PC through the wrapper (`uhd-rfsoc`, root), except
 `loopback_test.py`, which runs on the board. Without a board, the host-side
-checks are in `../tools/` (`zcu216_kernel_check`, the benches). From `host/`:
+checks are in `../tools/` (`rfsoc_kernel_check`, the benches). From `host/`:
 
 ```sh
 benchmark/dpdk_rx_test.sh                                   # first check of a new link: probe, RX, bit-exact capture, TX
 ADDR=<board-ip> DEV_ARGS=channels=8 benchmark/bench_strict.sh rxtx 312.5e6 8 sc16 sc16
-zcu216-uhd python3 benchmark/rate_bandwidth.py --args type=zcu216,addr=<board-ip>,channels=4 --rate 625e6
+uhd-rfsoc python3 benchmark/rate_bandwidth.py --args type=rfsoc,addr=<board-ip>,channels=4 --rate 625e6
 ```
 
 ## Which script for what
@@ -45,7 +45,7 @@ sudo -E env PATH=$PATH BOARD=xilinx@<board> ADDR=<board-ip> BUILDS=oracle_builds
 ```
 
 `BOARD` (the ssh target) is required; `ADDR` defaults to the board discovery
-finds, `BOARD_DIR` to `/home/xilinx/jupyter_notebooks/rfsoc-uhd`. `BUILDS`
+finds, `BOARD_DIR` to `/home/xilinx/jupyter_notebooks/uhd-rfsoc`. `BUILDS`
 lists the builds (`oracle_builds.txt`: the ZCU216, `oracle_builds_rfsoc4x2.txt`:
 the RFSoC 4x2; one line per build and rate with its wire formats). `RUNS`,
 `DUR`, `FREQ`, `LAYOUT`, `APP_CPUS`, `HK_CPUS`, `ISOLATE` and `OUT` are in

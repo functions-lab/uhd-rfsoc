@@ -6,7 +6,7 @@ the board setup for people; this file is the rules of the board side.
 ## Rules
 - `rfsoc_lib/` holds only what the daemon imports, plus the two pure-numpy
   modules other parts of the repository share (`dsp/beamformer.py`: the
-  §11 weights, also used by the `fpga_ip` simulations; `dsp/phase_search.py`:
+  §11 weights, also used by the `fpga/ip` simulations; `dsp/phase_search.py`:
   `host/benchmark/phase_cal.py`). Nothing else goes in; its gotchas are
   `rfsoc_lib/AGENTS.md`.
 - The package name `rfsoc_lib` and its position next to `server/` are
@@ -14,7 +14,7 @@ the board setup for people; this file is the rules of the board side.
   directory): do not rename or move either.
 - The board holds a git clone of the repository; code reaches it by `git
   pull`, bitstreams by `push_bitstreams.sh <bit_dir> <user@board>`.
-  `server/zcu216_uhd.conf` and `server/*.bit` / `*.hwh` are board-local and
+  `server/uhd_rfsoc.conf` and `server/*.bit` / `*.hwh` are board-local and
   gitignored (top `.gitignore`); never add a board's addresses or files to
   the code.
 - A fresh PYNQ image must come up with `README.md`'s steps alone. The only
@@ -33,7 +33,7 @@ the board setup for people; this file is the rules of the board side.
 ## Where things are
 | what | where |
 |---|---|
-| daemon entry, control / discovery servers | `server/zcu216_uhd_daemon.py` |
+| daemon entry, control / discovery servers | `server/uhd_rfsoc_daemon.py` |
 | the Protocol's commands | `server/protocol.py` |
 | the board (bring-up, retune, reload, NCO / gain, sensors) | `server/hw_backend.py`, `server/boards.py` |
 | FPGA register maps of the data plane | `server/eth100g.py`, `server/tx_beamformer.py`, `server/rx_beamformer.py` |

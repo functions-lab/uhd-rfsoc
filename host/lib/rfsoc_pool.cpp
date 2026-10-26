@@ -1,7 +1,7 @@
 //
-// uhd_zcu216 -- worker pool (see zcu216_pool.hpp).
+// uhd_rfsoc -- worker pool (see rfsoc_pool.hpp).
 //
-#include "zcu216_pool.hpp"
+#include "rfsoc_pool.hpp"
 #include <linux/futex.h>
 #include <pthread.h>
 #include <sched.h>
@@ -11,7 +11,7 @@
 #include <climits>
 #include <ctime>
 
-namespace zcu216 {
+namespace rfsoc {
 
 namespace {
 inline void relax()
@@ -67,7 +67,7 @@ std::string worker_pool::desc() const
 void worker_pool::_worker(size_t idx, int cpu)
 {
     char name[16];
-    std::snprintf(name, sizeof(name), "zcu216_w%zu", idx);
+    std::snprintf(name, sizeof(name), "rfsoc_w%zu", idx);
     pthread_setname_np(pthread_self(), name);
     if (cpu >= 0) {
         cpu_set_t set;
@@ -141,4 +141,4 @@ void worker_pool::run(size_t ntasks, task_fn fn, void* ctx)
         relax();
 }
 
-} // namespace zcu216
+} // namespace rfsoc

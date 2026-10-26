@@ -10,12 +10,12 @@ device argument, how UHD calls map to the Protocol, tests and limitations.
   `CMakeLists.txt` refuses another version) and needs DPDK, on x86_64 or
   aarch64.
 - DPDK is the only sample transport; every application that opens the
-  device runs as root (`sudo`, or `tools/zcu216-uhd`).
+  device runs as root (`sudo`, or `tools/uhd-rfsoc`).
 - The module derives its CPU layout from the topology (`dpdk::default_layout`
-  in `lib/zcu216_dpdk.cpp`). Never hard-code CPU numbers, interface names or
+  in `lib/rfsoc_dpdk.cpp`). Never hard-code CPU numbers, interface names or
   addresses for one machine; a measured fact names the CPU class it holds for.
 - The SIMD kernels and the scalar loops must give the same bits: after a
-  change to `lib/zcu216_kernels.*` run `build/zcu216_kernel_check` (exit
+  change to `lib/rfsoc_kernels.*` run `build/rfsoc_kernel_check` (exit
   status 0), on x86 and aarch64 when possible (the output digests must match).
 - A change to the wire or control behaviour is a change to the Protocol
   section of `../AGENTS.md`: update it together with `../rfsoc/server`.
@@ -39,24 +39,24 @@ device argument, how UHD calls map to the Protocol, tests and limitations.
 searches `/usr/local` and pkg-config first, and GCC searches
 `/usr/local/include` before `/usr/include` even with `-I/usr/include`. A
 module linked against a source-built libuhd (4.7, say) pulls a second libuhd
-into a 4.6 process, registers itself in the wrong library, and `type=zcu216`
+into a 4.6 process, registers itself in the wrong library, and `type=rfsoc`
 is never found. `CMakeLists.txt` therefore pins the library to
 `${UHD_ROOT}/lib/<multiarch>` (default `UHD_ROOT=/usr`), puts the headers
 behind a private include shim, and fails if what it found is not 4.6.
-`ldd build/libuhd_zcu216.so | grep uhd` must show `libuhd.so.4.6.0`.
+`ldd build/libuhd_rfsoc.so | grep uhd` must show `libuhd.so.4.6.0`.
 
 **Module path.** UHD `dlopen()`s every file under `<libdir>/uhd/modules` and
 every entry of `UHD_MODULE_PATH` (colon-separated, files or directories,
 searched recursively). Point `UHD_MODULE_PATH` at a **file**, never at the
 build directory (UHD would try to dlopen every CMake file in it), and never
 at a second copy while the module is installed: two copies in one process
-register `type=zcu216` twice. An uninstalled build:
-`ZCU216_MODULE=$PWD/build/libuhd_zcu216.so zcu216-uhd ...` with nothing
+register `type=rfsoc` twice. An uninstalled build:
+`UHD_RFSOC_MODULE=$PWD/build/libuhd_rfsoc.so uhd-rfsoc ...` with nothing
 installed.
 
 **CI** (`../.github/workflows/ci.yml`) builds on x86_64 and aarch64, loads
 the module with ctypes, runs `uhd_find_devices` with it, runs
-`zcu216_kernel_check`, compiles the Python and shell sources and every
+`rfsoc_kernel_check`, compiles the Python and shell sources and every
 flowgraph. Keep those steps passing locally before a push.
 
 ## Running and CPU placement
@@ -76,12 +76,12 @@ arg `app_cpus=<list>` sets it, `app_cpus=all` leaves it alone. Threads the
 application started before `make()` keep their affinity. The layout itself:
 [Core layout](#core-layout).
 
-`tools/zcu216-uhd <app> [args]` runs an application with `sudo -E`,
-`UHD_MODULE_PATH` = the installed module (or `$ZCU216_MODULE`) and bare UHD
+`tools/uhd-rfsoc <app> [args]` runs an application with `sudo -E`,
+`UHD_MODULE_PATH` = the installed module (or `$UHD_RFSOC_MODULE`) and bare UHD
 example names resolved in `/usr/libexec/uhd/examples`; the board tests use
 it. When the lcores or workers are moved with device args, its
-`ZCU216_APP_CPUS` / `ZCU216_LCORE_CPUS` / `ZCU216_WORKER_CPUS` /
-`ZCU216_RX_WORKERS` tell it where, and it pins the application to what they
+`UHD_RFSOC_APP_CPUS` / `UHD_RFSOC_LCORE_CPUS` / `UHD_RFSOC_WORKER_CPUS` /
+`UHD_RFSOC_RX_WORKERS` tell it where, and it pins the application to what they
 leave free (with the module's default layout it pins nothing: the module
 does).
 
@@ -165,11 +165,11 @@ does).
   exit the port is closed and `rte_eal_cleanup()` runs, unless a streamer was
   never destroyed. lcores sleep 20 us after ~1-2 ms of empty polls, so an idle
   streamer does not burn cores.
-* **EAL arguments.** Default: `-a <dpdk_port> --file-prefix uhd_zcu216 --in-memory
+* **EAL arguments.** Default: `-a <dpdk_port> --file-prefix uhd_rfsoc --in-memory
   --no-telemetry -l <main>,<rx cores>,<tx core> --main-lcore <main>`.
   `--in-memory` leaves no files in `/dev/hugepages` and needs no shared config,
   so it does not collide with another DPDK process. `dpdk_eal=` or the
-  environment variable `ZCU216_DPDK_EAL` replace everything but `-l`, which is
+  environment variable `UHD_RFSOC_DPDK_EAL` replace everything but `-l`, which is
   appended unless given.
 * **Errors are raised at `make()`:** not root, no free hugepages, EAL failure,
   port not found or busy (with a hint about another DPDK application on the
@@ -209,7 +209,7 @@ order kept within a class): the application, the lcores and the workers get
 fast cores only (within 90 % of the highest capacity; the application one
 more when C0 has no SMT sibling), and the little cores stay with the system.
 Change with `dpdk_rx_cores=`, `dpdk_tx_core=`, `dpdk_main_core=`,
-`rx_workers=`, `worker_cpus=` (and the wrapper's `ZCU216_*` variables).
+`rx_workers=`, `worker_cpus=` (and the wrapper's `UHD_RFSOC_*` variables).
 
 Two memory-locality settings belong to the layout: the mbuf pools are LIFO
 (`dpdk_*_pool_ops=stack`) and the RX descriptor rings are short (`dpdk_rxd`),
@@ -244,7 +244,7 @@ so a buffer is reused while it is still in L3 -- see both device args.
   in-flight footprint so both directions stay in L3. The CPU numbers below
   are for a 6-core / 12-thread host with one DIMM channel, CPU c and c+6
   siblings -- adapt them to yours:
-  `ZCU216_APP_CPUS=0,1,6,7` (the app's RX and TX threads get two cores) and
+  `UHD_RFSOC_APP_CPUS=0,1,6,7` (the app's RX and TX threads get two cores) and
   `rx_workers=2,worker_cpus=2:3,tx_workers=3,tx_worker_cpus=4:5:11,`
   `dpdk_rx_cores=8,dpdk_tx_core=10,dpdk_rxd=128,tx_max_pkts=256,`
   `num_recv_frames=1024` (a 1024-packet RX ring keeps even a stalled backlog
@@ -260,15 +260,15 @@ so a buffer is reused while it is still in L3 -- see both device args.
 
 | arg | default | meaning |
 |---|---|---|
-| `type` | | `zcu216` (any board this module serves) or `rfsoc4x2` (RFSoC 4x2 boards only, reported as `type=rfsoc4x2`). With any other `type` the module returns nothing without touching the network. |
-| `addr` | broadcast | board management IP (control). Without it, discovery broadcasts on every IPv4 interface for 150 ms (`find_timeout=`) and each board answers with the address it was reached on. If UDP discovery is filtered, `type=zcu216,addr=` falls back to `info` over TCP. |
+| `type` | | `rfsoc` (any board this module serves). The names from before the rename still work: `zcu216` (any board) and `rfsoc4x2` (RFSoC 4x2 boards only); a device is reported with the type it was asked for. With any other `type` the module returns nothing without touching the network. |
+| `addr` | broadcast | board management IP (control). Without it, discovery broadcasts on every IPv4 interface for 150 ms (`find_timeout=`) and each board answers with the address it was reached on. If UDP discovery is filtered, `type=rfsoc,addr=` falls back to `info` over TCP. |
 | `serial`, `name`, `product` | | filter discovery results (`product=zcu216` or `rfsoc4x2`: the board kind) |
 | `channels` | 1 | the build to use: N = 1, 2, 4, 8 or 16 channels in one stream (Protocol §9). Sent as `set_channels N` right after `claim`; the daemon loads that N's default build -- the fastest whose sc16 stream fits the link: 1250 MS/s at 1-2 channels, 625 / 312.5 / 156.25 MS/s at 4 / 8 / 16 -- if another is loaded (seconds, `rate_timeout`). A daemon that answers `ERR unknown command` is a 1-channel daemon: the module warns and uses N = 1. |
 | `otw` | | the OTW format the application will stream in (§10), declared with every `set_rx_rate`/`set_tx_rate` (`otw=`, §3) so the daemon picks -- or refuses before reloading -- the build for it, and the default of a stream whose `otw_format` is empty. A rate is served by the highest build at or below it that carries the declared format. Needed for the sc8-only top rates: `channels=4,otw=sc8` and 1250 MS/s gives 1250 MS/s (sc8 only); without `otw=sc8` the same request gets 625 MS/s, the fastest sc16 rate. Once a streamer exists, its format is declared instead. |
 | `ctrl_port`, `disc_port` | 49710, 49700 | |
 | `ctrl_timeout` | 10 | seconds to wait for a control reply |
 | `rate_timeout` | 120 | seconds to wait for a reply that may reload the FPGA |
-| `data_ip` | from `info` | override the FPGA data IP (the board's `zcu216_uhd.conf` sets the real one; no built-in default: a daemon reporting none is an error) |
+| `data_ip` | from `info` | override the FPGA data IP (the board's `uhd_rfsoc.conf` sets the real one; no built-in default: a daemon reporting none is an error) |
 | `host_data_ip` | auto | local IP for the data plane. Default: the source address the kernel routes to `data_ip` (UDP `connect()` + `getsockname()`); pass it when the module logs another interface. |
 | `host_data_mac` | auto | default: `SIOCGIFHWADDR` of the interface that owns `host_data_ip` |
 | `recv_port` | 49810 | RX UDP port base: ports `recv_port + k`, k < nports (one stream for all channels) |
@@ -301,7 +301,7 @@ so a buffer is reused while it is still in L3 -- see both device args.
 | `tx_arp_prime` | 1 | before the first TX burst, send one byte to UDP port 9 of the FPGA so the kernel learns its MAC ([FPGA MAC](#tx-protocol-6-7)) |
 | `data_mac` | learned | FPGA data MAC for DPDK TX (default: kernel neighbour table after the ARP probe, else `info data_mac=`; neither -> error) |
 | `dpdk_port` | PCI of the data interface | EAL device of the 100G port (sysfs of the interface that routes to the FPGA; error if it has none), or a vdev name such as `net_tap0` |
-| `dpdk_eal` | see [Data plane](#data-plane-dpdk) | EAL arguments, space-separated. UHD args cannot hold `,` or `=`: write `;` and `~` (or set `ZCU216_DPDK_EAL` in the environment, verbatim). Only the first open in a process initialises the EAL. |
+| `dpdk_eal` | see [Data plane](#data-plane-dpdk) | EAL arguments, space-separated. UHD args cannot hold `,` or `=`: write `;` and `~` (or set `UHD_RFSOC_DPDK_EAL` in the environment, verbatim). Only the first open in a process initialises the EAL. |
 | `dpdk_rx_cores` | first thread of C1 | CPUs of the RX lcores (`2-5` or `2:3:4:5`; not `,`) |
 | `dpdk_tx_core` | second thread of C1 | CPU of the TX lcore |
 | `dpdk_main_core` | first thread of C0 | EAL main lcore (the application thread's affinity is restored after `rte_eal_init`) |
@@ -324,13 +324,13 @@ Environment variables:
 
 | variable | effect |
 |---|---|
-| `ZCU216_TX_STATS=1` | at TX streamer destruction, print where `send()`'s time went (packing, credit wait), the gaps between status packets as the TX lcore saw them, the FPGA's event totals, the lead of every timed burst start (start TSF minus the FPGA time when it was sent: a histogram), and the last 12 of the most recent 256 underflow/late/sequence events, each with the slow episodes of the sending thread in the 5 ms before it and, for a timed burst, how far into the burst the event was against how much of it the host had sent (less = the application fell behind). Also the RX streamer's call statistics below |
-| `ZCU216_RX_STATS=1` | at RX streamer destruction, print the gaps between the application's `recv()` calls (it did not read) and the long calls: the largest few with their time, and counts above 10 / 50 / 100 ms |
-| `ZCU216_CTRL_TRACE=1` | time every control request (including the wait for the connection's mutex), log each one slower than 5 ms with the calling thread's name, and print per command the count, total and maximum at device destruction: what the application blocks on in the daemon |
-| `ZCU216_RX_TRACE=<n>` | log the first n packets the RX merge takes (port, TSF, nsamps, SOB/EOB, the expected TSF, what each port has queued) |
-| `ZCU216_NO_SIMD=1` | scalar kernels instead of the SIMD ones (AVX-512 / NEON); the output is the same |
-| `ZCU216_DPDK_EAL` | EAL arguments, verbatim (as `dpdk_eal=`) |
-| `ZCU216_APP_CPUS`, `ZCU216_LCORE_CPUS`, `ZCU216_WORKER_CPUS`, `ZCU216_RX_WORKERS`, `ZCU216_MODULE` | the wrapper (`tools/zcu216-uhd`): app CPUs, where moved lcores / workers are, the module file |
+| `UHD_RFSOC_TX_STATS=1` | at TX streamer destruction, print where `send()`'s time went (packing, credit wait), the gaps between status packets as the TX lcore saw them, the FPGA's event totals, the lead of every timed burst start (start TSF minus the FPGA time when it was sent: a histogram), and the last 12 of the most recent 256 underflow/late/sequence events, each with the slow episodes of the sending thread in the 5 ms before it and, for a timed burst, how far into the burst the event was against how much of it the host had sent (less = the application fell behind). Also the RX streamer's call statistics below |
+| `UHD_RFSOC_RX_STATS=1` | at RX streamer destruction, print the gaps between the application's `recv()` calls (it did not read) and the long calls: the largest few with their time, and counts above 10 / 50 / 100 ms |
+| `UHD_RFSOC_CTRL_TRACE=1` | time every control request (including the wait for the connection's mutex), log each one slower than 5 ms with the calling thread's name, and print per command the count, total and maximum at device destruction: what the application blocks on in the daemon |
+| `UHD_RFSOC_RX_TRACE=<n>` | log the first n packets the RX merge takes (port, TSF, nsamps, SOB/EOB, the expected TSF, what each port has queued) |
+| `UHD_RFSOC_NO_SIMD=1` | scalar kernels instead of the SIMD ones (AVX-512 / NEON); the output is the same |
+| `UHD_RFSOC_DPDK_EAL` | EAL arguments, verbatim (as `dpdk_eal=`) |
+| `UHD_RFSOC_APP_CPUS`, `UHD_RFSOC_LCORE_CPUS`, `UHD_RFSOC_WORKER_CPUS`, `UHD_RFSOC_RX_WORKERS`, `UHD_RFSOC_MODULE` | the wrapper (`tools/uhd-rfsoc`): app CPUs, where moved lcores / workers are, the module file |
 
 ## OTW formats (Protocol §10)
 
@@ -358,13 +358,13 @@ host quantisation and an FPGA one agree bit for bit. Full scale: fc32/fc64
 -1.0..0.9995, fc32 exactly int16/32768); sc16 keeps the converters' int16
 scale in every format. UHD 4.6's own fc32 → sc12 packer truncates and wraps
 at +1.0 (2048 → -2048, measured), so TX sc12 goes through sc16 and the module
-packs (`zcu216_kernels.cpp pack_sc12`, the same words as UHD's for in-range
+packs (`rfsoc_kernels.cpp pack_sc12`, the same words as UHD's for in-range
 values).
 
 ### Conversion kernels and worker pool
 
 The "UHD ..." entries above are not UHD converter calls but the module's own
-kernels (`lib/zcu216_kernels.*`), which produce exactly UHD 4.6's bits (each
+kernels (`lib/rfsoc_kernels.*`), which produce exactly UHD 4.6's bits (each
 was checked against `uhd::convert` when it was written: every format pair,
 N = 1, 2, 4, 8, 16, channel subsets, calls starting/ending on any sample,
 random data with -32768, rounding ties, NaN, inf). Each kernel fuses the
@@ -385,11 +385,11 @@ included), so a call can start and end anywhere.
   sc16 / sc8 / sc12 and sc8 -> sc8; N = 1, 2, 4, 8, 16. fc64 and the fc32 wire
   format run the scalar loops.
 * **Same bits everywhere.** SIMD and scalar give identical output on both
-  architectures (`ZCU216_NO_SIMD=1` forces the scalar loops). The conversions
+  architectures (`UHD_RFSOC_NO_SIMD=1` forces the scalar loops). The conversions
   follow the x86 rules exactly -- `cvtps2dq` round to even, NaN or out of
   range -> INT32_MIN, saturating narrowing -- and NEON, whose own conversion
   saturates, gets the integer-indefinite fix-up; the scalar loops write the
-  same rules out instead of using an intrinsic. `build/zcu216_kernel_check`
+  same rules out instead of using an intrinsic. `build/rfsoc_kernel_check`
   compares SIMD with scalar bit for bit (every RX and TX format pair, N = 1-16,
   channel subsets, unaligned starts and lengths, -32768, rounding ties, NaN,
   +-inf, +-huge) and prints a digest of all outputs: the same digest on x86 and
@@ -399,7 +399,7 @@ included), so a call can start and end anywhere.
   like UHD's `cvttpd`): UHD itself runs a scalar loop on the unaligned head
   and the `n % 4` tail of every call that *truncates*, so its output for a
   non-integer sample depends on its position in the call; the kernels do not.
-* **Cost.** `build/zcu216_kernel_bench [--cpu C] [--pool-cpus ...]` measures
+* **Cost.** `build/rfsoc_kernel_bench [--cpu C] [--pool-cpus ...]` measures
   the kernels and the pool on this CPU (GS/s of wire slots, against UHD's own
   converter). What the builds need: up to 1.25 GS/s at N = 1, 2.5 GS/s of
   sc16 at N = 2-16, 4.0 GS/s of sc12 and 5.0 GS/s of sc8 on the 4-16 channel
@@ -409,7 +409,7 @@ included), so a call can start and end anywhere.
   kernels inline in its thread; an application with larger buffers (GNU
   Radio, `rx_samples_to_file --spb`, `recv_num_samps`) gets the pool too.
 
-The worker pool (`lib/zcu216_pool.*`, `rx_workers` threads pinned to
+The worker pool (`lib/rfsoc_pool.*`, `rx_workers` threads pinned to
 `worker_cpus`) is shared by RX and TX unless `tx_workers` gives TX its own. A
 call hands out disjoint output ranges through one 64-bit atomic (generation |
 task count | next task) to the workers and the calling thread and returns
@@ -503,12 +503,12 @@ caller converts alone instead of waiting.
   of that channel (the NCO runs on it), PLL locked or, PLL bypassed, the tile's
   clock detected. An older daemon: the mboard `adc/dac_pll_locked`.
 * **GPIO.** None. multi_usrp lists banks `RXA`/`TXA` for every dboard; using
-  them throws `NotImplementedError: ZCU216: no GPIO` (the `gpio` example fails
+  them throws `NotImplementedError: rfsoc: no GPIO` (the `gpio` example fails
   with that message).
 * **EEPROM.** The mboard EEPROM holds `name`, `serial` and `product` from
   discovery. Writes are ignored.
 * **Ownership.** `claim` is sent at `make()` and held for the device's lifetime.
-  A second process gets `the ZCU216 is in use by another UHD session`. The
+  A second process gets `the board is in use by another UHD session`. The
   destructor stops streams, drains TX and sends `unclaim`. Inside one process,
   UHD's device cache returns the same device for the same args.
 
@@ -681,7 +681,7 @@ RX beamformer enabled, **RX channel 0 of the stream is the beam**
 `sat16((sum_c x_c w[c] + 2^(14+shift)) >> (15+shift))` and channels 1..N-1
 the raw elements 1..N-1. The same angle gives the same weights in both
 directions (no conjugate). The daemon resets both to bypass when the claim is
-released (device destruction). `tools/zcu216_bf.py` is the complete Python
+released (device destruction). `tools/rfsoc_bf.py` is the complete Python
 example (`tools/README.md`).
 
 ## Tests
@@ -689,17 +689,17 @@ example (`tools/README.md`).
 ### Without a board
 
 ```sh
-build/zcu216_kernel_check                               # SIMD vs scalar, bit for bit; exit status = mismatches
-build/zcu216_kernel_bench --cpu 1 --pool-cpus 2,3,4,5   # the kernels: SIMD / scalar / UHD, the pool, GS/s
-build/zcu216_dram_bench --dir duplex --n 16 --otw sc16 --cpu sc16 ...   # x86 only; see its header
-make -C ../fpga_ip/ip_design/uhd_ip sim-streamer sim-player sim-fmt   # the IP simulations
+build/rfsoc_kernel_check                               # SIMD vs scalar, bit for bit; exit status = mismatches
+build/rfsoc_kernel_bench --cpu 1 --pool-cpus 2,3,4,5   # the kernels: SIMD / scalar / UHD, the pool, GS/s
+build/rfsoc_dram_bench --dir duplex --n 16 --otw sc16 --cpu sc16 ...   # x86 only; see its header
+make -C ../fpga/ip/src/uhd_ip sim-streamer sim-player sim-fmt   # the IP simulations
 ```
 
-`zcu216_kernel_check` is the correctness test of `lib/zcu216_kernels.*`; run
+`rfsoc_kernel_check` is the correctness test of `lib/rfsoc_kernels.*`; run
 it on every architecture you build for and compare the digests.
-`zcu216_kernel_bench` is what the per-sample work costs on this CPU; pin its
+`rfsoc_kernel_bench` is what the per-sample work costs on this CPU; pin its
 pool workers (`--pool-cpus`, CPUs no other load uses) or the pool rows are not
-meaningful. `zcu216_dram_bench` runs the module's kernels and worker pool
+meaningful. `rfsoc_dram_bench` runs the module's kernels and worker pool
 against a packet ring much larger than L3 while a "NIC" thread streams the
 DMA traffic at a set rate: whether this host's memory system can carry a
 configuration at all, before the board is involved. Everything else is
@@ -708,8 +708,8 @@ measured on the board (`benchmark/`).
 ### Real link: `benchmark/dpdk_rx_test.sh`
 
 On the host PC, with the board daemon running and the 100G link aligned,
-from `host/`: `benchmark/dpdk_rx_test.sh` (the installed `zcu216-uhd`, or
-`ZCU216_MODULE=$PWD/build/libuhd_zcu216.so` for a build tree). It checks:
+from `host/`: `benchmark/dpdk_rx_test.sh` (the installed `uhd-rfsoc`, or
+`UHD_RFSOC_MODULE=$PWD/build/libuhd_rfsoc.so` for a build tree). It checks:
 
 1. `uhd_usrp_probe` over DPDK and sensor `cmac_aligned` = true;
 2. `benchmark_rate` RX sc16, nports=4: 0 dropped, 0 overruns (fc32 is
@@ -724,17 +724,17 @@ NIC counters (`rx_out_of_buffer` = a DPDK queue was full) are printed before
 and after. The same steps by hand, for a first bring-up:
 
 ```sh
-uhd_find_devices --args type=zcu216                      # broadcast, no root needed: addr=, data_ip=
-A=type=zcu216,addr=<board-ip>
-zcu216-uhd uhd_usrp_probe --args $A --sensor /mboards/0/sensors/cmac_aligned    # must be true
-zcu216-uhd uhd_usrp_probe --args $A --sensor /mboards/0/sensors/adc_pll_locked
-zcu216-uhd rx_samples_to_file --args $A,nports=4,pattern=1,num_recv_frames=32768 \
+uhd_find_devices --args type=rfsoc                      # broadcast, no root needed: addr=, data_ip=
+A=type=rfsoc,addr=<board-ip>
+uhd-rfsoc uhd_usrp_probe --args $A --sensor /mboards/0/sensors/cmac_aligned    # must be true
+uhd-rfsoc uhd_usrp_probe --args $A --sensor /mboards/0/sensors/adc_pll_locked
+uhd-rfsoc rx_samples_to_file --args $A,nports=4,pattern=1,num_recv_frames=32768 \
     --rate 1.25e9 --freq 1e9 --nsamps 100000000 --file /dev/shm/x.dat
 tools/check_pattern_file.py /dev/shm/x.dat --nsamps 100000000          # -> BIT-EXACT
-zcu216-uhd rx_timed_samples --args $A,pattern=1 --rate 1.25e9 --nsamps 10001 --secs 1.5
-zcu216-uhd benchmark_rate --args $A,nports=4 --rx_rate 1.25e9 --duration 10 --rx_cpu sc16
-zcu216-uhd tx_waveforms --args $A --rate 1.25e9 --freq 1e9 --wave-type SINE --wave-freq 10e6 --ampl 0.3
-zcu216-uhd tx_timed_samples --args $A --rate 1.25e9 --nsamps 100000 --secs 1.5   # "ACK... success"
+uhd-rfsoc rx_timed_samples --args $A,pattern=1 --rate 1.25e9 --nsamps 10001 --secs 1.5
+uhd-rfsoc benchmark_rate --args $A,nports=4 --rx_rate 1.25e9 --duration 10 --rx_cpu sc16
+uhd-rfsoc tx_waveforms --args $A --rate 1.25e9 --freq 1e9 --wave-type SINE --wave-freq 10e6 --ampl 0.3
+uhd-rfsoc tx_timed_samples --args $A --rate 1.25e9 --nsamps 100000 --secs 1.5   # "ACK... success"
 ```
 
 A rate not in the builds' list is served by the highest build at or below

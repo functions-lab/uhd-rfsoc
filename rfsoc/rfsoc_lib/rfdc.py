@@ -5,20 +5,20 @@ import contextlib
 
 from xrfdc import RFdcDacTile, RFdcAdcTile
 
-from rfsoc_lib.rfdc_config import ZCU216_CONFIG
+from rfsoc_lib.rfdc_config import RFDC_CONFIG
 from rfsoc_lib.rfdc_type import MyRFdcType
 
 
 def nco_on_sysref():
     """True when mixer/NCO/QMC updates are applied on a SYSREF edge.
 
-    ZCU216_CONFIG['NCOEventSource']: "TILE" (default) applies them per tile
+    RFDC_CONFIG['NCOEventSource']: "TILE" (default) applies them per tile
     as they are written; "SYSREF" holds them until setup() pulses SYSREF into
     the converters, so every tile takes its NCO frequency and phase reset on
     the same edge (cross-tile phase alignment). SYSREF must be running for it --
     with no SYSREF an update never lands.
     """
-    src = str(ZCU216_CONFIG.get('NCOEventSource', 'TILE')).upper()
+    src = str(RFDC_CONFIG.get('NCOEventSource', 'TILE')).upper()
     if src not in ('TILE', 'SYSREF'):
         raise ValueError(f"NCOEventSource {src!r}: expected TILE or SYSREF")
     return src == 'SYSREF'
@@ -137,13 +137,13 @@ class MyRFdcFreqConfig:
     def mandatory_check(self):
         # Check reference clock
         if self.clock_src == xrfdc.CLK_SRC_PLL:
-            ref_clk_min, ref_clk_max = ZCU216_CONFIG['RefClockForPLLMin'], ZCU216_CONFIG['RefClockForPLLMax']
+            ref_clk_min, ref_clk_max = RFDC_CONFIG['RefClockForPLLMin'], RFDC_CONFIG['RefClockForPLLMax']
             assert self.ref_clk >= ref_clk_min and self.ref_clk <= ref_clk_max, f"Reference clock frequency shall fall between {ref_clk_min}, {ref_clk_max} Hz if on-chip PLL is enabled."
         else:  # xrfdc.CLK_SRC_EXT
-            ref_clk_min_for_dac = ZCU216_CONFIG['RefClockNoPLLDacMin']
-            ref_clk_max_for_dac = ZCU216_CONFIG['RefClockNoPLLDacMax']
-            ref_clk_min_for_adc = ZCU216_CONFIG['RefClockNoPLLAdcMin']
-            ref_clk_max_for_adc = ZCU216_CONFIG['RefClockNoPLLAdcMax']
+            ref_clk_min_for_dac = RFDC_CONFIG['RefClockNoPLLDacMin']
+            ref_clk_max_for_dac = RFDC_CONFIG['RefClockNoPLLDacMax']
+            ref_clk_min_for_adc = RFDC_CONFIG['RefClockNoPLLAdcMin']
+            ref_clk_max_for_adc = RFDC_CONFIG['RefClockNoPLLAdcMax']
             err_msg = f"Reference clock frequency shall be above DAC:{ref_clk_min_for_dac} or ADC:{ref_clk_min_for_adc} Hz if on-chip PLL is bypassed."
             assert self.ref_clk >= ref_clk_min_for_dac and self.ref_clk >= ref_clk_min_for_adc, err_msg
             # The bypassed tile samples at its reference, so this bound is the
@@ -187,27 +187,27 @@ class MyRFdcConfig:
         reference sits far above RefClockForPLLMax: CLK_SRC_EXT. A reference
         inside the PLL's range is a PLL design: CLK_SRC_PLL.
         """
-        if ref_clk > ZCU216_CONFIG['RefClockForPLLMax']:
+        if ref_clk > RFDC_CONFIG['RefClockForPLLMax']:
             return xrfdc.CLK_SRC_EXT
         return xrfdc.CLK_SRC_PLL
 
     def __init__(self):
         self.freq_cfg = MyRFdcFreqConfig(
-            ref_clk=ZCU216_CONFIG['RefClockForPLL'],
-            dac_samp_rate=ZCU216_CONFIG['DACSampleRate'],
-            dac_nco=ZCU216_CONFIG['DACNCO'],
-            dac_interp_rate=ZCU216_CONFIG['DACInterpolationRate'],
-            adc_samp_rate=ZCU216_CONFIG['ADCSampleRate'],
-            adc_nco=ZCU216_CONFIG['ADCNCO'],
-            adc_interp_rate=ZCU216_CONFIG['ADCInterpolationRate'],
-            clock_src=self.clock_src_for(ZCU216_CONFIG['RefClockForPLL'])
+            ref_clk=RFDC_CONFIG['RefClockForPLL'],
+            dac_samp_rate=RFDC_CONFIG['DACSampleRate'],
+            dac_nco=RFDC_CONFIG['DACNCO'],
+            dac_interp_rate=RFDC_CONFIG['DACInterpolationRate'],
+            adc_samp_rate=RFDC_CONFIG['ADCSampleRate'],
+            adc_nco=RFDC_CONFIG['ADCNCO'],
+            adc_interp_rate=RFDC_CONFIG['ADCInterpolationRate'],
+            clock_src=self.clock_src_for(RFDC_CONFIG['RefClockForPLL'])
         )
 
         self.dac_block_cfg = {
             'InterpolationFactor': self.freq_cfg.dac_interp_rate,
-            'NyquistZone': ZCU216_CONFIG['DACNyquistZone'],
+            'NyquistZone': RFDC_CONFIG['DACNyquistZone'],
             'UpdateEvent': xrfdc.EVENT_MIXER,
-            'InvSincFIR': ZCU216_CONFIG['InvSincFIR'],
+            'InvSincFIR': RFDC_CONFIG['InvSincFIR'],
         }
         self.dac_block_mixer_cfg = {
             'CoarseMixFreq': xrfdc.COARSE_MIX_BYPASS,
@@ -221,7 +221,7 @@ class MyRFdcConfig:
 
         self.adc_block_cfg = {
             'DecimationFactor': self.freq_cfg.adc_interp_rate,
-            'NyquistZone': ZCU216_CONFIG['ADCNyquistZone'],
+            'NyquistZone': RFDC_CONFIG['ADCNyquistZone'],
             'UpdateEvent': xrfdc.EVENT_MIXER,
         }
         self.adc_block_mixer_cfg = {
@@ -307,7 +307,7 @@ class MyRFdc:
         """Power on DAC tiles."""
         if self.rfdc_status.get_dac_tile_enb(tile.tile_id):
             # Configure a single tile
-            self._dynamic_pll_config("DAC", tile, ZCU216_CONFIG[f'DACSampleRate{tile.tile_id}'])
+            self._dynamic_pll_config("DAC", tile, RFDC_CONFIG[f'DACSampleRate{tile.tile_id}'])
             time.sleep(1)
             tile.SetupFIFO(True)
             # Check tile state
@@ -325,7 +325,7 @@ class MyRFdc:
         """Power on ADC tiles."""
         if self.rfdc_status.get_adc_tile_enb(tile.tile_id):
             # Configure a single tile
-            self._dynamic_pll_config("ADC", tile, ZCU216_CONFIG[f'ADCSampleRate{tile.tile_id}'])
+            self._dynamic_pll_config("ADC", tile, RFDC_CONFIG[f'ADCSampleRate{tile.tile_id}'])
             time.sleep(1)
             tile.SetupFIFO(True)
             # Check tile state
@@ -341,7 +341,7 @@ class MyRFdc:
 
     @staticmethod
     def _check_nco(kind, tile, nco_freq_mhz):
-        fs = ZCU216_CONFIG[f'{kind}SampleRate{tile.tile_id}']
+        fs = RFDC_CONFIG[f'{kind}SampleRate{tile.tile_id}']
         if not (fs / 2 >= nco_freq_mhz >= -fs / 2):
             logging.warning(f"{kind} NCO ({nco_freq_mhz}) shall fall between "
                             f"-1/2*Fs ({-fs / 2}) and 1/2*Fs ({fs / 2})")
@@ -360,7 +360,7 @@ class MyRFdc:
         """The mixer dict for one block: its own NCO (per-block key, falling
         back to the flat one) and the configured event source."""
         cfg = dict(base)
-        cfg['Freq'] = ZCU216_CONFIG[f'{kind}NCO{tile_id}{block_id}']
+        cfg['Freq'] = RFDC_CONFIG[f'{kind}NCO{tile_id}{block_id}']
         if nco_on_sysref():
             cfg['EventSource'] = xrfdc.EVNT_SRC_SYSREF
         return cfg
@@ -392,7 +392,7 @@ class MyRFdc:
                 self.rfdc_cfg.dac_block_mixer_cfg, 'DAC', tile.tile_id, block_id)
             # Same guard as the ADC: rewriting an unchanged interpolation still
             # re-derives the DAC fabric width and breaks the compiled gearbox.
-            interp = ZCU216_CONFIG[f'DACInterpFactor{tile.tile_id}{block_id}']
+            interp = RFDC_CONFIG[f'DACInterpFactor{tile.tile_id}{block_id}']
             if block.InterpolationFactor != interp:
                 block.InterpolationFactor = interp
             self._apply_mixer(block)
@@ -443,7 +443,7 @@ class MyRFdc:
             # compiled Data_Width gearbox (measured on a ZCU216 with Data_Width
             # 8: the ADC then handed the fabric two complex samples per clock
             # instead of four, every capture 2x time-compressed).
-            decim = ZCU216_CONFIG[f'ADCDecimFactor{tile.tile_id}{block_id}']
+            decim = RFDC_CONFIG[f'ADCDecimFactor{tile.tile_id}{block_id}']
             if block.DecimationFactor != decim:
                 block.DecimationFactor = decim
             self._apply_mixer(block)

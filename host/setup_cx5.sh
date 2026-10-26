@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Configure an NVIDIA/Mellanox ConnectX (-5, -6, -7; mlx5) port as the 100GbE
-# sample link to the board's CMAC (uhd_zcu216). Idempotent; run as root.
+# sample link to the board's CMAC (uhd_rfsoc). Idempotent; run as root.
 #
 #   sudo ./setup_cx5.sh <iface> <host-data-ip>/<prefix>
 #   e.g. sudo ./setup_cx5.sh enp1s0f1np1 <host-data-ip>/24   (the name follows the PCIe slot)
 # Both arguments are required: the address is the PC's end of the 100G link
-# and must share a subnet with the FPGA's data_ip (the board's zcu216_uhd.conf).
+# and must share a subnet with the FPGA's data_ip (the board's uhd_rfsoc.conf).
 #
 # Why each setting:
 #   autoneg off, 100000 full  the Xilinx CMAC is built without the (licensed)

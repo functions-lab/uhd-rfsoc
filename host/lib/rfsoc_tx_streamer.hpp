@@ -1,15 +1,15 @@
 //
-// uhd_zcu216 -- TX streamer (Protocol §6, §7).
+// uhd_rfsoc -- TX streamer (Protocol §6, §7).
 //
 // send() cuts the application's samples into packets of up to spp slots
 // (whole 64-byte words of the OTW format and a multiple of N; a tail too short
 // for that is carried to the next call, the last packet of a burst is
 // zero-padded) and builds each one directly in a DPDK mbuf that the TX lcore
-// sends (zcu216_dpdk.cpp). The header is written while planning; the payload
+// sends (rfsoc_dpdk.cpp). The header is written while planning; the payload
 // -- the N channels interleaved slot by slot (Protocol §9; channels the
 // application did not ask for carry zeros) and converted to the OTW format
-// (Protocol §10) by one fused kernel (zcu216_kernels.hpp) -- is filled for a
-// batch of up to 32 packets at once, by the worker pool (zcu216_pool.hpp) and
+// (Protocol §10) by one fused kernel (rfsoc_kernels.hpp) -- is filled for a
+// batch of up to 32 packets at once, by the worker pool (rfsoc_pool.hpp) and
 // the application thread when the batch is large, just before the batch goes
 // to the TX lcore.
 //
@@ -25,10 +25,10 @@
 //
 #pragma once
 
-#include "zcu216_common.hpp"
-#include "zcu216_dpdk.hpp"
-#include "zcu216_kernels.hpp"
-#include "zcu216_otw.hpp"
+#include "rfsoc_common.hpp"
+#include "rfsoc_dpdk.hpp"
+#include "rfsoc_kernels.hpp"
+#include "rfsoc_otw.hpp"
 #include <uhd/stream.hpp>
 #include <uhd/version.hpp>
 #include <uhd/exception.hpp>
@@ -37,7 +37,7 @@
 #include <deque>
 #include <vector>
 
-namespace zcu216 {
+namespace rfsoc {
 
 class tx_streamer_impl : public uhd::tx_streamer
 {
@@ -55,7 +55,7 @@ public:
     // device, so there is nothing to post an action to.
     void post_output_action(const std::shared_ptr<uhd::rfnoc::action_info>&, const size_t) override
     {
-        throw uhd::not_implemented_error("zcu216: post_output_action (RFNoC) is not supported");
+        throw uhd::not_implemented_error("rfsoc: post_output_action (RFNoC) is not supported");
     }
 #endif
     //! samples per channel in one application buffer: _buf_pkts packets
@@ -104,7 +104,7 @@ private:
         uint64_t ev_dropped = 0; // events lost because the async ring was full
     };
 
-    //! Measurement hooks (ZCU216_TX_STATS=1 / tx_ignore_credit=1), printed at
+    //! Measurement hooks (UHD_RFSOC_TX_STATS=1 / tx_ignore_credit=1), printed at
     //! shutdown: where the sender's time goes and how often credit arrives.
     struct tx_stats
     {
@@ -164,7 +164,7 @@ private:
     } _stats;
     void _print_stats();
 
-    //! the TX lcore hands every packet of the async port here (zcu216_dpdk)
+    //! the TX lcore hands every packet of the async port here (rfsoc_dpdk)
     struct status_sink;
     std::unique_ptr<status_sink> _status_sink;
     //! TX lcore: one async status packet (Protocol §7)
@@ -302,4 +302,4 @@ private:
     std::condition_variable _ev_cv;
 };
 
-} // namespace zcu216
+} // namespace rfsoc

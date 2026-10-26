@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# uhd_examples_hw.sh -- every stock UHD example that applies to the ZCU216, run
+# uhd_examples_hw.sh -- every stock UHD example that applies to the boards, run
 # unmodified against the real board, one PASS / FAIL / N/A line each.
 #
 #   sudo env PATH=$PATH ADDR=<board-ip> benchmark/uhd_examples_hw.sh
@@ -23,11 +23,11 @@
 #   DUR (10)  benchmark_rate seconds;  DEV_ARGS extra device args
 #   BENCH_ARGS extra device args for the full-rate benchmark_rate(.py) runs only
 #             (e.g. host/AGENTS.md's duplex layout)
-#   LOGDIR (/tmp/zcu216_uhd_hw), DATA (/dev/shm/zcu216_uhd_hw)
+#   LOGDIR (/tmp/uhd_rfsoc_uhd_hw), DATA (/dev/shm/uhd_rfsoc_uhd_hw)
 #   UHD_EXAMPLES [/usr/libexec/uhd/examples]
 #
 # Not run, and why (printed at the end too):
-#   rfnoc_* (5), network_relay  the ZCU216 is not an RFNoC device
+#   rfnoc_* (5), network_relay  the boards are not RFNoC devices
 #   twinrx_freq_hopping, test_dboard_coercion, spi, sync_to_gps
 #                               Ettus daughterboard / SPI / GPSDO hardware
 #   test_clock_synch            needs an OctoClock (--clock-args)
@@ -37,14 +37,14 @@
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 TOOLS=$HERE/../tools
-if command -v zcu216-uhd >/dev/null; then RUN=$(command -v zcu216-uhd); else RUN=$TOOLS/zcu216-uhd; fi
+if command -v uhd-rfsoc >/dev/null; then RUN=$(command -v uhd-rfsoc); else RUN=$TOOLS/uhd-rfsoc; fi
 E=${UHD_EXAMPLES:-/usr/libexec/uhd/examples}
 PYE=$E/python
 
-DISC=$(uhd_find_devices --args "type=zcu216${ADDR:+,addr=$ADDR}" 2>/dev/null)
+DISC=$(uhd_find_devices --args "type=rfsoc${ADDR:+,addr=$ADDR}" 2>/dev/null)
 NDEV=$(echo "$DISC" | grep -cE '^ +addr: ')
 if [ "$NDEV" -ne 1 ]; then
-    echo "discovery found $NDEV ZCU216 board(s)${ADDR:+ at $ADDR}; set ADDR=<board-ip>" >&2
+    echo "discovery found $NDEV board(s)${ADDR:+ at $ADDR}; set ADDR=<board-ip>" >&2
     exit 1
 fi
 ADDR=${ADDR:-$(echo "$DISC" | awk '/^ +addr: /{print $2; exit}')}
@@ -54,7 +54,7 @@ WIRE=${WIRE:-sc16}
 if [ "$WIRE" != sc16 ]; then OTWS=${OTWS-}; fi
 if [ "$N" = 1 ]; then TPS=${TPS:-1}; OTWS=${OTWS-sc12 sc8 fc32}; else TPS=${TPS:-$N}; OTWS=${OTWS-sc12 sc8}; fi
 DUR=${DUR:-10}
-A="type=zcu216,addr=$ADDR,channels=$N${DEV_ARGS:+,$DEV_ARGS}"
+A="type=rfsoc,addr=$ADDR,channels=$N${DEV_ARGS:+,$DEV_ARGS}"
 [ "$WIRE" != sc16 ] && A="$A,otw=$WIRE"
 # the pattern as the wire format rounds it
 POTW=(); [ "$WIRE" != sc16 ] && POTW=(--otw "$WIRE")
@@ -62,8 +62,8 @@ POTW=(); [ "$WIRE" != sc16 ] && POTW=(--otw "$WIRE")
 # writer's stalls are absorbed instead of overflowing at 1.25 GS/s
 AC="$A,pattern=1,num_recv_frames=32768"
 ALL=$(seq -s, 0 $((N - 1)))
-L=${LOGDIR:-/tmp/zcu216_uhd_hw}
-D=${DATA:-/dev/shm/zcu216_uhd_hw}
+L=${LOGDIR:-/tmp/uhd_rfsoc_uhd_hw}
+D=${DATA:-/dev/shm/uhd_rfsoc_uhd_hw}
 rm -rf "$D"; mkdir -p "$L" "$D"
 FAILS=0
 NRUN=0
@@ -99,7 +99,7 @@ echo "board    $ADDR: N=$N at $RATE per channel (TPS $TPS), wire $WIRE${OTWS:+, 
 echo "logs     $L"
 
 # --- discovery and the property tree
-uhd_find_devices --args "type=zcu216,addr=$ADDR" >"$L/find.log" 2>&1 && grep -q "type: zcu216" "$L/find.log"
+uhd_find_devices --args "type=rfsoc,addr=$ADDR" >"$L/find.log" 2>&1 && grep -q "type: rfsoc" "$L/find.log"
 result "uhd_find_devices" $?
 timeout 60 "$RUN" uhd_usrp_probe --args "$A" >"$L/probe.log" 2>&1 &&
     grep -q "RX Frontend: $((N - 1))" "$L/probe.log" && grep -q "TX Frontend: $((N - 1))" "$L/probe.log"
@@ -254,7 +254,7 @@ timeout 60 "$RUN" "$E/test_pps_input" --args "$A,pps_emulation=0" >"$L/pps_stric
 result "test_pps_input pps_emulation=0: refuses (no PPS input on the board)" $?
 timeout 30 "$RUN" "$E/gpio" --args "$A" >"$L/gpio.log" 2>&1
 [ $? -ne 0 ] && grep -q "no GPIO" "$L/gpio.log"
-result "gpio: fails cleanly (the ZCU216 has no GPIO)" $?
+result "gpio: fails cleanly (no GPIO)" $?
 
 # --- the Python examples (the python bindings over the same module)
 # a 50 ms RX ring (32768 frames at 1.25 GS/s): the example starts its RX thread,

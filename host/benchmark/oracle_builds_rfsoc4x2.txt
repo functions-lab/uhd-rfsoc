@@ -1,4 +1,4 @@
-# The RFSoC 4x2 builds (fpga_board/rfsoc4x2: make v49-ladder), in the format of
+# The RFSoC 4x2 builds (fpga/boards/rfsoc4x2: make v49-ladder), in the format of
 # oracle_builds.txt:
 #   <family> <N> <rate per channel> <bitstream basename> <wire formats> <4T4R beamforming>
 # fs 5000 MS/s (dual RF-ADC tiles), 1T1R and 2T2R only. family normal: every

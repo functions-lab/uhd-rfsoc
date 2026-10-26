@@ -1,7 +1,7 @@
 //
-// uhd_zcu216 -- helpers: strings, TCP control client, discovery, interfaces.
+// uhd_rfsoc -- helpers: strings, TCP control client, discovery, interfaces.
 //
-#include "zcu216_common.hpp"
+#include "rfsoc_common.hpp"
 #include <uhd/transport/if_addrs.hpp>
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -24,7 +24,7 @@
 #include <cstring>
 #include <set>
 
-namespace zcu216 {
+namespace rfsoc {
 
 // ---------------------------------------------------------------------------
 // strings
@@ -63,7 +63,7 @@ double parse_double(const std::string& s, const std::string& what)
     errno = 0;
     const double v = std::strtod(t.c_str(), &end);
     if (t.empty() or end == t.c_str() or *end != '\0' or errno == ERANGE)
-        throw uhd::value_error("ZCU216: cannot parse " + what + " from '" + s + "'");
+        throw uhd::value_error("rfsoc: cannot parse " + what + " from '" + s + "'");
     return v;
 }
 
@@ -74,7 +74,7 @@ long long parse_ll(const std::string& s, const std::string& what)
     errno = 0;
     const long long v = std::strtoll(t.c_str(), &end, 0);
     if (t.empty() or end == t.c_str() or *end != '\0' or errno == ERANGE)
-        throw uhd::value_error("ZCU216: cannot parse " + what + " from '" + s + "'");
+        throw uhd::value_error("rfsoc: cannot parse " + what + " from '" + s + "'");
     return v;
 }
 
@@ -93,6 +93,15 @@ std::string fmt_double(double v)
     char buf[64];
     std::snprintf(buf, sizeof(buf), "%.17g", v);
     return buf;
+}
+
+std::string board_display_name(const std::string& product)
+{
+    if (product == "zcu216")
+        return "ZCU216";
+    if (product == "rfsoc4x2")
+        return "RFSoC 4x2";
+    return product;
 }
 
 uhd::device_addr_t parse_kv(const std::string& s)
@@ -129,7 +138,7 @@ std::vector<unsigned> parse_cpus(const std::string& s, const std::string& what)
                     out.push_back(c);
             }
         } catch (const std::exception&) {
-            throw uhd::value_error("ZCU216: bad " + what + " '" + s
+            throw uhd::value_error("rfsoc: bad " + what + " '" + s
                                    + "' (CPU list like 2-5 or 2:3:4:5)");
         }
         tok.clear();
@@ -142,7 +151,7 @@ std::vector<unsigned> parse_cpus(const std::string& s, const std::string& what)
     }
     flush();
     if (out.empty())
-        throw uhd::value_error("ZCU216: empty " + what);
+        throw uhd::value_error("rfsoc: empty " + what);
     return out;
 }
 
@@ -156,7 +165,7 @@ std::string resolve_ipv4(const std::string& host)
     addrinfo* res   = nullptr;
     const int rc    = getaddrinfo(host.c_str(), nullptr, &hints, &res);
     if (rc != 0 or res == nullptr)
-        throw uhd::lookup_error("ZCU216: cannot resolve '" + host + "': " + gai_strerror(rc));
+        throw uhd::lookup_error("rfsoc: cannot resolve '" + host + "': " + gai_strerror(rc));
     char buf[INET_ADDRSTRLEN];
     inet_ntop(AF_INET,
         &reinterpret_cast<sockaddr_in*>(res->ai_addr)->sin_addr,
@@ -172,7 +181,7 @@ static sockaddr_in make_sin(const std::string& ip, uint16_t port)
     sa.sin_family = AF_INET;
     sa.sin_port   = htons(port);
     if (inet_pton(AF_INET, ip.c_str(), &sa.sin_addr) != 1)
-        throw uhd::value_error("ZCU216: bad IPv4 address '" + ip + "'");
+        throw uhd::value_error("rfsoc: bad IPv4 address '" + ip + "'");
     return sa;
 }
 
@@ -182,7 +191,7 @@ ctrl_client::ctrl_client(const std::string& host, uint16_t port, double timeout_
     const std::string ip = resolve_ipv4(host);
     _fd                  = ::socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
     if (_fd < 0)
-        throw uhd::os_error(std::string("ZCU216: socket(): ") + strerror(errno));
+        throw uhd::os_error(std::string("rfsoc: socket(): ") + strerror(errno));
     const sockaddr_in sa = make_sin(ip, port);
     // non-blocking connect with a bounded wait
     const int fl = fcntl(_fd, F_GETFL, 0);
@@ -198,7 +207,7 @@ ctrl_client::ctrl_client(const std::string& host, uint16_t port, double timeout_
         if (rc != 1 or err != 0) {
             ::close(_fd);
             _fd = -1;
-            throw uhd::io_error("ZCU216: cannot connect to control port " + ip + ":"
+            throw uhd::io_error("rfsoc: cannot connect to control port " + ip + ":"
                                 + std::to_string(port) + ": "
                                 + (rc == 1 ? strerror(err) : "timeout"));
         }
@@ -206,13 +215,13 @@ ctrl_client::ctrl_client(const std::string& host, uint16_t port, double timeout_
         const int e = errno;
         ::close(_fd);
         _fd = -1;
-        throw uhd::io_error("ZCU216: cannot connect to control port " + ip + ":"
+        throw uhd::io_error("rfsoc: cannot connect to control port " + ip + ":"
                             + std::to_string(port) + ": " + strerror(e));
     }
     fcntl(_fd, F_SETFL, fl);
     int one = 1;
     setsockopt(_fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
-    _trace = std::getenv("ZCU216_CTRL_TRACE") != nullptr;
+    _trace = std::getenv("UHD_RFSOC_CTRL_TRACE") != nullptr;
 }
 
 ctrl_client::~ctrl_client()
@@ -222,7 +231,7 @@ ctrl_client::~ctrl_client()
         for (const auto& kv : _tstats)
             out += "; " + kv.first + " x" + std::to_string(kv.second.n) + " total "
                    + std::to_string(kv.second.total_ms) + " ms max " + std::to_string(kv.second.max_ms) + " ms";
-        ZLOG_INFO("control calls (ZCU216_CTRL_TRACE)" << out);
+        ZLOG_INFO("control calls (UHD_RFSOC_CTRL_TRACE)" << out);
     }
     if (_fd >= 0)
         ::close(_fd);
@@ -247,7 +256,7 @@ std::string ctrl_client::_read_line(const std::string& cmd, double timeout_s)
                               .count();
         if (left <= 0) {
             _broken = true;
-            throw uhd::io_error("ZCU216: timeout waiting for reply to '" + cmd + "'");
+            throw uhd::io_error("rfsoc: timeout waiting for reply to '" + cmd + "'");
         }
         pollfd p{_fd, POLLIN, 0};
         const int rc = ::poll(&p, 1, int(left));
@@ -259,7 +268,7 @@ std::string ctrl_client::_read_line(const std::string& cmd, double timeout_s)
         const ssize_t n = ::recv(_fd, buf, sizeof(buf), 0);
         if (n <= 0) {
             _broken = true;
-            throw uhd::io_error("ZCU216: control connection closed by daemon ("
+            throw uhd::io_error("rfsoc: control connection closed by daemon ("
                                 + std::string(n < 0 ? strerror(errno) : "EOF") + ")");
         }
         _rx.append(buf, size_t(n));
@@ -297,7 +306,7 @@ std::string ctrl_client::call(const std::string& line, double timeout_s)
     } trace{this, line, t_start};
     std::lock_guard<std::mutex> lock(_mutex);
     if (_broken)
-        throw uhd::io_error("ZCU216: control connection is broken; recreate the device");
+        throw uhd::io_error("rfsoc: control connection is broken; recreate the device");
     const std::string msg = line + "\n";
     size_t off            = 0;
     while (off < msg.size()) {
@@ -306,7 +315,7 @@ std::string ctrl_client::call(const std::string& line, double timeout_s)
             continue;
         if (n <= 0) {
             _broken = true;
-            throw uhd::io_error(std::string("ZCU216: control send failed: ") + strerror(errno));
+            throw uhd::io_error(std::string("rfsoc: control send failed: ") + strerror(errno));
         }
         off += size_t(n);
     }
@@ -318,8 +327,8 @@ std::string ctrl_client::call(const std::string& line, double timeout_s)
         return reply.substr(3);
     if (reply.compare(0, 3, "ERR") == 0)
         throw uhd::runtime_error(
-            "ZCU216: daemon rejected '" + line + "': " + trim(reply.substr(3)));
-    throw uhd::runtime_error("ZCU216: malformed reply to '" + line + "': '" + reply + "'");
+            "rfsoc: daemon rejected '" + line + "': " + trim(reply.substr(3)));
+    throw uhd::runtime_error("rfsoc: malformed reply to '" + line + "': '" + reply + "'");
 }
 
 std::vector<std::string> ctrl_client::call_tokens(const std::string& line, double timeout_s)
@@ -331,7 +340,7 @@ double ctrl_client::call_double(const std::string& line, double timeout_s)
 {
     const auto t = call_tokens(line, timeout_s);
     if (t.empty())
-        throw uhd::runtime_error("ZCU216: empty reply to '" + line + "'");
+        throw uhd::runtime_error("rfsoc: empty reply to '" + line + "'");
     return parse_double(t[0], "reply to '" + line + "'");
 }
 
@@ -410,7 +419,7 @@ uhd::device_addrs_t discover(const uhd::device_addr_t& hint, double timeout_s)
         inet_ntop(AF_INET, &from.sin_addr, fbuf, sizeof(fbuf));
         if (not dev.has_key("addr") or dev["addr"].empty() or dev["addr"] == "0.0.0.0")
             dev["addr"] = fbuf;
-        if (not dev.has_key("type") or dev["type"] != "zcu216")
+        if (not dev.has_key("type") or dev["type"] != "rfsoc")
             continue;
         // user filters
         if (hint.has_key("serial") and dev.get("serial", "") != hint["serial"])
@@ -480,7 +489,7 @@ local_iface iface_for_ip(const std::string& ip)
         freeifaddrs(list);
     }
     if (out.name.empty())
-        throw uhd::lookup_error("ZCU216: no local interface owns IPv4 address " + ip
+        throw uhd::lookup_error("rfsoc: no local interface owns IPv4 address " + ip
                                 + " (check host_data_ip=)");
     out.mac = mac_of_iface(out.name);
     return out;
@@ -492,12 +501,12 @@ local_iface iface_for_route(const std::string& dest_ip)
     // address without sending anything.
     const int fd = ::socket(AF_INET, SOCK_DGRAM | SOCK_CLOEXEC, 0);
     if (fd < 0)
-        throw uhd::os_error(std::string("ZCU216: socket(): ") + strerror(errno));
+        throw uhd::os_error(std::string("rfsoc: socket(): ") + strerror(errno));
     const sockaddr_in sa = make_sin(dest_ip, kTxPort);
     if (::connect(fd, reinterpret_cast<const sockaddr*>(&sa), sizeof(sa)) != 0) {
         const int e = errno;
         ::close(fd);
-        throw uhd::lookup_error("ZCU216: no route to FPGA data IP " + dest_ip + ": "
+        throw uhd::lookup_error("rfsoc: no route to FPGA data IP " + dest_ip + ": "
                                 + strerror(e) + " (is the 100G port up? set host_data_ip=)");
     }
     sockaddr_in local{};
@@ -545,7 +554,7 @@ void dev_state::refresh_freq_ranges()
     auto one = [this](const std::string& dir, std::atomic<double>& start, std::atomic<double>& stop) {
         const auto fr = ctrl->call_tokens("get_" + dir + "_freq_range 0");
         if (fr.size() < 2)
-            throw uhd::runtime_error("ZCU216: bad get_" + dir + "_freq_range reply");
+            throw uhd::runtime_error("rfsoc: bad get_" + dir + "_freq_range reply");
         start.store(parse_double(fr[0], "freq start"));
         stop.store(parse_double(fr[1], "freq stop"));
     };
@@ -618,7 +627,7 @@ double dev_state::set_rate(bool rx, size_t ch, double rate)
     try {
         const auto rep = ctrl->call_tokens(req, rate_timeout);
         if (rep.empty())
-            throw uhd::runtime_error("ZCU216: empty reply to '" + req + "'");
+            throw uhd::runtime_error("rfsoc: empty reply to '" + req + "'");
         actual = parse_double(rep[0], "reply to '" + req + "'");
         // §3/§8: the 2nd token is the (possibly new) build's tick rate
         if (rep.size() >= 2) {
@@ -683,4 +692,4 @@ local_iface dev_state::host_data_iface()
     return _iface;
 }
 
-} // namespace zcu216
+} // namespace rfsoc

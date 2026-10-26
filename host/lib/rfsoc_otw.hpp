@@ -1,5 +1,5 @@
 //
-// uhd_zcu216 -- over-the-wire (OTW) sample formats, Protocol §10.
+// uhd_rfsoc -- over-the-wire (OTW) sample formats, Protocol §10.
 //
 // The FPGA converts between the converters' int16 samples and the wire
 // format; the host converts between the wire format and the application's
@@ -28,16 +28,16 @@
 // sc12_item32_le (identical words for in-range values, checked against UHD 4.6).
 //
 // The conversions themselves, fused with the channel (de-)interleave, are the
-// kernels of zcu216_kernels.hpp, bit for bit equal to UHD's converters (the
+// kernels of rfsoc_kernels.hpp, bit for bit equal to UHD's converters (the
 // "UHD ..." entries above).
 //
 #pragma once
 
-#include "zcu216_common.hpp"
+#include "rfsoc_common.hpp"
 #include <memory>
 #include <string>
 
-namespace zcu216 {
+namespace rfsoc {
 
 //! Protocol §10 formats; the value is the FPGA FMT register code
 enum class otw_t : int { sc16 = 0, sc8 = 1, sc12 = 2, fc32 = 3 };
@@ -59,4 +59,4 @@ constexpr size_t kTxWordBytes = 64;
 //! "" -> sc16; throws uhd::value_error for an unknown format
 const otw_info& otw_lookup(const std::string& name);
 
-} // namespace zcu216
+} // namespace rfsoc

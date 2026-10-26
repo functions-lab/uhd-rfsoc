@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
-# dpdk_rx_test.sh -- the real-link test of the ZCU216 UHD module: stock UHD 4.6
+# dpdk_rx_test.sh -- the real-link test of the uhd-rfsoc UHD module: stock UHD 4.6
 # apps over the DPDK data plane at 1250 MS/s (1 channel, the max-rate build). Run on
 # the host PC once the board daemon is up and the 100G link is aligned. Uses sudo
 # (asks once).
 #
 #   benchmark/dpdk_rx_test.sh
-#   ZCU216_MODULE=$PWD/build/libuhd_zcu216.so benchmark/dpdk_rx_test.sh   # a build-tree copy
+#   UHD_RFSOC_MODULE=$PWD/build/libuhd_rfsoc.so benchmark/dpdk_rx_test.sh   # a build-tree copy
 #
-# Apps run through zcu216-uhd (root, UHD_MODULE_PATH, off the lcore CPUs): the
-# installed one if it is on PATH, else tools/zcu216-uhd with ../build.
+# Apps run through uhd-rfsoc (root, UHD_MODULE_PATH, off the lcore CPUs): the
+# installed one if it is on PATH, else tools/uhd-rfsoc with ../build.
 #
 # Environment (no address is built in):
-#   ADDR      board LAN address [discovery: `uhd_find_devices --args type=zcu216`
+#   ADDR      board LAN address [discovery: `uhd_find_devices --args type=rfsoc`
 #             broadcast, which must find exactly one board]
 #   DATA_IP   FPGA 100G data IP [the board's data_ip= from discovery]
 #   IFACE     the PC's 100G netdev [the interface the kernel routes DATA_IP to]
-#   NPORTS (4)  DUR (10 s)  NSAMPS (100000000)  OUT (/dev/shm/zcu216_dpdk_rx.dat)
+#   NPORTS (4)  DUR (10 s)  NSAMPS (100000000)  OUT (/dev/shm/uhd_rfsoc_dpdk_rx.dat)
 #   FRAMES (32768: num_recv_frames per port for the capture, 4 x 32768 x 8 KB =
 #          1 GB of ring = 210 ms at 1.25 GS/s, so the file writer's stalls are absorbed)
 #   DEV_ARGS (extra device args, e.g. "dpdk_rx_cores=2-5,dpdk_rxd=8192")
@@ -28,17 +28,17 @@
 #     that dies shows as "Error: stod"), it must print "Done!", and
 #     check_pattern_file.py must say BIT-EXACT
 #   4 tx_timed_samples: burst ACK, no 'U';  benchmark_rate TX 1.25 GS/s sc16 with
-#     ZCU216_TX_STATS=1: INFO (the gaps are printed)
+#     UHD_RFSOC_TX_STATS=1: INFO (the gaps are printed)
 #   5 the kernel side of the same port still resolves the FPGA by ARP (isolated mode)
 #   NIC drop counters (rx_out_of_buffer = a DPDK queue was full) before/after.
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
-if command -v zcu216-uhd >/dev/null; then RUN=$(command -v zcu216-uhd); else RUN=$HERE/../tools/zcu216-uhd; fi
+if command -v uhd-rfsoc >/dev/null; then RUN=$(command -v uhd-rfsoc); else RUN=$HERE/../tools/uhd-rfsoc; fi
 # the board: from discovery unless given (unicast to ADDR if set)
-DISC=$(uhd_find_devices --args "type=zcu216${ADDR:+,addr=$ADDR}" 2>/dev/null)
+DISC=$(uhd_find_devices --args "type=rfsoc${ADDR:+,addr=$ADDR}" 2>/dev/null)
 NDEV=$(echo "$DISC" | grep -cE '^ +addr: ')
 if [ "$NDEV" -ne 1 ]; then
-    echo "discovery found $NDEV ZCU216 board(s)${ADDR:+ at $ADDR}; set ADDR=<board-ip>" >&2
+    echo "discovery found $NDEV board(s)${ADDR:+ at $ADDR}; set ADDR=<board-ip>" >&2
     exit 1
 fi
 ADDR=${ADDR:-$(echo "$DISC" | awk '/^ +addr: /{print $2; exit}')}
@@ -49,11 +49,11 @@ IFACE=${IFACE:-$(ip -o route get "$DATA_IP" 2>/dev/null | sed -n 's/.* dev \([^ 
 NPORTS=${NPORTS:-4}
 DUR=${DUR:-10}
 NSAMPS=${NSAMPS:-100000000}
-OUT=${OUT:-/dev/shm/zcu216_dpdk_rx.dat}
+OUT=${OUT:-/dev/shm/uhd_rfsoc_dpdk_rx.dat}
 DIP=$DATA_IP
 FRAMES=${FRAMES:-32768}
-A="type=zcu216,addr=$ADDR,nports=$NPORTS${DEV_ARGS:+,$DEV_ARGS}"
-L=${LOGDIR:-/tmp/zcu216_dpdk_test}
+A="type=rfsoc,addr=$ADDR,nports=$NPORTS${DEV_ARGS:+,$DEV_ARGS}"
+L=${LOGDIR:-/tmp/uhd_rfsoc_dpdk_test}
 FAILS=0
 res() { if [ "$2" -eq 0 ]; then echo "PASS  $1"; else echo "FAIL  $1"; FAILS=$((FAILS + 1)); fi; }
 nic() { ethtool -S "$IFACE" 2>/dev/null | grep -E " (rx_out_of_buffer|rx_discards_phy|rx_packets_phy|rx_crc_errors_phy):" | tr -s ' ' | tr '\n' ' '; echo; }
@@ -61,7 +61,7 @@ num() { grep -E "$1" "$2" | grep -oE '[0-9]+$' | tail -1; }
 
 sudo -v || exit 1
 mkdir -p "$L"
-echo "wrapper $RUN (module: ${ZCU216_MODULE:-installed/default})"
+echo "wrapper $RUN (module: ${UHD_RFSOC_MODULE:-installed/default})"
 echo "board   $ADDR, FPGA data $DIP via $IFACE"
 echo "args    $A"
 echo "logs    $L"
@@ -116,7 +116,7 @@ echo "  underflow 'U' printed: $NU"
 tr -d U <"$F" | grep -q "ACK... success" && [ "$NU" -eq 0 ]
 res "tx_timed_samples 400000 samples at 1.25 GS/s: burst ACK, no underflow" $?
 F=$L/bench_tx.log
-ZCU216_TX_STATS=1 "$RUN" benchmark_rate --args "$A" --tx_rate 1.25e9 --duration 5 --tx_cpu sc16 >"$F" 2>&1
+UHD_RFSOC_TX_STATS=1 "$RUN" benchmark_rate --args "$A" --tx_rate 1.25e9 --duration 5 --tx_cpu sc16 >"$F" 2>&1
 grep -E "TX stats|DPDK TX closed" "$F"
 echo "INFO  benchmark_rate TX 1.25 GS/s sc16: transmitted $(num 'Num transmitted samples:' "$F"), underruns $(num 'Num underruns detected:' "$F")"
 

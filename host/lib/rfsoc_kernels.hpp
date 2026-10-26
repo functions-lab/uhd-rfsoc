@@ -1,7 +1,7 @@
 //
-// uhd_zcu216 -- sample kernels: de-interleave/interleave of the N channels of
+// uhd_rfsoc -- sample kernels: de-interleave/interleave of the N channels of
 // the one wire stream (Protocol §9) fused with the OTW <-> CPU format
-// conversion (Protocol §10, zcu216_otw.hpp), scalar and SIMD.
+// conversion (Protocol §10, rfsoc_otw.hpp), scalar and SIMD.
 //
 // Every kernel addresses whole slots (sc12 too: its 4-slot groups are
 // unpacked per slot), so a call may start and end on any sample. The SIMD
@@ -32,20 +32,20 @@
 // so UHD's own TX output for a non-integer sample depends on where it falls in
 // the call. These kernels apply the bulk rule to every sample.
 //
-// The formats this module defines itself (zcu216_otw.hpp): RX sc8 -> sc16
+// The formats this module defines itself (rfsoc_otw.hpp): RX sc8 -> sc16
 // v * 256, fc32 -> sc16 round(f * 32768) saturated (NaN -> 0); TX sc16 -> sc8
 // round-half-up(x / 256) saturated, sc16 -> sc12 round-half-up(x / 16)
 // saturated, sc16 -> fc32 x / 32768, fc64 -> fc32 float(x).
 //
 #pragma once
 
-#include "zcu216_otw.hpp"
+#include "rfsoc_otw.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
 
-namespace zcu216 {
+namespace rfsoc {
 
 enum class cpu_t : int { fc32, fc64, sc16, sc8 };
 //! "fc32", "fc64", "sc16", "sc8"; uhd::value_error otherwise
@@ -53,7 +53,7 @@ cpu_t cpu_lookup(const std::string& name);
 size_t cpu_bytes(cpu_t c);
 const char* cpu_name(cpu_t c);
 //! the SIMD kernels run on this CPU (x86: AVX-512 F + BW; aarch64: always,
-//! NEON); false with ZCU216_NO_SIMD=1
+//! NEON); false with UHD_RFSOC_NO_SIMD=1
 bool cpu_has_simd();
 //! "AVX-512" (x86) or "NEON" (aarch64)
 const char* simd_name();
@@ -64,7 +64,7 @@ class rx_kernel
 public:
     //! chans: the wire channels to extract, in output-buffer order (each < N).
     //! simd = false forces the scalar loops (tests). Throws uhd::value_error
-    //! for a cpu/otw pair the module does not support (zcu216_otw.hpp).
+    //! for a cpu/otw pair the module does not support (rfsoc_otw.hpp).
     rx_kernel(otw_t otw, cpu_t cpu, size_t nchan, const std::vector<size_t>& chans, bool simd = true);
 
     //! n samples per channel, from sample s0 of the payload `pay` (slot 0 at
@@ -143,4 +143,4 @@ private:
 //! value = round-half-up(x / 16) saturated to [-2048, 2047]
 void pack_sc12(const uint32_t* sc16_slots, uint8_t* out, size_t n);
 
-} // namespace zcu216
+} // namespace rfsoc

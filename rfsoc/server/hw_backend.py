@@ -1,6 +1,6 @@
 """Hardware backend: the real ZCU216 running a zcu216_v49_{N}ch_qsfp build.
 
-RFDC bring-up is the proven pattern of fpga_board/zcu216/AGENTS.md, nothing else:
+RFDC bring-up is the proven pattern of fpga/boards/zcu216/AGENTS.md, nothing else:
 
   1. RFSoCOverlay(bitstream)
   2. NEW_CONFIG carrying the COMPILED geometry, read from the .hwh (sampling
@@ -65,7 +65,7 @@ from rx_beamformer import RxBeamformer, default_shift
 from tx_beamformer import TxBeamformer
 import vrt
 
-log = logging.getLogger("zcu216.hw")
+log = logging.getLogger("uhd_rfsoc.hw")
 
 PLL_LOCKED = 2            # XRFDC_PLL_LOCKED; 1 = XRFDC_PLL_UNLOCKED
 TILE_STATE_DONE = 15
@@ -623,7 +623,7 @@ class HwBackend(Backend):
         self._time_set = False
         self._streaming_cfg = None
         self.reloads = 0
-        self.reload_settle_s = float(os.environ.get("ZCU216_RELOAD_SETTLE_S", "4.0"))
+        self.reload_settle_s = float(os.environ.get("UHD_RFSOC_RELOAD_SETTLE_S", "4.0"))
 
         self._import_libs(lib_root)
 
@@ -690,10 +690,10 @@ class HwBackend(Backend):
                 "the daemon again")
         self._xrfdc = xrfdc
         self._RFSoCOverlay, self._RfdcTask = RFSoCOverlay, RfdcTask
-        # rfdc.py and rfdc_task.py read the module-global ZCU216_CONFIG
+        # rfdc.py and rfdc_task.py read the module-global RFDC_CONFIG
         # whatever the board, so that dict is the one NEW_CONFIG goes into;
         # another board's clock limits are copied into it first.
-        self._rfdc_cfg = rfdc_config.ZCU216_CONFIG
+        self._rfdc_cfg = rfdc_config.RFDC_CONFIG
         self._rfdc_cfg.update(getattr(rfdc_config, self.board.lib_config))
 
     # -- the full bring-up (initial, and after every variant reload) -------------
@@ -783,7 +783,8 @@ class HwBackend(Backend):
         threading.excepthook = hook
         try:
             # MTS is run below, not inside the task: it must end LOCKED
-            self.rfdc_t = self._RfdcTask(self.ol, debug_mode=False, board=self.board.name)
+            self.rfdc_t = self._RfdcTask(self.ol, debug_mode=False, board=self.board.name,
+                                         masked_tiles=self.board.masked_tiles)
             for task in [self.rfdc_t]:
                 task.start()
                 task.join()
@@ -798,7 +799,7 @@ class HwBackend(Backend):
                f"{self.variant.pl_clk_mhz:g} MHz, converters {self.geo.refclk:g} MHz)")
         # the compiled fabric word counts, held across run-time factor changes
         self._fab_words = self._read_fab_words()
-        # MTS before any sample is trusted (fpga_board/zcu216/AGENTS.md): the
+        # MTS before any sample is trusted (fpga/boards/zcu216/AGENTS.md): the
         # NCOs are programmed after it, as RfdcTask orders them
         self.mts = self._mts_lock()
 
@@ -849,7 +850,7 @@ class HwBackend(Backend):
         pr(f"[e] OTW formats (FMT registers): {','.join(self._otw_hw)}")
         self.tx_buf_words = self.eth.tx_buf_words()
         # FC update every 512 consumed words (1/8 of a smaller buffer);
-        # $ZCU216_FC_INTERVAL overrides (measurements)
+        # $UHD_RFSOC_FC_INTERVAL overrides (measurements)
         self.fc_interval = default_fc_interval(self.tx_buf_words)
         # §11: the TX beamformer of an N >= 2 build (bypass + unity at reset;
         # the kept state is re-applied by bf_restore)
@@ -1222,12 +1223,12 @@ class HwBackend(Backend):
         fail (the first after a board reboot on a ZCU216; DAC alignment, see
         MTS_ATTEMPTS), so it runs up to MTS_ATTEMPTS times; the attempt that
         locked is logged. MyMTS takes
-        the board's tile mask and reference tile (RFSoC 4x2: tiles 0 and 2,
-        RefTile 2)."""
+        the board's tile mask and reference tile (Board.mts_tiles,
+        mts_ref_tile)."""
         from rfsoc_lib.mts import MyMTS
         mts = MyMTS(self.ol.rfdc.usp_rf_data_converter, self.ol,
-                    board=self.board.name, after_clkwiz_reset=after_clkwiz_reset,
-                    after_dac_reset=after_dac_reset)
+                    tiles=self.board.mts_tiles, ref_tile=self.board.mts_ref_tile,
+                    after_clkwiz_reset=after_clkwiz_reset, after_dac_reset=after_dac_reset)
         last = None
         for attempt in range(1, attempts + 1):
             try:
@@ -1248,7 +1249,7 @@ class HwBackend(Backend):
                      f"ADC tiles {st['adc']['tiles']:#06b} latency {st['adc']['latency']} offset {st['adc']['offset']}")
             return st
         raise RuntimeError(f"MTS NOT locked after {attempts} attempts ({last!r}); refusing "
-                           "to serve -- fpga_board/zcu216/AGENTS.md")
+                           "to serve -- fpga/boards/zcu216/AGENTS.md")
 
     def _tile_clock(self, tile) -> Dict[str, object]:
         """PLL-enabled tile: PLLLockStatus must be 2. Bypassed tile (it
@@ -1276,11 +1277,11 @@ class HwBackend(Backend):
         """Tile clock of every tile holding a streamed channel, and the
         interpolation / decimation factor of EVERY enabled block (not only the
         streamed ones: one AXIS clock drives them all, and a block at the
-        wrong factor resamples silently -- fpga_board/zcu216/AGENTS.md).
+        wrong factor resamples silently -- fpga/boards/zcu216/AGENTS.md).
 
         The compiled factors are per IP slice; they are read back per xrfdc
         block (a dual ADC tile's I and Q slices 2k, 2k+1 are block k). A tile
-        the board leaves unpowered (RfdcTask set_board_rules; RFSoC 4x2 tiles 1
+        the board leaves unpowered (Board.masked_tiles; RFSoC 4x2 tiles 1
         and 3) is listed but not read: its blocks were never initialised and
         it carries no streamed channel (the build's verify_rate_variant
         checked its compiled factor)."""

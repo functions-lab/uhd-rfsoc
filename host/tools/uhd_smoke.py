@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""uhd_smoke.py -- Python-API smoke test of the zcu216 UHD module.
+"""uhd_smoke.py -- Python-API smoke test of the uhd-rfsoc UHD module.
 
 Needs the section-5 test pattern (device arg pattern=1) for the RX checks. Runs
 as root (DPDK) against the board (../benchmark/uhd_examples_hw.sh does):
 
-    tools/zcu216-uhd python3 tools/uhd_smoke.py --args type=zcu216,addr=<board-ip>,pattern=1
+    tools/uhd-rfsoc python3 tools/uhd_smoke.py --args type=rfsoc,addr=<board-ip>,pattern=1
 
   1. MultiUSRP.recv_num_samps()               -> bit-exact counter, contiguous
   2. timed num_done at a time that is NOT on a 4-sample beat, with a count that
@@ -37,7 +37,7 @@ def pattern_ok(x, tps=1):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--args', required=True,
-                    help='device args, e.g. type=zcu216,addr=<board-ip>,pattern=1')
+                    help='device args, e.g. type=rfsoc,addr=<board-ip>,pattern=1')
     ap.add_argument('--rate', type=float, default=4e6)
     ap.add_argument('--freq', type=float, default=1e9)
     ap.add_argument('--no-tx', action='store_true')

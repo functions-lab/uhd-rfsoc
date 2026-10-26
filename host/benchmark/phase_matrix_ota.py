@@ -19,7 +19,7 @@ between repeats (NCO determinism, Protocol §3d). --save FILE writes
 the matrices (numpy .npz) so runs before and after a bitstream reload can be
 compared with --compare FILE.
 
-    zcu216-uhd python3 benchmark/phase_matrix_ota.py --args type=zcu216,addr=<board-ip>,channels=4 --reps 3
+    uhd-rfsoc python3 benchmark/phase_matrix_ota.py --args type=rfsoc,addr=<board-ip>,channels=4 --reps 3
 """
 import argparse
 import math

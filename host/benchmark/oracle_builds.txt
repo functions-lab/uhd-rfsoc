@@ -10,7 +10,7 @@
 # no RX fc32 on 512-bit-beat builds). The beamforming suite runs on the
 # 4-channel template (an sc16 client gets its 625 MS/s rate): channels 0-3 are
 # the over-the-air 4T4R link.
-# fpga_board/zcu216/scripts/v49_ladder.sh builds the same list.
+# fpga/flow/ladder.sh builds the same list.
 normal    1  1250000000    zcu216_v49_1ch_qsfp_f2_fs2500    sc16,sc12,sc8,fc32  no
 normal    1  833333333.3   zcu216_v49_1ch_qsfp_f3_fs2500    sc16,sc12,sc8,fc32  no
 normal    1  625000000     zcu216_v49_1ch_qsfp_f4_fs2500    sc16,sc12,sc8,fc32  no

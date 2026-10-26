@@ -13,7 +13,7 @@ point); only the digital offsets move, so the response is the RFDC filters':
 D runs over --fracs x rate; levels are relative to the first point. Per point
 a timed TX burst and an RX capture inside it.
 
-    zcu216-uhd python3 benchmark/rate_bandwidth.py --args type=zcu216,addr=<ip> --rate 625e6
+    uhd-rfsoc python3 benchmark/rate_bandwidth.py --args type=rfsoc,addr=<ip> --rate 625e6
     python3 benchmark/rate_bandwidth.py --compare <log>...   # the BWRES lines of several rates
 
 PASS per rate (set before the measurement): RX and TX flat within 1 dB up to
@@ -25,7 +25,7 @@ import argparse, json, sys, time
 import numpy as np
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--args", default="type=zcu216")
+ap.add_argument("--args", default="type=rfsoc")
 ap.add_argument("--rate", type=float)
 ap.add_argument("--chan", type=int, default=0)
 ap.add_argument("--freq", type=float, default=950e6)

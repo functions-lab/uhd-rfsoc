@@ -16,7 +16,7 @@ mean amplitude (dBFS), amplitude and phase relative to the sc16/fc32 reference
 identical within noise; sc8 the same amplitude/phase within its quantisation,
 lower SNR (an int8 tone of amplitude 16 LSB: ~32 dB full-band SQNR).
 
-    zcu216-uhd python3 benchmark/otw_tx_ota.py --args type=zcu216,addr=<ip>,channels=4 --rate 625e6
+    uhd-rfsoc python3 benchmark/otw_tx_ota.py --args type=rfsoc,addr=<ip>,channels=4 --rate 625e6
 """
 import argparse
 import math

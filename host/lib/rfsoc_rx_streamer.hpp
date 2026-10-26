@@ -1,7 +1,7 @@
 //
-// uhd_zcu216 -- RX streamer (Protocol §4, §5).
+// uhd_rfsoc -- RX streamer (Protocol §4, §5).
 //
-// The DPDK RX lcores (zcu216_dpdk.cpp) fill one single-producer/single-
+// The DPDK RX lcores (rfsoc_dpdk.cpp) fill one single-producer/single-
 // consumer ring of packet slots per UDP port (= NIC queue). recv() works in
 // two steps:
 //
@@ -11,11 +11,11 @@
 //     sample, count, output offset). The ring slots stay owned by the
 //     consumer (a private read cursor runs ahead of the published one) until
 //     step 2 is done with them.
-//  2. convert: one fused kernel per stretch (zcu216_kernels.hpp) de-interleaves
+//  2. convert: one fused kernel per stretch (rfsoc_kernels.hpp) de-interleaves
 //     the N channels of the wire stream (Protocol §9: slot i = channel i % N,
 //     sample i / N) into the requested channels' buffers and converts the OTW
 //     format (Protocol §10) to the CPU format. A large request is cut into
-//     disjoint output ranges that the worker pool (zcu216_pool.hpp) and the
+//     disjoint output ranges that the worker pool (rfsoc_pool.hpp) and the
 //     application thread convert in parallel. Then the slots are released.
 //
 // Planning stops early to convert what it has whenever the next packet has
@@ -23,17 +23,17 @@
 //
 #pragma once
 
-#include "zcu216_common.hpp"
-#include "zcu216_dpdk.hpp"
-#include "zcu216_kernels.hpp"
-#include "zcu216_otw.hpp"
+#include "rfsoc_common.hpp"
+#include "rfsoc_dpdk.hpp"
+#include "rfsoc_kernels.hpp"
+#include "rfsoc_otw.hpp"
 #include <uhd/stream.hpp>
 #include <uhd/version.hpp>
 #include <uhd/exception.hpp>
 #include <condition_variable>
 #include <deque>
 
-namespace zcu216 {
+namespace rfsoc {
 
 class rx_streamer_impl : public uhd::rx_streamer
 {
@@ -51,7 +51,7 @@ public:
     // device, so there is nothing to post an action to.
     void post_input_action(const std::shared_ptr<uhd::rfnoc::action_info>&, const size_t) override
     {
-        throw uhd::not_implemented_error("zcu216: post_input_action (RFNoC) is not supported");
+        throw uhd::not_implemented_error("rfsoc: post_input_action (RFNoC) is not supported");
     }
 #endif
     //! samples per channel in one application buffer: _buf_pkts packets
@@ -262,7 +262,7 @@ private:
     // time accounting of recv() (ns): all of it, converting, releasing slots, waiting for data
     uint64_t _ns_recv = 0, _ns_conv = 0, _ns_rel = 0, _ns_wait = 0, _recv_calls = 0;
     //! gaps between the application's recv() calls (it did not read) and
-    //! long recv() calls, printed with ZCU216_TX_STATS / ZCU216_RX_STATS: the
+    //! long recv() calls, printed with UHD_RFSOC_TX_STATS / UHD_RFSOC_RX_STATS: the
     //! largest few with their time, and counts above 10 / 50 / 100 ms
     bool _rx_stats = false;
     std::chrono::steady_clock::time_point _first_call, _last_exit;
@@ -312,7 +312,7 @@ private:
     uint64_t _overflows = 0; //!< ERROR_CODE_OVERFLOW reports (one per gap delivered)
     bool _warned_bad = false, _warned_late = false;
     int _gap_logs = 0; //!< gap warnings logged (the first few per stream)
-    int _trace_left = 0; //!< ZCU216_RX_TRACE: packets still to trace
+    int _trace_left = 0; //!< UHD_RFSOC_RX_TRACE: packets still to trace
 };
 
-} // namespace zcu216
+} // namespace rfsoc

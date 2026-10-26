@@ -1,6 +1,9 @@
 """The boards the UHD daemon serves, and where each puts UHD channel c.
 
-One table per board, so hw_backend.py names no board. Two numberings of an
+One `Board` per board, data only, so hw_backend.py (and rfsoc_lib, which gets
+these facts as arguments) names no board. A new board is a new entry in
+BOARDS (plus its builds, fpga/boards/<board>/, and its clock register files,
+rfsoc_lib/xrfclk/<name>/). Two numberings of an
 RF-ADC block exist and must not be mixed:
 
   IP slice   (tile, slice) of the RFDC IP / .hwh: C_ADC_Slice<t><s>_Enable,
@@ -19,7 +22,7 @@ RFSoC4x2  xczu48dr  ch0: DAC s20 (vout20), ADC tile 2 converter 0 (vin2_01,
                          slices m20 I / m21 Q)
                     ch1: DAC s00 (vout00), ADC tile 0 converter 1 (vin0_23,
                          slices m02 I / m03 Q)
-          (fpga_board/rfsoc4x2/block_designs/rfsoc4x2_uhd_v49/rfsoc4x2_uhd_v49.tcl,
+          (fpga/boards/rfsoc4x2/block_designs/rfsoc4x2_uhd_v49/rfsoc4x2_uhd_v49.tcl,
           v49_channel_slices; the PYNQ RFSoC4x2 base overlay enables the same slices)
 
 GT refclk of the 100G CMAC: the ZCU216's comes from the 8A34001 (U409), which
@@ -37,16 +40,28 @@ Slice = Tuple[int, int]
 
 class Board:
     def __init__(self, name: str, dual_adc: bool, max_channels: int,
-                 masked_tiles: Tuple[int, ...], default_bitstream: str,
-                 lib_config: str, gt_refclk: str = "8a34001"):
-        self.name = name                    # rfsoc_lib board name (RfdcTask, MyMTS, xrfclk/<name>)
-        self.prefix = name.lower()          # bitstream prefix: <prefix>_v49_<N>ch_qsfp*
-        self.dual_adc = dual_adc
+                 default_bitstream: str, lib_config: str,
+                 masked_tiles: Tuple[int, ...] = (),
+                 dac_blocks: Optional[Tuple[Slice, ...]] = None,
+                 adc_blocks: Optional[Tuple[Slice, ...]] = None,
+                 mts_tiles: int = 0b1111, mts_ref_tile: int = 1,
+                 gt_refclk: str = "8a34001"):
+        self.name = name                    # rfsoc_lib board name (rfsoc_lib/xrfclk/<name>/)
+        self.prefix = name.lower()          # bitstream prefix <prefix>_v49_<N>ch_qsfp*, discovery product=
+        self.dual_adc = dual_adc            # dual RF-ADC tiles (I and Q on two IP slices)
         self.max_channels = max_channels
-        # tiles RfdcTask leaves unpowered on this board (set_board_rules)
-        self.masked_tiles = masked_tiles
         self.default_bitstream = default_bitstream  # loaded at start when present (the 1ch template)
-        self.lib_config = lib_config        # rfdc_config name of its clock limits
+        self.lib_config = lib_config        # rfdc_config name of its converter clock limits
+        # tiles RfdcTask leaves unpowered on this board
+        self.masked_tiles = masked_tiles
+        # (tile, block) of channel c's DAC and of its ADC (the xrfdc API
+        # block); None: tile c // 4, block c % 4 (four blocks per tile)
+        self.dac_blocks = dac_blocks
+        self.adc_blocks = adc_blocks
+        # MTS: the tiles synchronised (bit t = tile t, DAC and ADC) and the
+        # reference tile
+        self.mts_tiles = mts_tiles
+        self.mts_ref_tile = mts_ref_tile
         # the 100G GT refclk: "8a34001" (programmed at bring-up) or "si570"
         # (fixed, runs from power-up: never programmed)
         self.gt_refclk = gt_refclk
@@ -63,16 +78,12 @@ class Board:
     def dac_slice(self, c: int) -> Slice:
         """DAC (tile, block) of channel c (IP slice = API block)."""
         c = self._check(c)
-        if self.name == "RFSoC4x2":
-            return ((2, 0), (0, 0))[c]
-        return (c // 4, c % 4)
+        return self.dac_blocks[c] if self.dac_blocks else (c // 4, c % 4)
 
     def adc_block(self, c: int) -> Slice:
         """xrfdc (tile, block) of channel c's ADC."""
         c = self._check(c)
-        if self.name == "RFSoC4x2":
-            return ((2, 0), (0, 1))[c]
-        return (c // 4, c % 4)
+        return self.adc_blocks[c] if self.adc_blocks else (c // 4, c % 4)
 
     def adc_slices(self, c: int) -> List[Slice]:
         """The IP slices carrying channel c's ADC stream: [I, Q] on a dual
@@ -97,12 +108,15 @@ class Board:
 
 
 BOARDS = {
-    "ZCU216": Board("ZCU216", dual_adc=False, max_channels=16, masked_tiles=(),
+    "ZCU216": Board("ZCU216", dual_adc=False, max_channels=16,
                     default_bitstream="zcu216_v49_1ch_qsfp_f2_fs2500.bit",   # 1 ch, 1250 MS/s
                     lib_config="ZCU216_MIN_MAX_CONFIG"),
-    "RFSOC4X2": Board("RFSoC4x2", dual_adc=True, max_channels=2, masked_tiles=(1, 3),
+    "RFSOC4X2": Board("RFSoC4x2", dual_adc=True, max_channels=2,
                       default_bitstream="rfsoc4x2_v49_1ch_qsfp_f2_fs5000.bit",   # 1 ch, 2500 MS/s
                       lib_config="RFSOC4X2_MIN_MAX_CONFIG",
+                      # only tiles 0 and 2 reach the SMA ports
+                      masked_tiles=(1, 3), mts_tiles=0b0101, mts_ref_tile=2,
+                      dac_blocks=((2, 0), (0, 0)), adc_blocks=((2, 0), (0, 1)),
                       gt_refclk="si570"),
 }
 DEFAULT_BOARD = "ZCU216"
@@ -124,9 +138,9 @@ def board_of_bitstream(name: str) -> Optional[Board]:
 
 
 def detect_board(directory: str, bitstream: Optional[str] = None) -> Board:
-    """$UHD_BOARD (or $ZCU216_UHD_BOARD), else the board of `bitstream`,
+    """$UHD_BOARD (or $UHD_RFSOC_BOARD), else the board of `bitstream`,
     else the one board whose v49 builds are in `directory`, else ZCU216."""
-    env = os.environ.get("UHD_BOARD") or os.environ.get("ZCU216_UHD_BOARD")
+    env = os.environ.get("UHD_BOARD") or os.environ.get("UHD_RFSOC_BOARD")
     if env:
         return get_board(env)
     if bitstream:

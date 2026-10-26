@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""uhd_semantics.py -- USRP semantics of the zcu216 UHD module, through the
+"""uhd_semantics.py -- USRP semantics of the uhd-rfsoc UHD module, through the
 Python API (Protocol §3b-§3d, §4a).
 
 Needs the section-5 test pattern (device arg pattern=1). Runs against the
 board (../benchmark/uhd_examples_hw.sh does):
 
-    tools/zcu216-uhd python3 tools/uhd_semantics.py --args type=zcu216,addr=<board-ip>,pattern=1
+    tools/uhd-rfsoc python3 tools/uhd_semantics.py --args type=rfsoc,addr=<board-ip>,pattern=1
 
 Checks (each prints PASS/FAIL; exit code = number of failures):
   late        a timed command in the past: ERROR_CODE_LATE_COMMAND, no samples;

@@ -27,7 +27,7 @@ jobs:
         run: sha256sum *.tar.gz > SHA256SUMS
       - uses: softprops/action-gh-release@v2
         with:
-          name: rfsoc-uhd ${{ github.ref_name }}
+          name: uhd-rfsoc ${{ github.ref_name }}
           generate_release_notes: true
           prerelease: ${{ startsWith(github.ref_name, 'v0.') }}
           files: |

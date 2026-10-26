@@ -3,12 +3,12 @@
 #
 #   rfsoc/push_bitstreams.sh <bit_dir> <user@board> [remote_checkout]
 #
-#   bit_dir          e.g. fpga_board/zcu216/build/v49_qsfp/bitstreams
-#                    (RFSoC 4x2: fpga_board/rfsoc4x2/build/v49_qsfp/bitstreams),
+#   bit_dir          e.g. fpga/build/zcu216/bitstreams
+#                    (RFSoC 4x2: fpga/build/rfsoc4x2/bitstreams),
 #                    or the bitstreams of a release, unpacked
 #   user@board       ssh target of the board, e.g. xilinx@<board-ip>
 #   remote_checkout  the board's clone of this repository
-#                    [/home/xilinx/jupyter_notebooks/rfsoc-uhd]
+#                    [/home/xilinx/jupyter_notebooks/uhd-rfsoc]
 #
 # The code reaches the board by git (a clone on the board); the bitstreams do
 # not (tens of MB each, gitignored). Every <board>_v49_*ch_qsfp*.bit and its .hwh
@@ -21,7 +21,7 @@ case ${1:-} in -h|--help) usage; exit 0 ;; esac
 if [[ $# -lt 2 || $# -gt 3 ]]; then usage >&2; exit 2; fi
 BIT_DIR=$1
 TARGET=$2
-RDIR=${3:-/home/xilinx/jupyter_notebooks/rfsoc-uhd}
+RDIR=${3:-/home/xilinx/jupyter_notebooks/uhd-rfsoc}
 [[ -d $BIT_DIR ]] || { echo "no directory $BIT_DIR" >&2; exit 1; }
 SSH="ssh -o BatchMode=yes -o ConnectTimeout=10"
 shopt -s nullglob

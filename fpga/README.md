@@ -33,6 +33,9 @@ make BOARD=rfsoc4x2 templates   # the RFSoC 4x2's 4 templates
 make BOARD=zcu216 list          # every build of the board and whether it is built
 ```
 
+The RFSoC 4x2 has one extra build, sc8max (2 channels at 2 x 2500 MS/s in
+sc8): `make BOARD=rfsoc4x2 bitstream N=2 F=2`.
+
 A template is a channel count's top build at an fs. At run time the board's
 daemon retunes it to every lower RFDC factor, so the templates alone cover
 every rate (each about 35 min on a 12-core machine; `MAXPAR=2` builds run at

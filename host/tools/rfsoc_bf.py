@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""zcu216_bf.py -- steer the ZCU216 TX or RX beamformer (Protocol §11)
+"""rfsoc_bf.py -- steer a board's TX or RX beamformer (Protocol §11)
 from Python with the stock UHD API: multi_usrp.set_user_register() writes, the
 property tree (/mboards/0/tx_beamformer/*, /mboards/0/rx_beamformer/*) reads
 back.
@@ -8,11 +8,11 @@ Needs an N >= 2 build (device arg channels=N); the RX beamformer also needs a
 bitstream that carries it (info rbf=1). Run as root through the wrapper (the
 module opens the DPDK port at make()):
 
-    zcu216-uhd python3 tools/zcu216_bf.py --args type=zcu216,addr=<board-ip>,channels=4 \\
+    uhd-rfsoc python3 tools/rfsoc_bf.py --args type=rfsoc,addr=<board-ip>,channels=4 \\
         --carrier 28e9 --spacing 5.35e-3 --angle 30 --enable
-    zcu216-uhd python3 tools/zcu216_bf.py --args ... --weights "32767,0 0,32767 -32768,0 0,-32768" --enable
-    zcu216-uhd python3 tools/zcu216_bf.py --args ... --disable          # bit-exact bypass
-    zcu216-uhd python3 tools/zcu216_bf.py --rx --args ... --angle 30 --shift 2 --enable
+    uhd-rfsoc python3 tools/rfsoc_bf.py --args ... --weights "32767,0 0,32767 -32768,0 0,-32768" --enable
+    uhd-rfsoc python3 tools/rfsoc_bf.py --args ... --disable          # bit-exact bypass
+    uhd-rfsoc python3 tools/rfsoc_bf.py --rx --args ... --angle 30 --shift 2 --enable
 
 User register map (section 11), TX at base 0, RX at base 64:
   base+0 enable (0/1); base+1 steering angle in millidegrees (int32, two's

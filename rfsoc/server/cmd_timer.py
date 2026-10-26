@@ -1,4 +1,4 @@
-"""Timed control commands of the ZCU216 daemon (Protocol §3c).
+"""Timed control commands of the uhd-rfsoc daemon (Protocol §3c).
 
 UHD's set_command_time() makes later tune and gain requests take effect at a
 device time. The RFDC has no timed-command queue in the fabric, so the daemon
@@ -31,7 +31,7 @@ import threading
 import time
 from typing import Callable, Dict, List, Tuple
 
-log = logging.getLogger("zcu216.timer")
+log = logging.getLogger("uhd_rfsoc.timer")
 
 
 class CommandTimer:

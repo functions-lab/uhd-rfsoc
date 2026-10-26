@@ -1,20 +1,20 @@
 # server — the board daemon
 
-`zcu216_uhd_daemon.py` is what UHD talks to: discovery on UDP 49700,
+`uhd_rfsoc_daemon.py` is what UHD talks to: discovery on UDP 49700,
 control on TCP 49710 (the Protocol in the top `AGENTS.md`). It loads a
 `<board>_v49_<N>ch_qsfp*.bit` build, programs the clock chips, brings the
 RFDC up, locks multi-tile sync, aligns the 100G link, and then serves one
 UHD client at a time: channel count, sample rate (retune in place or reload
 another build), NCOs, gains, RX / TX streams and the beamformers. Runs as
 root in the PYNQ venv on a ZCU216 or an RFSoC 4x2 (UHD sees both as
-`type=zcu216`).
+`type=rfsoc`).
 
 Setting a board up from scratch: `../README.md`. Day to day:
 
     ../../run_daemon.sh                  # start (also stop, restart, status, log, fg)
     ../../run_daemon.sh --bitstream zcu216_v49_4ch_qsfp_f2_fs2500.bit   # start with this build
 
-Needs, in this directory: `zcu216_uhd.conf` (from `zcu216_uhd.conf.example`
+Needs, in this directory: `uhd_rfsoc.conf` (from `uhd_rfsoc.conf.example`
 via `../setup_board.sh`; `data_ip` = the FPGA's 100G address) and the
 `.bit` + `.hwh` pairs to serve. Any subset of the builds works, both clock
 families together too; every installed build's rates are offered.

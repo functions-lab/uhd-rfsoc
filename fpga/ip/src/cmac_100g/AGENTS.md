@@ -7,7 +7,7 @@
 - `cmac_usplus` and `gtwizard_ultrascale` may not sit inside a block-design
   module reference (Vivado filemgmt 56-181), and the IP's "GT in core" mode
   cannot reach the GT sites the zSFP28 cages use (GTY X0Y4, X0Y5 in quad 128,
-  X0Y8, X0Y9 in quad 129). So `v49_build.tcl` sources `create_cmac_ip.tcl`
+  X0Y8, X0Y9 in quad 129). So `fpga/flow/build.tcl` sources `create_cmac_ip.tcl`
   (creates both IPs in the project + adds this RTL) and generates an RTL top
   (`v49_gen_top`) = BD wrapper + `cmac_100g`. The BD exports the CMAC-side
   ports (`cmac_usr_clk/rstn`, `cmac_tx/rx`, `cmac_ctl/status`,

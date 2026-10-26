@@ -1,6 +1,6 @@
 # host — the PC side
 
-`libuhd_zcu216.so` is a UHD 4.6 device module (`type=zcu216`) that makes a
+`libuhd_rfsoc.so` is a UHD 4.6 device module (`type=rfsoc`) that makes a
 ZCU216 or RFSoC 4x2 running the board daemon (`../rfsoc/server`) look like a
 USRP to every stock UHD application: `uhd_usrp_probe`, `rx_samples_to_file`,
 `benchmark_rate`, GNU Radio, Python `uhd`. Samples travel over a 100 GbE link
@@ -10,7 +10,7 @@ aarch64 (NEON).
 | in this directory | what |
 |---|---|
 | `lib/` | the module's sources (`lib/README.md`) |
-| `tools/` | the `zcu216-uhd` wrapper, the no-board checks, the Python helpers (`tools/README.md`) |
+| `tools/` | the `uhd-rfsoc` wrapper, the no-board checks, the Python helpers (`tools/README.md`) |
 | `setup_cx5.sh`, `setup_dpdk.sh` | one-time setup of the 100G port and of DPDK |
 | `benchmark/` | tests on the real board (`benchmark/README.md`) |
 | `gnuradio/` | GNU Radio flowgraphs (`gnuradio/README.md`) |
@@ -44,7 +44,7 @@ sudo ./setup_dpdk.sh <100g-iface> --install          # hugepages (persistent), m
 
 `<100g-iface>` is the NIC's netdev (`ip link`); `<host-data-ip>` is the PC's
 end of the 100G link and must be on the subnet of the FPGA's `data_ip` (the
-board's `rfsoc/server/zcu216_uhd.conf`), e.g. `192.168.5.1/24` for a
+board's `rfsoc/server/uhd_rfsoc.conf`), e.g. `192.168.5.1/24` for a
 `data_ip` of `192.168.5.2`. Keep NetworkManager off the port
 (`sudo nmcli device set <100g-iface> managed no`); `setup_cx5.sh` must be
 re-run after a reboot unless its settings are made persistent (see its
@@ -57,22 +57,22 @@ bifurcated, the kernel keeps the netdev, its IP, ARP and ping.
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
-ldd build/libuhd_zcu216.so | grep uhd          # must be libuhd.so.4.6.0
+ldd build/libuhd_rfsoc.so | grep uhd          # must be libuhd.so.4.6.0
 sudo cmake --install build
-#  -> /usr/lib/<multiarch>/uhd/modules/libuhd_zcu216.so   (UHD loads it by itself)
-#  -> /usr/local/bin/zcu216-uhd                             (-DUHD_ZCU216_BIN_DIR=... to change)
+#  -> /usr/lib/<multiarch>/uhd/modules/libuhd_rfsoc.so   (UHD loads it by itself)
+#  -> /usr/local/bin/uhd-rfsoc                             (-DUHD_RFSOC_BIN_DIR=... to change)
 ```
 
-Also built: `build/zcu216_kernel_check` (the SIMD kernels against the scalar
-ones, bit for bit: run it, exit status 0), `build/zcu216_kernel_bench` and
-(x86) `build/zcu216_dram_bench` -- host-only checks, no board needed
+Also built: `build/rfsoc_kernel_check` (the SIMD kernels against the scalar
+ones, bit for bit: run it, exit status 0), `build/rfsoc_kernel_bench` and
+(x86) `build/rfsoc_dram_bench` -- host-only checks, no board needed
 (`tools/README.md`).
 
 ## Find the board and stream
 
 ```sh
-uhd_find_devices --args type=zcu216                 # no root: addr=<board-ip>, data_ip=, fpga=
-A=type=zcu216,addr=<board-ip>
+uhd_find_devices --args type=rfsoc                 # no root: addr=<board-ip>, data_ip=, fpga=
+A=type=rfsoc,addr=<board-ip>
 sudo uhd_usrp_probe --args $A,channels=4            # the tree; channels=N picks the N-channel build
 E=/usr/libexec/uhd/examples                         # UHD's examples (not on sudo's PATH)
 sudo $E/rx_samples_to_file --args $A,pattern=1 --rate 1.25e9 --freq 1e9 \
@@ -84,18 +84,17 @@ sudo python3 -c "import uhd; u = uhd.usrp.MultiUSRP('$A,channels=4'); print(u.ge
 sudo -E gnuradio-companion                          # GUI: -E keeps DISPLAY
 ```
 
-`zcu216-uhd <app> [args]` runs the same things (sudo, the module's path,
-bare example names such as `benchmark_rate` found for you): `zcu216-uhd
+`uhd-rfsoc <app> [args]` runs the same things (sudo, the module's path,
+bare example names such as `benchmark_rate` found for you): `uhd-rfsoc
 rx_samples_to_file --args ...`. A build tree instead of the installed module:
-`ZCU216_MODULE=$PWD/build/libuhd_zcu216.so zcu216-uhd ...` (with nothing
+`UHD_RFSOC_MODULE=$PWD/build/libuhd_rfsoc.so uhd-rfsoc ...` (with nothing
 installed; two copies of the module in one process is an error).
 
 * `channels=N` (1, 2, 4, 8, 16 on a ZCU216; 1, 2 on an RFSoC 4x2) selects the
   bitstream; a new N reloads it (~16 s). Within one N, `set_rx_rate` /
   `--rate` picks the sample rate (= bandwidth) from the installed builds'
   rates, met from below; the board retunes (~1 s) or reloads (seconds). The
-  rates per board: `../README.md`, "Sample rate (bandwidth) and carrier
-  frequency".
+  rates per board: `../README.md`, "Sample rate (bandwidth) and carrier".
 * The top rates that only `sc8` (or `sc12`) fit on the link need the device
   arg `otw=sc8` (`otw=sc12`) and the matching `--wirefmt` / `--otw`;
   without it a request for them is served at the fastest sc16 rate.

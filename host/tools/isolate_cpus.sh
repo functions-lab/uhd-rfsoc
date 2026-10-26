@@ -22,7 +22,7 @@
 #          (with the default layout none is free; the full-rate duplex layout
 #          of host/AGENTS.md leaves one). Processes started later inherit their
 #          parent's affinity; the module pins its own threads with
-#          sched_setaffinity (lcores, workers, ZCU216_APP_CPUS), which is not
+#          sched_setaffinity (lcores, workers, UHD_RFSOC_APP_CPUS), which is not
 #          limited by this.
 # restore: all of the above back to every online CPU.
 set -u

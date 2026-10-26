@@ -1,4 +1,4 @@
-"""VITA-49-style packets of the zcu216 data plane (Protocol §4-7, §10).
+"""VITA-49-style packets of the uhd-rfsoc data plane (Protocol §4-7, §10).
 
 Pure Python (numpy optional). Used by the daemon and by the host-side
 checkers (host/tools/check_pattern_file.py, tests/client_check.py), so they

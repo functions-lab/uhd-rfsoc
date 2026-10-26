@@ -1,8 +1,8 @@
-"""Control protocol of the ZCU216 UHD daemon (Protocol §2-3, §6-7 commands).
+"""Control protocol of the uhd-rfsoc daemon (Protocol §2-3, §6-7 commands).
 
 Transport-free: `ControlCore.handle_line(session, line)` takes one request line
 and returns one reply line (without the newline). The TCP/UDP servers in
-zcu216_uhd_daemon.py feed it; tests/test_protocol.py drives it directly
+uhd_rfsoc_daemon.py feed it; tests/test_protocol.py drives it directly
 against a fake backend.
 
 Every reply is `OK [values]` or `ERR <message>`; no request can raise out of
@@ -22,11 +22,15 @@ from backend import Backend, BackendError, STREAM_MODES, coerce_rate, link_probl
 from cmd_timer import CommandTimer
 from rx_cmdq import CONT
 
-log = logging.getLogger("zcu216.protocol")
+log = logging.getLogger("uhd_rfsoc.protocol")
 
 PROTO_VERSION = 1
-DISC_REQUEST = "ZCU216-DISC?"
-DISC_PREFIX = "ZCU216-DISC"
+DEVICE_TYPE = "rfsoc"                 # the UHD device type= (Protocol §2)
+DISC_REQUEST = "UHD-RFSOC-DISC?"
+DISC_PREFIX = "UHD-RFSOC-DISC"
+# the probe of hosts from before the rename: answered as they expect
+# (type=rfsoc), so an updated board is still found by them
+LEGACY_DISC = {"ZCU216-DISC?": ("ZCU216-DISC", "zcu216")}
 MAX_LINE = 4096
 MTU = 9000
 MAX_NPORTS = 64
@@ -254,17 +258,24 @@ class ControlCore:
         # 2016 instead of 2048)
         self._spp = vrt.round_spp(vrt.DEFAULT_SPP, self.be.slot_granule)
 
-    def discovery_reply(self, mgmt_ip: str) -> str:
-        return f"{DISC_PREFIX} " + self._kv(self._disc_fields(mgmt_ip))
+    def discovery_reply(self, mgmt_ip: str, request: str = DISC_REQUEST) -> Optional[str]:
+        """The reply to the discovery datagram `request`, None if it is not a probe."""
+        if request == DISC_REQUEST:
+            prefix, dtype = DISC_PREFIX, DEVICE_TYPE
+        elif request in LEGACY_DISC:
+            prefix, dtype = LEGACY_DISC[request]
+        else:
+            return None
+        return f"{prefix} " + self._kv(self._disc_fields(mgmt_ip, dtype))
 
     # -- formatting helpers -------------------------------------------------------
     @staticmethod
     def _kv(fields: List[Tuple[str, object]]) -> str:
         return ";".join(f"{k}={v}" for k, v in fields)
 
-    def _disc_fields(self, mgmt_ip: str) -> List[Tuple[str, object]]:
+    def _disc_fields(self, mgmt_ip: str, dtype: str = DEVICE_TYPE) -> List[Tuple[str, object]]:
         # type is the UHD device (the protocol); product the board served
-        return [("type", "zcu216"), ("product", getattr(self.be, "product", "zcu216")),
+        return [("type", dtype), ("product", getattr(self.be, "product", "zcu216")),
                 ("serial", self.serial), ("name", self.name),
                 ("addr", mgmt_ip or self.mgmt_ip),
                 ("data_ip", self.data_ip or mgmt_ip or self.mgmt_ip),

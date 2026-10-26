@@ -28,14 +28,14 @@
 #   BOARD      ssh target of the board, e.g. xilinx@<board> (required)
 #   ADDR       board LAN address [discovery: exactly one board]
 #   BOARD_DIR  the board's git checkout of this repository
-#              [/home/xilinx/jupyter_notebooks/rfsoc-uhd]
+#              [/home/xilinx/jupyter_notebooks/uhd-rfsoc]
 #   RUNS (10)  DUR (30)  FREQ (950e6: RF centre of the over-the-air tests)
-#   LAYOUT     device args of the full-rate runs; APP_CPUS (ZCU216_APP_CPUS);
+#   LAYOUT     device args of the full-rate runs; APP_CPUS (UHD_RFSOC_APP_CPUS);
 #              HK_CPUS (the CPUs left to the rest of the system). The defaults
 #              are the full-rate duplex layout of host/AGENTS.md for a 6-core /
 #              12-thread host (APP_CPUS 0,1,6,7, HK_CPUS 9): adapt all three.
 #   ISOLATE (1) tools/isolate_cpus.sh apply HK_CPUS for the run, restore after
-#   OUT        [/tmp/zcu216_oracle/<date-time>]
+#   OUT        [/tmp/uhd_rfsoc_oracle/<date-time>]
 # Exit code: the number of failed items (a run, a check, a test).
 set -u
 [ "$(id -u)" = 0 ] || { echo "run as root (sudo -E ...): UHD over DPDK" >&2; exit 2; }
@@ -45,21 +45,21 @@ case $SUITE in robustness|compliance|beamforming|all) ;; *)
     echo "usage: $0 robustness|compliance|beamforming|all [filter]" >&2; exit 2 ;; esac
 HERE=$(cd "$(dirname "$0")" && pwd)
 TOOLS=$HERE/../tools
-if command -v zcu216-uhd >/dev/null; then RUN=$(command -v zcu216-uhd); else RUN=$TOOLS/zcu216-uhd; fi
+if command -v uhd-rfsoc >/dev/null; then RUN=$(command -v uhd-rfsoc); else RUN=$TOOLS/uhd-rfsoc; fi
 [ -n "${BOARD:-}" ] || { echo "set BOARD=<user>@<board>: the ssh target of the board (e.g. xilinx@<board-ip>)" >&2; exit 2; }
 BUILDS=${BUILDS:-$HERE/oracle_builds.txt}
 case $BUILDS in /*) ;; *) [ -f "$BUILDS" ] || BUILDS=$HERE/$BUILDS ;; esac
-BOARD_DIR=${BOARD_DIR:-/home/xilinx/jupyter_notebooks/rfsoc-uhd}
+BOARD_DIR=${BOARD_DIR:-/home/xilinx/jupyter_notebooks/uhd-rfsoc}
 RUNS=${RUNS:-10}
 DUR=${DUR:-30}
 FREQ=${FREQ:-950e6}
 LAYOUT=${LAYOUT:-rx_workers=2,worker_cpus=2:3,tx_workers=3,tx_worker_cpus=4:5:11,dpdk_rx_cores=8,dpdk_tx_core=10,dpdk_rxd=128,tx_max_pkts=256,num_recv_frames=1024}
-export ZCU216_APP_CPUS=${APP_CPUS:-0,1,6,7}
+export UHD_RFSOC_APP_CPUS=${APP_CPUS:-0,1,6,7}
 HK_CPUS=${HK_CPUS:-9}
-OUT=${OUT:-/tmp/zcu216_oracle/$(date +%Y%m%d-%H%M%S)}
+OUT=${OUT:-/tmp/uhd_rfsoc_oracle/$(date +%Y%m%d-%H%M%S)}
 mkdir -p "$OUT"
 if [ -z "${ADDR:-}" ]; then
-    ADDR=$(uhd_find_devices --args type=zcu216 2>/dev/null | awk '/^ +addr: /{print $2}')
+    ADDR=$(uhd_find_devices --args type=rfsoc 2>/dev/null | awk '/^ +addr: /{print $2}')
     [ "$(echo "$ADDR" | wc -w)" = 1 ] || { echo "discovery found '$ADDR'; set ADDR=<board-ip>" >&2; exit 2; }
 fi
 bssh() { # -n: never read stdin (the build list's while-read loop reads it)
@@ -90,12 +90,12 @@ while read -r FAM N RATE BIT FMTS BF <&3; do
     case "$FAM ${N}ch $BIT" in *"$FILTER"*) ;; *) continue ;; esac
     # beamforming alone has nothing to do on a build without the 4T4R flag
     [ "$SUITE" = beamforming ] && [ "$BF" != yes ] && continue
-    # the Python tools get the same layout as the full-rate runs: ZCU216_APP_CPUS
+    # the Python tools get the same layout as the full-rate runs: UHD_RFSOC_APP_CPUS
     # (exported above) assumes the DPDK lcores sit on LAYOUT's cores. With the
     # module's default layout instead, an lcore shares a core with the
     # application and over-the-air captures near the link rate lose packets.
     BL=$LAYOUT
-    A="type=zcu216,addr=$ADDR,channels=$N,$BL"
+    A="type=rfsoc,addr=$ADDR,channels=$N,$BL"
     # the over-the-air check's wire format: sc16 where the build carries it,
     # else sc8 (a template's sc8 / sc12 top rates)
     case ",$FMTS," in *,sc16,*) WIRE=sc16 ;; *) WIRE=sc8 ;; esac

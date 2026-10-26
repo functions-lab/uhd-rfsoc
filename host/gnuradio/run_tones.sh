@@ -1,33 +1,36 @@
 #!/usr/bin/env bash
-# run_tones.sh [<board>] <family> <N> [flowgraph options] -- compile one tones
-# flowgraph (grc/<board>_tones_<family>_<N>ch.grc) and run it as root (DPDK;
-# asks for the sudo password): the ZCU216's through zcu216-uhd, the RFSoC
-# 4x2's with plain sudo (device type=rfsoc4x2).
+# run_tones.sh <N> [flowgraph options] -- compile the N-channel tones flowgraph
+# (grc/tones_<N>ch.grc) and run it as root through uhd-rfsoc (DPDK; asks for
+# the sudo password). Any board with N-channel builds: pick it with --addr.
 #
-#   run_tones.sh normal 4                    # ZCU216 4T4R, 625 MS/s per channel
-#   run_tones.sh normal 4 --addr <board-ip> -f 950e6
-#   run_tones.sh normal 4 --tx-phases 0,90,180,-90 --tx-amps 0.25,0.25,0.25,0.25
-#   run_tones.sh rfsoc4x2 normal 2           # RFSoC 4x2 2T2R, 1250 MS/s per channel
-#   run_tones.sh rfsoc4x2 normal 1 -t 20e6   # tone 20 MHz above the RF centre (default 10 MHz)
-#   boards: zcu216 (default): normal (N = 1, 2, 4, 8, 16);
-#           rfsoc4x2: normal (N = 1, 2)
+#   run_tones.sh 4                                   # 4T4R at 625 MS/s per channel
+#   run_tones.sh 1 --addr <board-ip> -r 2.5e9        # 1ch at 2500 MS/s (RFSoC 4x2)
+#   run_tones.sh 4 -f 950e6 -t 20e6 --tx-phases 0,90,180,-90 --tx-amps 0.25,0.25,0.25,0.25
+#   N: 1, 2, 4, 8, 16 (the board must have an N-channel build); -r: per-channel
+#   rate (default: N's fastest sc16 rate on the ZCU216), served from below.
 #
-# Needs the board daemon serving (it loads the matching bitstream itself) and
-# a display (run it from the PC's desktop session; sudo -E keeps DISPLAY).
-# The compiled .py goes to ~/.cache/<board>_gnuradio, rebuilt when the .grc is
-# newer, with GNU Radio 3.10's grcc (GRCC=<path> picks another one).
+#   SECONDS_HEADLESS=<s>  run without a display (Qt offscreen) for <s> seconds,
+#                         save the window to $SNAPSHOT (default
+#                         ./tones_<N>ch.png) and exit; prints the bursts sent.
+#
+# Needs the board daemon serving (it loads the matching bitstream itself) and,
+# unless headless, a display (run it from the PC's desktop session; sudo -E
+# keeps DISPLAY). The compiled .py goes to ~/.cache/uhd_rfsoc_gnuradio,
+# rebuilt when the .grc is newer, with GNU Radio 3.10's grcc (GRCC=<path>).
 set -euo pipefail
 GRCC=${GRCC:-grcc}
 D=$(cd "$(dirname "$0")" && pwd)
-B=zcu216
-case ${1:-} in zcu216|rfsoc4x2) B=$1; shift ;; esac
-[ $# -ge 2 ] || { sed -n '2,/^set -e/p' "$0" | grep '^#' | sed 's/^# \{0,1\}//'; exit 2; }
-G=$D/grc/${B}_tones_$1_$2ch.grc
+[ "${1:-}" = normal ] && shift          # the old "<family> <N>" form
+[ $# -ge 1 ] || { sed -n '2,/^set -e/p' "$0" | grep '^#' | sed 's/^# \{0,1\}//'; exit 2; }
+N=$1; shift
+G=$D/grc/tones_${N}ch.grc
 [ -f "$G" ] || { echo "no flowgraph $G; have:" >&2; ls "$D/grc" >&2; exit 2; }
-OUT=${XDG_CACHE_HOME:-$HOME/.cache}/${B}_gnuradio
+OUT=${XDG_CACHE_HOME:-$HOME/.cache}/uhd_rfsoc_gnuradio
 mkdir -p "$OUT"
-PY=$OUT/${B}_tones_$1_$2ch.py
+PY=$OUT/tones_${N}ch.py
 [ "$PY" -nt "$G" ] || "$GRCC" -o "$OUT" "$G" > /dev/null
-shift 2
-[ "$B" = rfsoc4x2 ] && exec sudo -E env -u PYTHONPATH python3 "$PY" "$@"
-exec zcu216-uhd python3 "$PY" "$@"
+if [ -n "${SECONDS_HEADLESS:-}" ]; then
+    export QT_QPA_PLATFORM=offscreen
+    export UHD_RFSOC_GR_SNAPSHOT=${SNAPSHOT:-$PWD/tones_${N}ch.png} UHD_RFSOC_GR_SNAPSHOT_S=$SECONDS_HEADLESS
+fi
+exec uhd-rfsoc python3 "$PY" "$@"

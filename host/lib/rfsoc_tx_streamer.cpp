@@ -1,8 +1,8 @@
 //
-// uhd_zcu216 -- TX streamer implementation (Protocol §6, §7).
+// uhd_rfsoc -- TX streamer implementation (Protocol §6, §7).
 //
-#include "zcu216_tx_streamer.hpp"
-#include "zcu216_pool.hpp"
+#include "rfsoc_tx_streamer.hpp"
+#include "rfsoc_pool.hpp"
 #include <arpa/inet.h>
 #include <endian.h>
 #include <netinet/in.h>
@@ -17,7 +17,7 @@
 #include <numeric>
 #include <thread>
 
-namespace zcu216 {
+namespace rfsoc {
 
 using clk = std::chrono::steady_clock;
 
@@ -67,7 +67,7 @@ tx_streamer_impl::tx_streamer_impl(
         std::string have;
         for (const auto& f : offered)
             have += (have.empty() ? "" : ",") + f;
-        throw uhd::value_error(std::string("ZCU216: TX otw_format ") + _otw->name
+        throw uhd::value_error(std::string("rfsoc: TX otw_format ") + _otw->name
                                + " is not offered by the daemon for this build (it offers "
                                + have + "; an older daemon/bitstream offers only sc16). "
                                  "Protocol §9/§10: the sc8-only builds are selected with "
@@ -99,7 +99,7 @@ tx_streamer_impl::tx_streamer_impl(
     _spin_s        = std::max(0.0, parse_double(arg("tx_spin_us", "20"), "tx_spin_us")) * 1e-6;
     _yield_s       = std::max(_spin_s, parse_double(arg("tx_yield_us", "2000"), "tx_yield_us") * 1e-6);
     _keep_warm     = arg("tx_keep_warm", "1") != "0";
-    _stats.on            = std::getenv("ZCU216_TX_STATS") != nullptr;
+    _stats.on            = std::getenv("UHD_RFSOC_TX_STATS") != nullptr;
     _stats.ignore_credit = arg("tx_ignore_credit", "0") == "1";
     if (_stats.ignore_credit)
         ZLOG_WARN("tx_ignore_credit=1: TX flow control DISABLED (measurement only; "
@@ -114,11 +114,11 @@ tx_streamer_impl::tx_streamer_impl(
 
     for (const size_t ch : args.channels) {
         if (ch >= _st->num_tx)
-            throw uhd::index_error("ZCU216: TX channel " + std::to_string(ch)
+            throw uhd::index_error("rfsoc: TX channel " + std::to_string(ch)
                                    + " out of range (device has " + std::to_string(_st->num_tx)
                                    + ")");
         if (std::find(_dev_chans.begin(), _dev_chans.end(), ch) != _dev_chans.end())
-            throw uhd::value_error("ZCU216: TX channel listed twice");
+            throw uhd::value_error("rfsoc: TX channel listed twice");
         _dev_chans.push_back(ch);
     }
     // throws for a cpu/otw pair the module does not support
@@ -132,17 +132,17 @@ tx_streamer_impl::tx_streamer_impl(
         dst.sin_family = AF_INET;
         dst.sin_port   = htons(tx_port);
         if (inet_pton(AF_INET, _st->data_ip.c_str(), &dst.sin_addr) != 1)
-            throw uhd::value_error("ZCU216: bad FPGA data IP '" + _st->data_ip + "'");
+            throw uhd::value_error("rfsoc: bad FPGA data IP '" + _st->data_ip + "'");
         // The DPDK frames need a UDP source port. Bind a kernel socket to the
         // host data IP to reserve one, so no kernel socket gets it too.
         _src_fd = ::socket(AF_INET, SOCK_DGRAM | SOCK_CLOEXEC, 0);
         if (_src_fd < 0)
-            throw uhd::os_error(std::string("ZCU216: socket(): ") + strerror(errno));
+            throw uhd::os_error(std::string("rfsoc: socket(): ") + strerror(errno));
         sockaddr_in me{};
         me.sin_family = AF_INET;
         if (inet_pton(AF_INET, ifc.ip.c_str(), &me.sin_addr) != 1
             or ::bind(_src_fd, reinterpret_cast<sockaddr*>(&me), sizeof(me)) != 0)
-            throw uhd::io_error("ZCU216: cannot bind a UDP socket to the host data IP " + ifc.ip
+            throw uhd::io_error("rfsoc: cannot bind a UDP socket to the host data IP " + ifc.ip
                                 + ": " + strerror(errno));
         socklen_t ml = sizeof(me);
         ::getsockname(_src_fd, reinterpret_cast<sockaddr*>(&me), &ml);
@@ -218,7 +218,7 @@ tx_streamer_impl::tx_streamer_impl(
     _warm_up(size_t(std::max(0LL, parse_ll(arg("tx_warmup_rounds", "4"), "tx_warmup_rounds"))));
 }
 
-// Warm-up. Measured (4ch F4 sc8, full-rate duplex, ZCU216_TX_STATS): an
+// Warm-up. Measured (4ch F4 sc8, full-rate duplex, UHD_RFSOC_TX_STATS): an
 // underflow 2 ms after a timed start, after one send() spent 4 ms packing --
 // the first conversions after the ~250 ms wait for the start met sleeping
 // pool workers and cold caches, while the FPGA buffer holds < 1 ms at that
@@ -567,10 +567,10 @@ void tx_streamer_impl::_setup_tx()
         req += std::string(" otw=") + _otw->name;
     const auto rep = _st->ctrl->call_tokens(req);
     if (rep.size() < 2)
-        throw uhd::runtime_error("ZCU216: short reply to stream_setup_tx");
+        throw uhd::runtime_error("rfsoc: short reply to stream_setup_tx");
     const size_t buf_words = size_t(parse_ll(rep[0], "tx_buf_words"));
     if (buf_words < 2 * _words(_spp / _nchan))
-        throw uhd::runtime_error("ZCU216: TX buffer of " + rep[0]
+        throw uhd::runtime_error("rfsoc: TX buffer of " + rep[0]
                                  + " words is smaller than two packets");
     // consumed count is monotonic on the FPGA; count from the baseline
     // (older daemons reply with two tokens: baseline 0)
@@ -915,7 +915,7 @@ size_t tx_streamer_impl::send(const buffs_type& buffs,
     } mark{_stats, ts0, _stats.build_ns, _stats.wait_ns};
     _resync_if_reloaded();
     if (buffs.size() < _dev_chans.size() and nsamps > 0)
-        throw uhd::value_error("ZCU216: send() needs one buffer per channel");
+        throw uhd::value_error("rfsoc: send() needs one buffer per channel");
     const auto deadline = deadline_in(timeout);
     long long ticks =
         md.has_time_spec ? std::max(0LL, md.time_spec.to_ticks(_st->tick_rate)) : 0;
@@ -1105,4 +1105,4 @@ size_t tx_streamer_impl::send(const buffs_type& buffs,
     return in_off;
 }
 
-} // namespace zcu216
+} // namespace rfsoc

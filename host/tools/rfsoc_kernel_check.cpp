@@ -1,5 +1,5 @@
 //
-// zcu216_kernel_check -- the SIMD sample kernels (AVX-512 on x86, NEON on
+// rfsoc_kernel_check -- the SIMD sample kernels (AVX-512 on x86, NEON on
 // aarch64) against the scalar ones, bit for bit: every RX and TX
 // format pair, N = 1, 2, 4, 8, 16, several channel subsets, unaligned starts
 // and lengths, random data with the edge cases (-32768, rounding ties, NaN,
@@ -7,9 +7,9 @@
 // buffer: the same digest on two machines means the same bits (x86 vs arm).
 // No device, no root. Exit status: the number of mismatching cases.
 //
-//   zcu216_kernel_check [--verbose]
+//   rfsoc_kernel_check [--verbose]
 //
-#include "zcu216_kernels.hpp"
+#include "rfsoc_kernels.hpp"
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -18,7 +18,7 @@
 #include <string>
 #include <vector>
 
-using namespace zcu216;
+using namespace rfsoc;
 
 namespace {
 
@@ -136,7 +136,7 @@ int main(int argc, char** argv)
     const size_t Ns[]  = {1, 2, 4, 8, 16};
     // (start sample, samples per channel); sc12 needs s0 * N and n * N in whole groups (TX)
     const std::pair<size_t, size_t> spans[] = {{0, 4096}, {3, 1021}, {1, 7}, {5, 1}, {12, 300}};
-    std::printf("zcu216_kernel_check: SIMD %s, %s\n", simd_name(), cpu_has_simd() ? "used" : "NOT available (scalar only)");
+    std::printf("rfsoc_kernel_check: SIMD %s, %s\n", simd_name(), cpu_has_simd() ? "used" : "NOT available (scalar only)");
     int fails = 0;
     for (int dir = 0; dir < 2; dir++) {
         uint64_t digest = 1469598103934665603ull, in_digest = digest;

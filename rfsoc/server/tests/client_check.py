@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""End-to-end client check of a running zcu216 daemon (run on the HOST).
+"""End-to-end client check of a running uhd-rfsoc daemon (run on the HOST).
 
 Discovery (unicast + broadcast), claim, info, set/get, RX stream_setup with
 pattern=1, stream_cmd num_done N now, bit-exact verification of every received
@@ -52,7 +52,7 @@ def discover(target, port, timeout=1.0):
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
     s.settimeout(timeout)
-    s.sendto(b"ZCU216-DISC?", (target, port))
+    s.sendto(b"UHD-RFSOC-DISC?", (target, port))
     out = []
     t_end = time.monotonic() + timeout
     while time.monotonic() < t_end:
@@ -122,7 +122,7 @@ def main():
 
     print("[discovery unicast]")
     r = discover(a.addr, a.disc_port)
-    check(len(r) == 1 and r[0][1].startswith("ZCU216-DISC type=zcu216;"),
+    check(len(r) == 1 and r[0][1].startswith("UHD-RFSOC-DISC type=rfsoc;"),
           f"unicast reply {r}")
     if r:
         kv = dict(x.split("=", 1) for x in r[0][1].split(" ", 1)[1].split(";"))

@@ -1,4 +1,4 @@
-"""The device interface of the ZCU216 UHD daemon.
+"""The device interface of the uhd-rfsoc daemon.
 
 `Backend` is what the control protocol (protocol.py) drives; its
 implementation is `HwBackend` (hw_backend.py), the real board: pynq overlay,
@@ -35,7 +35,7 @@ import rx_beamformer
 import tx_beamformer
 import vrt
 
-log = logging.getLogger("zcu216.backend")
+log = logging.getLogger("uhd_rfsoc.backend")
 
 STREAM_MODES = ("start_cont", "stop_cont", "num_done", "num_more")
 
@@ -57,9 +57,9 @@ DEFAULT_FC_INTERVAL = 512
 
 def default_fc_interval(tx_buf_words: int) -> int:
     """udp_player FC_INTERVAL the daemon programs: DEFAULT_FC_INTERVAL (512)
-    words, or 1/8 of a buffer too small for that; $ZCU216_FC_INTERVAL
+    words, or 1/8 of a buffer too small for that; $UHD_RFSOC_FC_INTERVAL
     overrides it (measurements). 0 if the build has no TX buffer."""
-    env = os.environ.get("ZCU216_FC_INTERVAL")
+    env = os.environ.get("UHD_RFSOC_FC_INTERVAL")
     if env:
         return max(1, int(env))
     if not tx_buf_words:

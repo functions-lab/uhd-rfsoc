@@ -1,7 +1,7 @@
 //
-// uhd_zcu216 -- the DPDK data plane (see zcu216_dpdk.hpp).
+// uhd_rfsoc -- the DPDK data plane (see rfsoc_dpdk.hpp).
 //
-#include "zcu216_dpdk.hpp"
+#include "rfsoc_dpdk.hpp"
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <algorithm>
@@ -14,7 +14,7 @@
 #include <sstream>
 #include <thread>
 
-namespace zcu216 {
+namespace rfsoc {
 namespace dpdk {
 
 using clk = std::chrono::steady_clock;
@@ -75,7 +75,7 @@ std::string fpga_mac(const std::string& override_mac,
     if (not override_mac.empty()) {
         const std::string m = norm_mac(override_mac);
         if (m.empty())
-            throw uhd::value_error("ZCU216: bad data_mac '" + override_mac + "'");
+            throw uhd::value_error("rfsoc: bad data_mac '" + override_mac + "'");
         ZLOG_INFO("DPDK TX: FPGA data MAC " << m << " (data_mac=)");
         return m;
     }
@@ -100,13 +100,13 @@ std::string fpga_mac(const std::string& override_mac,
                                             << " not in the neighbour table)");
         return im;
     }
-    throw uhd::lookup_error("ZCU216: FPGA data MAC unknown: no ARP reply from " + data_ip + " on "
+    throw uhd::lookup_error("rfsoc: FPGA data MAC unknown: no ARP reply from " + data_ip + " on "
                             + ifname + " and the daemon reports no data_mac. Is the 100G link "
                             "up (sensor cmac_aligned)? Pass data_mac= to override.");
 }
 
 } // namespace dpdk
-} // namespace zcu216
+} // namespace rfsoc
 
 // ---------------------------------------------------------------------------
 // DPDK
@@ -137,7 +137,7 @@ std::string fpga_mac(const std::string& override_mac,
 #include <mutex>
 #include <set>
 
-namespace zcu216 {
+namespace rfsoc {
 namespace dpdk {
 
 namespace {
@@ -377,7 +377,7 @@ void eal_init_once(const uhd::device_addr_t& args,
         throw uhd::runtime_error(g.eal_err);
 
     std::string raw;
-    if (const char* e = std::getenv("ZCU216_DPDK_EAL")) {
+    if (const char* e = std::getenv("UHD_RFSOC_DPDK_EAL")) {
         raw = e;
     } else if (args.has_key("dpdk_eal")) {
         // UHD device args cannot hold ',' or '=': write ';' and '~' instead
@@ -385,7 +385,7 @@ void eal_init_once(const uhd::device_addr_t& args,
         std::replace(raw.begin(), raw.end(), ';', ',');
         std::replace(raw.begin(), raw.end(), '~', '=');
     } else {
-        raw = "-a " + pci + " --file-prefix uhd_zcu216 --in-memory --no-telemetry";
+        raw = "-a " + pci + " --file-prefix uhd_rfsoc --in-memory --no-telemetry";
     }
     std::vector<std::string> toks;
     {
@@ -424,16 +424,16 @@ void eal_init_once(const uhd::device_addr_t& args,
     std::string why;
     if (not have_privileges(why))
         throw uhd::runtime_error(
-            "ZCU216: the DPDK data plane needs root (or CAP_NET_ADMIN, CAP_NET_RAW, "
+            "rfsoc: the DPDK data plane needs root (or CAP_NET_ADMIN, CAP_NET_RAW, "
             "CAP_IPC_LOCK): " + why
-            + ". Run the application with sudo (e.g. sudo uhd_usrp_probe --args type=zcu216)");
+            + ". Run the application with sudo (e.g. sudo uhd_usrp_probe --args type=rfsoc)");
     if (not no_huge and free_hugepages() == 0)
-        throw uhd::runtime_error("ZCU216: no free hugepages for DPDK "
+        throw uhd::runtime_error("rfsoc: no free hugepages for DPDK "
                                  "(/sys/kernel/mm/hugepages/*/free_hugepages); run "
                                  "host/setup_dpdk.sh");
 
     g.argv_store.clear();
-    g.argv_store.push_back("uhd_zcu216");
+    g.argv_store.push_back("uhd_rfsoc");
     for (auto& t : toks)
         g.argv_store.push_back(t);
     g.argv.clear();
@@ -457,7 +457,7 @@ void eal_init_once(const uhd::device_addr_t& args,
         pthread_setaffinity_np(pthread_self(), sizeof(saved), &saved);
     if (rc < 0) {
         g.eal     = -1; // rte_eal_init cannot be retried in this process
-        g.eal_err = "ZCU216: rte_eal_init(" + g.eal_args + ") failed: " + rte_err(err)
+        g.eal_err = "rfsoc: rte_eal_init(" + g.eal_args + ") failed: " + rte_err(err)
                     + ". Check: root, hugepages (setup_dpdk.sh), the -a PCI address, "
                       "and that no other process uses the same --file-prefix without --in-memory";
         throw uhd::runtime_error(g.eal_err);
@@ -514,7 +514,7 @@ public:
             return;
         if (ps.started) {
             if (ps.rx_active or ps.tx_active)
-                throw uhd::runtime_error("ZCU216: DPDK port " + name + " runs "
+                throw uhd::runtime_error("rfsoc: DPDK port " + name + " runs "
                                          + std::to_string(ps.nq_rx) + " RX queues and " + std::to_string(nq)
                                          + " are needed while a stream is active; pass nports="
                                          + std::to_string(nq) + " as a device arg");
@@ -523,24 +523,24 @@ public:
         const auto t0 = clk::now();
         rte_flow_error ferr{};
         if (rte_flow_isolate(id, 1, &ferr) != 0)
-            throw uhd::runtime_error("ZCU216: rte_flow_isolate(" + name + "): " + flow_err(ferr)
+            throw uhd::runtime_error("rfsoc: rte_flow_isolate(" + name + "): " + flow_err(ferr)
                                      + ". Isolated mode is required so that ARP, ICMP and the "
                                        "async status port stay with the kernel.");
         rte_eth_dev_info info{};
         int rc = rte_eth_dev_info_get(id, &info);
         if (rc != 0)
-            throw uhd::runtime_error("ZCU216: rte_eth_dev_info_get(" + name + "): " + rte_err(rc));
+            throw uhd::runtime_error("rfsoc: rte_eth_dev_info_get(" + name + "): " + rte_err(rc));
         // nq data queues + the TX status queue (Protocol §7, polled by the TX lcore)
         const uint16_t nrxq = uint16_t(nq + 1);
         if (std::string(info.driver_name ? info.driver_name : "") == "net_tap" and nrxq > 4)
             // DPDK 23.11's tap PMD puts one fd per RX and TX queue into an
             // 8-fd IPC message at start (tap_mp_req_on_rxtx) and overflows
             // the stack beyond that; it also wants as many TX as RX queues
-            throw uhd::runtime_error("ZCU216: net_tap supports at most 3 sample queues (nports <= 3: "
+            throw uhd::runtime_error("rfsoc: net_tap supports at most 3 sample queues (nports <= 3: "
                                      + std::to_string(nq) + " + the TX status queue, as many TX "
                                        "queues, must stay within 8 queue fds)");
         if (nrxq > info.max_rx_queues)
-            throw uhd::runtime_error("ZCU216: DPDK port " + name + " has only "
+            throw uhd::runtime_error("rfsoc: DPDK port " + name + " has only "
                                      + std::to_string(info.max_rx_queues) + " RX queues ("
                                      + std::to_string(nq) + " for samples + 1 for TX status needed)");
         // The kernel netdev owns the MTU (bifurcated mlx5 reports 1500 until
@@ -566,7 +566,7 @@ public:
             rc   = rte_eth_dev_configure(id, nrxq, ntxq, &conf);
         }
         if (rc != 0)
-            throw uhd::runtime_error("ZCU216: rte_eth_dev_configure(" + name + ", " + std::to_string(nq)
+            throw uhd::runtime_error("rfsoc: rte_eth_dev_configure(" + name + ", " + std::to_string(nq)
                                      + " RX queues): " + rte_err(rc) + busy_hint(name));
         // rxd 0 (the default): ~1024 RX descriptors in all, split over the
         // queues. The buffers the NIC fills must still be in L3 when it
@@ -590,7 +590,7 @@ public:
                 : rte_pktmbuf_pool_create_by_ops(pn.c_str(), unsigned(need), kPoolCache, 0,
                       uint16_t(kMbufRoom), sock_id, rx_pool_ops.c_str());
             if (not mp)
-                throw uhd::runtime_error("ZCU216: cannot allocate " + std::to_string(need)
+                throw uhd::runtime_error("rfsoc: cannot allocate " + std::to_string(need)
                                          + " RX mbufs of " + std::to_string(kMbufRoom) + " B ("
                                          + rte_err(rte_errno) + "): not enough hugepages? "
                                          "(setup_dpdk.sh; lower dpdk_rxd=)");
@@ -607,7 +607,7 @@ public:
             }
             rc = rte_eth_rx_queue_setup(id, q, nd, unsigned(sock_id), nullptr, ps.rx_pool);
             if (rc != 0)
-                throw uhd::runtime_error("ZCU216: rte_eth_rx_queue_setup(" + name + ", "
+                throw uhd::runtime_error("rfsoc: rte_eth_rx_queue_setup(" + name + ", "
                                          + std::to_string(q) + "): " + rte_err(rc));
         }
         if (old)
@@ -620,18 +620,18 @@ public:
                 : rte_pktmbuf_pool_create_by_ops(pn.c_str(), n, kPoolCache, 0, uint16_t(kMbufRoom), sock_id,
                       tx_pool_ops.c_str());
             if (not ps.tx_pool)
-                throw uhd::runtime_error("ZCU216: cannot allocate " + std::to_string(n)
+                throw uhd::runtime_error("rfsoc: cannot allocate " + std::to_string(n)
                                          + " TX mbufs (" + rte_err(rte_errno)
                                          + "): not enough hugepages?");
         }
         for (uint16_t q = 0; q < ntxq; q++) {
             rc = rte_eth_tx_queue_setup(id, q, ntx, unsigned(sock_id), nullptr);
             if (rc != 0)
-                throw uhd::runtime_error("ZCU216: rte_eth_tx_queue_setup(" + name + "): " + rte_err(rc));
+                throw uhd::runtime_error("rfsoc: rte_eth_tx_queue_setup(" + name + "): " + rte_err(rc));
         }
         rc = rte_eth_dev_start(id);
         if (rc != 0)
-            throw uhd::runtime_error("ZCU216: rte_eth_dev_start(" + name + "): " + rte_err(rc)
+            throw uhd::runtime_error("rfsoc: rte_eth_dev_start(" + name + "): " + rte_err(rc)
                                      + busy_hint(name));
         ps.started = true;
         ps.nq_rx   = nq;
@@ -788,24 +788,24 @@ port_sptr open_port(const uhd::device_addr_t& args, const local_iface& ifc, size
     p->tx_pool_ops = args.has_key("dpdk_tx_pool_ops") ? ops_arg("dpdk_tx_pool_ops") : "stack";
     for (unsigned c : p->rx_cores)
         if (c == p->tx_core or c == main_core)
-            throw uhd::value_error("ZCU216: dpdk_rx_cores must not contain dpdk_tx_core ("
+            throw uhd::value_error("rfsoc: dpdk_rx_cores must not contain dpdk_tx_core ("
                                    + std::to_string(p->tx_core) + ") or dpdk_main_core ("
                                    + std::to_string(main_core) + ")");
     if (p->tx_core == main_core)
-        throw uhd::value_error("ZCU216: dpdk_tx_core must differ from dpdk_main_core");
+        throw uhd::value_error("rfsoc: dpdk_tx_core must differ from dpdk_main_core");
 
     std::string pci = args.get("dpdk_port", "");
     if (pci.empty())
         pci = pci_of_iface(ifc.name);
     if (pci.empty())
-        throw uhd::lookup_error("ZCU216: cannot tell the PCI device of the data interface '"
+        throw uhd::lookup_error("rfsoc: cannot tell the PCI device of the data interface '"
                                 + ifc.name + "' (" + ifc.ip
                                 + "); pass dpdk_port=<PCI address or vdev name>");
 
     std::lock_guard<std::mutex> l(G().m);
     const bool first = G().eal == 0;
     eal_init_once(args, pci, main_core, p->rx_cores, p->tx_core);
-    if (not first and (args.has_key("dpdk_eal") or std::getenv("ZCU216_DPDK_EAL")))
+    if (not first and (args.has_key("dpdk_eal") or std::getenv("UHD_RFSOC_DPDK_EAL")))
         ZLOG_DEBUG("DPDK: EAL already initialised in this process (" << G().eal_args
                                                                       << "); dpdk_eal ignored");
     uint16_t id = 0;
@@ -818,7 +818,7 @@ port_sptr open_port(const uhd::device_addr_t& args, const local_iface& ifc, size
             if (rte_eth_dev_get_name_by_port(pid, nm) == 0)
                 have += std::string(have.empty() ? "" : ", ") + nm;
         }
-        throw uhd::runtime_error("ZCU216: DPDK port '" + pci + "' not found (EAL ports: "
+        throw uhd::runtime_error("rfsoc: DPDK port '" + pci + "' not found (EAL ports: "
                                  + (have.empty() ? "none" : have)
                                  + "). Is it in the EAL allow list (-a) and is the mlx5 PMD "
                                    "installed (ibverbs-providers)?"
@@ -839,10 +839,10 @@ port_sptr open_port(const uhd::device_addr_t& args, const local_iface& ifc, size
                                 << ") that the FPGA is told to send to");
     for (unsigned c : p->rx_cores)
         if (not rte_lcore_is_enabled(c) or c == rte_get_main_lcore())
-            throw uhd::value_error("ZCU216: dpdk_rx_cores: CPU " + std::to_string(c)
+            throw uhd::value_error("rfsoc: dpdk_rx_cores: CPU " + std::to_string(c)
                                    + " is not an EAL worker lcore (EAL: " + G().eal_args + ")");
     if (not rte_lcore_is_enabled(p->tx_core) or p->tx_core == rte_get_main_lcore())
-        throw uhd::value_error("ZCU216: dpdk_tx_core " + std::to_string(p->tx_core)
+        throw uhd::value_error("rfsoc: dpdk_tx_core " + std::to_string(p->tx_core)
                                + " is not an EAL worker lcore (EAL: " + G().eal_args + ")");
     G().ports[id].objects++;
     ZLOG_INFO("DPDK: port " << pci << " (" << pm << ", " << ifc.name << "), RX lcores "
@@ -1161,20 +1161,20 @@ std::unique_ptr<rx_session> start_rx(const port_sptr& p,
     const std::vector<rx_sink*>& sinks)
 {
     if (not p)
-        throw uhd::runtime_error("ZCU216: DPDK port not open");
+        throw uhd::runtime_error("rfsoc: DPDK port not open");
     auto s       = std::make_unique<rx_session_impl>();
     s->p         = p;
     s->port_base = port_base;
     s->nq        = uint16_t(sinks.size());
     in_addr a{};
     if (inet_pton(AF_INET, host_ip.c_str(), &a) != 1)
-        throw uhd::value_error("ZCU216: bad host data IP '" + host_ip + "'");
+        throw uhd::value_error("rfsoc: bad host data IP '" + host_ip + "'");
     s->ip_be = a.s_addr;
     {
         std::lock_guard<std::mutex> l(G().m);
         port_state& ps = G().ports[p->id];
         if (ps.rx_active)
-            throw uhd::runtime_error("ZCU216: a DPDK RX session is already active on " + p->name);
+            throw uhd::runtime_error("rfsoc: a DPDK RX session is already active on " + p->name);
         p->ensure_started(s->nq);
         ps.rx_active = true;
         s->active    = true;
@@ -1182,7 +1182,7 @@ std::unique_ptr<rx_session> start_rx(const port_sptr& p,
             std::string why;
             rte_flow* f = make_rx_flow(p->id, s->ip_be, uint16_t(port_base + q), q, why);
             if (not f)
-                throw uhd::runtime_error("ZCU216: DPDK flow " + host_ip + ":"
+                throw uhd::runtime_error("rfsoc: DPDK flow " + host_ip + ":"
                                          + std::to_string(port_base + q) + " -> queue "
                                          + std::to_string(q) + ": " + why);
             s->flows.push_back(f);
@@ -1213,10 +1213,10 @@ std::unique_ptr<rx_session> start_rx(const port_sptr& p,
     std::string map;
     for (auto& w : s->workers) {
         if (rte_eal_get_lcore_state(w->lcore) != WAIT)
-            throw uhd::runtime_error("ZCU216: DPDK lcore " + std::to_string(w->lcore) + " is busy");
+            throw uhd::runtime_error("rfsoc: DPDK lcore " + std::to_string(w->lcore) + " is busy");
         const int rc = rte_eal_remote_launch(rx_main, w.get(), w->lcore);
         if (rc != 0)
-            throw uhd::runtime_error("ZCU216: rte_eal_remote_launch(lcore "
+            throw uhd::runtime_error("rfsoc: rte_eal_remote_launch(lcore "
                                      + std::to_string(w->lcore) + "): " + rte_err(rc));
         w->launched = true;
         map += " lcore " + std::to_string(w->lcore) + ":q";
@@ -1301,7 +1301,7 @@ public:
             const auto dl = clk::now() + std::chrono::seconds(2);
             while (not(slots[i] = rte_pktmbuf_alloc(pool))) {
                 if (clk::now() > dl)
-                    throw uhd::io_error("ZCU216: DPDK TX mbuf pool exhausted for 2 s "
+                    throw uhd::io_error("rfsoc: DPDK TX mbuf pool exhausted for 2 s "
                                         "(is the link down?)");
                 rte_pause();
             }
@@ -1314,7 +1314,7 @@ public:
         for (size_t i = 0; i < n; i++) {
             rte_mbuf* m = slots.at(i);
             if (not m)
-                throw uhd::runtime_error("ZCU216: DPDK TX: send() of an unbuilt slot");
+                throw uhd::runtime_error("rfsoc: DPDK TX: send() of an unbuilt slot");
             m->hash.usr = i == hold_at ? kHoldMark : 0; // read by the TX lcore only
             uint8_t* d = rte_pktmbuf_mtod(m, uint8_t*);
             std::memcpy(d, hdr, kEthIpUdp);
@@ -1339,7 +1339,7 @@ public:
                 if (clk::now() > dl or rte_eal_get_lcore_state(p->tx_core) != RUNNING) {
                     for (size_t i = 0; i < done; i++)
                         slots[i] = nullptr;
-                    throw uhd::io_error("ZCU216: DPDK TX lcore " + std::to_string(p->tx_core)
+                    throw uhd::io_error("rfsoc: DPDK TX lcore " + std::to_string(p->tx_core)
                                         + " is not draining its ring (link down?)");
                 }
                 rte_pause();
@@ -1628,9 +1628,9 @@ std::unique_ptr<tx_session> start_tx(const port_sptr& p,
     tx_status_sink* status)
 {
     if (not p)
-        throw uhd::runtime_error("ZCU216: DPDK port not open");
+        throw uhd::runtime_error("rfsoc: DPDK port not open");
     if (kEthIpUdp + max_payload + RTE_PKTMBUF_HEADROOM > kMbufRoom)
-        throw uhd::value_error("ZCU216: DPDK TX payload too large");
+        throw uhd::value_error("rfsoc: DPDK TX payload too large");
     auto s         = std::make_unique<tx_session_impl>();
     s->p           = p;
     s->max_payload = max_payload;
@@ -1639,10 +1639,10 @@ std::unique_ptr<tx_session> start_tx(const port_sptr& p,
     // header template
     uint8_t dmac[6];
     if (not parse_mac(ep.dst_mac, dmac))
-        throw uhd::value_error("ZCU216: bad FPGA MAC '" + ep.dst_mac + "'");
+        throw uhd::value_error("rfsoc: bad FPGA MAC '" + ep.dst_mac + "'");
     in_addr sa{}, da{};
     if (inet_pton(AF_INET, ep.src_ip.c_str(), &sa) != 1 or inet_pton(AF_INET, ep.dst_ip.c_str(), &da) != 1)
-        throw uhd::value_error("ZCU216: bad TX IP " + ep.src_ip + " -> " + ep.dst_ip);
+        throw uhd::value_error("rfsoc: bad TX IP " + ep.src_ip + " -> " + ep.dst_ip);
     std::memset(s->hdr, 0, sizeof(s->hdr));
     auto* eth = reinterpret_cast<rte_ether_hdr*>(s->hdr);
     std::memcpy(&eth->dst_addr, dmac, 6);
@@ -1664,7 +1664,7 @@ std::unique_ptr<tx_session> start_tx(const port_sptr& p,
         std::lock_guard<std::mutex> l(G().m);
         port_state& ps = G().ports[p->id];
         if (ps.tx_active)
-            throw uhd::runtime_error("ZCU216: a DPDK TX session is already active on " + p->name);
+            throw uhd::runtime_error("rfsoc: a DPDK TX session is already active on " + p->name);
         p->ensure_started(1);
         ps.tx_active = true;
         s->active    = true;
@@ -1673,7 +1673,7 @@ std::unique_ptr<tx_session> start_tx(const port_sptr& p,
         const std::string rn = "zcu_txr" + std::to_string(p->id) + "_" + std::to_string(G().seq++);
         s->ring = rte_ring_create(rn.c_str(), kTxRingSize, p->sock_id, RING_F_SP_ENQ | RING_F_SC_DEQ);
         if (not s->ring)
-            throw uhd::runtime_error("ZCU216: rte_ring_create: " + rte_err(rte_errno));
+            throw uhd::runtime_error("rfsoc: rte_ring_create: " + rte_err(rte_errno));
         if (status and ep.status_port) {
             s->squeue = ps.nq_rx; // the queue after the sample queues
             s->sport  = ep.status_port;
@@ -1681,17 +1681,17 @@ std::unique_ptr<tx_session> start_tx(const port_sptr& p,
             std::string why;
             s->sflow = make_rx_flow(p->id, s->sip_be, s->sport, s->squeue, why);
             if (not s->sflow)
-                throw uhd::runtime_error("ZCU216: DPDK flow (TX status) " + ep.src_ip + ":"
+                throw uhd::runtime_error("rfsoc: DPDK flow (TX status) " + ep.src_ip + ":"
                                          + std::to_string(s->sport) + " -> queue "
                                          + std::to_string(s->squeue) + ": " + why);
             s->sink = status;
         }
     }
     if (rte_eal_get_lcore_state(p->tx_core) != WAIT)
-        throw uhd::runtime_error("ZCU216: DPDK TX lcore " + std::to_string(p->tx_core) + " is busy");
+        throw uhd::runtime_error("rfsoc: DPDK TX lcore " + std::to_string(p->tx_core) + " is busy");
     const int rc = rte_eal_remote_launch(tx_main, s.get(), p->tx_core);
     if (rc != 0)
-        throw uhd::runtime_error("ZCU216: rte_eal_remote_launch(TX lcore "
+        throw uhd::runtime_error("rfsoc: rte_eal_remote_launch(TX lcore "
                                  + std::to_string(p->tx_core) + "): " + rte_err(rc));
     s->launched = true;
     if (ep.warmup_pkts)
@@ -1707,4 +1707,4 @@ std::unique_ptr<tx_session> start_tx(const port_sptr& p,
 }
 
 } // namespace dpdk
-} // namespace zcu216
+} // namespace rfsoc

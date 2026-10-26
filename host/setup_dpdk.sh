@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prepare the PC for the DPDK data plane of libuhd_zcu216.so (its only sample
+# Prepare the PC for the DPDK data plane of libuhd_rfsoc.so (its only sample
 # transport). Idempotent; run as root.
 #
 #   sudo ./setup_dpdk.sh <iface> [nr_2M_hugepages]
@@ -22,7 +22,7 @@
 #                            mounted at /dev/hugepages.
 #   root                     the module checks CAP_NET_ADMIN, CAP_NET_RAW and
 #                            CAP_IPC_LOCK; run UHD apps through the wrapper
-#                            zcu216-uhd <app> [args] (installed by cmake --install)
+#                            uhd-rfsoc <app> [args] (installed by cmake --install)
 #   the NIC itself           setup_cx5.sh (link, FEC, MTU 9000).
 set -euo pipefail
 
@@ -68,7 +68,7 @@ echo "== hugepages (2 MB x $NR)"
 SYSCTL=/etc/sysctl.d/61-dpdk-hugepages.conf
 WANT="vm.nr_hugepages = $NR"
 if ! grep -qx "$WANT" "$SYSCTL" 2>/dev/null; then
-    printf '# DPDK (uhd_zcu216): %s MB of 2 MB hugepages for the mlx5 PMD\n%s\n' "$((NR * 2))" "$WANT" > "$SYSCTL"
+    printf '# DPDK (uhd_rfsoc): %s MB of 2 MB hugepages for the mlx5 PMD\n%s\n' "$((NR * 2))" "$WANT" > "$SYSCTL"
     ok "wrote $SYSCTL"
 fi
 CUR=$(cat /proc/sys/vm/nr_hugepages)

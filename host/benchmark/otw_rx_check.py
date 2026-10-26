@@ -16,7 +16,7 @@ burst's time_spec, channel order/alignment).
 start tick): at ~10 GB/s of wire data a single 10M-sample burst into a large
 buffer can exceed what the host memory system absorbs (NIC rx_discards_phy).
 
-    zcu216-uhd python3 benchmark/otw_rx_check.py --args type=zcu216,addr=<ip>,channels=4 \\
+    uhd-rfsoc python3 benchmark/otw_rx_check.py --args type=rfsoc,addr=<ip>,channels=4 \\
         --rate 625e6 --otw sc12 --cpu sc16 --nsamps 10000000
 """
 import argparse

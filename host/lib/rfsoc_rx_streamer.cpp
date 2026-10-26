@@ -1,15 +1,15 @@
 //
-// uhd_zcu216 -- RX streamer implementation (Protocol §4, §5).
+// uhd_rfsoc -- RX streamer implementation (Protocol §4, §5).
 //
-#include "zcu216_rx_streamer.hpp"
-#include "zcu216_pool.hpp"
+#include "rfsoc_rx_streamer.hpp"
+#include "rfsoc_pool.hpp"
 #include <uhd/transport/vrt_if_packet.hpp>
 #include <algorithm>
 #include <cstring>
 #include <numeric>
 #include <thread>
 
-namespace zcu216 {
+namespace rfsoc {
 
 using clk = std::chrono::steady_clock;
 
@@ -121,7 +121,7 @@ rx_streamer_impl::rx_streamer_impl(
         std::string have;
         for (const auto& f : offered)
             have += (have.empty() ? "" : ",") + f;
-        throw uhd::value_error(std::string("ZCU216: RX otw_format ") + _otw->name
+        throw uhd::value_error(std::string("rfsoc: RX otw_format ") + _otw->name
                                + " is not offered by the daemon for this build (it offers "
                                + have + "; an older daemon/bitstream offers only sc16). "
                                  "Protocol §9/§10: the sc8-only builds are selected with "
@@ -149,7 +149,7 @@ rx_streamer_impl::rx_streamer_impl(
     const size_t frames  = size_t(std::max(64LL, parse_ll(arg("num_recv_frames", "4096"), "num_recv_frames")));
     const bool pattern   = arg("pattern", "0") == "1" or arg("pattern", "0") == "true";
     _reorder_s           = parse_double(arg("reorder_ms", "2"), "reorder_ms") / 1000.0;
-    if (const char* t = std::getenv("ZCU216_RX_TRACE"))
+    if (const char* t = std::getenv("UHD_RFSOC_RX_TRACE"))
         _trace_left = std::max(0, std::atoi(t));
 
     const local_iface ifc = _st->host_data_iface();
@@ -157,11 +157,11 @@ rx_streamer_impl::rx_streamer_impl(
 
     for (const size_t ch : args.channels) {
         if (ch >= _st->num_rx)
-            throw uhd::index_error("ZCU216: RX channel " + std::to_string(ch)
+            throw uhd::index_error("rfsoc: RX channel " + std::to_string(ch)
                                    + " out of range (device has " + std::to_string(_st->num_rx)
                                    + ")");
         if (std::find(_dev_chans.begin(), _dev_chans.end(), ch) != _dev_chans.end())
-            throw uhd::value_error("ZCU216: RX channel listed twice");
+            throw uhd::value_error("rfsoc: RX channel listed twice");
         _dev_chans.push_back(ch);
     }
 
@@ -187,11 +187,11 @@ rx_streamer_impl::rx_streamer_impl(
         _setup_cmd     = req;
         const auto rep = _st->ctrl->call_tokens(req);
         if (rep.size() < 2)
-            throw uhd::runtime_error("ZCU216: short reply to stream_setup");
+            throw uhd::runtime_error("rfsoc: short reply to stream_setup");
         const size_t spp_r = size_t(parse_ll(rep[0], "stream_setup spp"));
         const size_t np_r  = size_t(parse_ll(rep[1], "stream_setup nports"));
         if (spp_r == 0 or spp_r % quantum or np_r == 0 or np_r > _nports)
-            throw uhd::runtime_error("ZCU216: bad stream_setup reply: spp=" + rep[0]
+            throw uhd::runtime_error("rfsoc: bad stream_setup reply: spp=" + rep[0]
                                      + " nports=" + rep[1] + " (spp must be a multiple of "
                                      + std::to_string(quantum) + ")");
         while (c.ports.size() > np_r)
@@ -211,11 +211,11 @@ rx_streamer_impl::rx_streamer_impl(
         // port's pool was sized for num_recv_frames of them per queue
         const bool zc = _st->args.get("rx_zero_copy", "1") != "0";
         _overflow_hyst = arg("rx_overflow_hyst", "1") != "0";
-        _rx_stats      = std::getenv("ZCU216_RX_STATS") != nullptr or std::getenv("ZCU216_TX_STATS") != nullptr;
+        _rx_stats      = std::getenv("UHD_RFSOC_RX_STATS") != nullptr or std::getenv("UHD_RFSOC_TX_STATS") != nullptr;
         {
             const double f = parse_double(arg("rx_overflow_resume", "0.0625"), "rx_overflow_resume");
             if (not(f >= 0.0 and f <= 1.0))
-                throw uhd::value_error("ZCU216: rx_overflow_resume must be in 0..1");
+                throw uhd::value_error("rfsoc: rx_overflow_resume must be in 0..1");
             _resume_slots = size_t(f * double(frames));
         }
         for (auto& p : c.ports) {
@@ -507,7 +507,7 @@ bool rx_streamer_impl::_fetch(wire& c, clk::time_point deadline, bool block)
             p->pop();
             continue;
         }
-        if (_trace_left > 0) { // ZCU216_RX_TRACE=<n>: the first n packets the merge takes
+        if (_trace_left > 0) { // UHD_RFSOC_RX_TRACE=<n>: the first n packets the merge takes
             _trace_left--;
             ZLOG_INFO("RX trace: port " << p->port << " tsf " << s.tsf << " nsamps " << s.nsamps
                       << " sob " << s.sob << " eob " << s.eob << " | expected "
@@ -781,7 +781,7 @@ size_t rx_streamer_impl::recv(const buffs_type& buffs,
     _tps = _st->ticks_per_sample(_st->get_rx_rate(0));
     md.reset();
     if (buffs.size() < _dev_chans.size())
-        throw uhd::value_error("ZCU216: recv() needs one buffer per channel");
+        throw uhd::value_error("rfsoc: recv() needs one buffer per channel");
     if (nsamps == 0)
         return 0;
     const auto t_call = clk::now();
@@ -909,7 +909,7 @@ void rx_streamer_impl::_resync_if_reloaded()
     const auto rep = _st->ctrl->call_tokens(_setup_cmd);
     if (rep.size() < 2 or size_t(parse_ll(rep[0], "spp")) != _spp
         or size_t(parse_ll(rep[1], "nports")) != _w.ports.size())
-        throw uhd::runtime_error("ZCU216: stream_setup after FPGA reload changed spp/nports; "
+        throw uhd::runtime_error("rfsoc: stream_setup after FPGA reload changed spp/nports; "
                                  "recreate the RX streamer");
     wire& c          = _w;
     c.expected_valid = false;
@@ -1012,7 +1012,7 @@ void rx_streamer_impl::_issue_locked(
             b.count = num;
             break;
         default:
-            throw uhd::value_error("ZCU216: unsupported stream mode");
+            throw uhd::value_error("rfsoc: unsupported stream mode");
     }
     // a continuation of the open chain: stream_now, or timed at exactly its end
     const bool cont = c.chain == CH_OPEN
@@ -1046,4 +1046,4 @@ void rx_streamer_impl::_issue_locked(
     _streaming = true;
 }
 
-} // namespace zcu216
+} // namespace rfsoc

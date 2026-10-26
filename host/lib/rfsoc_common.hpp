@@ -1,5 +1,5 @@
 //
-// uhd_zcu216 -- UHD out-of-tree device module for the ZCU216 RFSoC board.
+// uhd_rfsoc -- UHD out-of-tree device module for RFSoC boards (uhd-rfsoc).
 // Shared declarations: constants, control client, network helpers and the
 // device state that streamers share with the device.
 //
@@ -19,12 +19,12 @@
 #include <string>
 #include <vector>
 
-#define ZLOG_TRACE(msg) UHD_LOG_TRACE("ZCU216", msg)
-#define ZLOG_DEBUG(msg) UHD_LOG_DEBUG("ZCU216", msg)
-#define ZLOG_INFO(msg) UHD_LOG_INFO("ZCU216", msg)
-#define ZLOG_WARN(msg) UHD_LOG_WARNING("ZCU216", msg)
+#define ZLOG_TRACE(msg) UHD_LOG_TRACE("RFSOC", msg)
+#define ZLOG_DEBUG(msg) UHD_LOG_DEBUG("RFSOC", msg)
+#define ZLOG_INFO(msg) UHD_LOG_INFO("RFSOC", msg)
+#define ZLOG_WARN(msg) UHD_LOG_WARNING("RFSOC", msg)
 
-namespace zcu216 {
+namespace rfsoc {
 
 // ---- Protocol constants -------------------------------------------------------------
 constexpr uint16_t kDiscPort       = 49700; // §2
@@ -41,8 +41,8 @@ constexpr size_t kBeatSamps        = 4;  // one 128-bit ADC beat (slots)
 constexpr size_t kTxMaxSpp         = 2048; // §6 (slots)
 constexpr size_t kMaxChans         = 16; // §9: N = 1, 2, 4, 8, 16
 constexpr size_t kHdrBytes         = 16; // 4-word header, §4/§6
-constexpr const char* kDiscRequest     = "ZCU216-DISC?";
-constexpr const char* kDiscReplyPrefix = "ZCU216-DISC ";
+constexpr const char* kDiscRequest     = "UHD-RFSOC-DISC?";
+constexpr const char* kDiscReplyPrefix = "UHD-RFSOC-DISC ";
 
 // ---- string helpers -------------------------------------------------------
 std::vector<std::string> split(const std::string& s, char sep, bool keep_empty = true);
@@ -61,6 +61,9 @@ constexpr double kAutoBufUs = 250.0;
 size_t buf_pkts_from_arg(const std::string& arg, double rate, size_t nchan, size_t spp);
 //! "k=v;k=v" -> device_addr_t (Protocol §2/§3)
 uhd::device_addr_t parse_kv(const std::string& s);
+//! the board's name for people, from discovery / `info` product= ("zcu216"
+//! -> "ZCU216"); an unknown product is shown as it is
+std::string board_display_name(const std::string& product);
 //! CPU list "2-5", "2:3:4:5", "2;3", "2 3" (or "2,3" where UHD's arg parser
 //! does not split on commas); uhd::value_error naming `what` otherwise
 std::vector<unsigned> parse_cpus(const std::string& s, const std::string& what);
@@ -83,7 +86,7 @@ public:
 
 private:
     std::string _read_line(const std::string& cmd, double timeout_s);
-    //! ZCU216_CTRL_TRACE=1: every request timed (incl. the wait for the
+    //! UHD_RFSOC_CTRL_TRACE=1: every request timed (incl. the wait for the
     //! connection's mutex), a log line for each one slower than 5 ms with the
     //! calling thread's name, and per command the count, total and maximum at
     //! destruction -- what the application blocks on in the daemon (a USRP
@@ -120,9 +123,9 @@ local_iface iface_for_ip(const std::string& ip);
 std::string resolve_ipv4(const std::string& host);
 
 namespace dpdk {
-class port; // zcu216_dpdk.hpp: the DPDK data plane
+class port; // rfsoc_dpdk.hpp: the DPDK data plane
 }
-class worker_pool; // zcu216_pool.hpp
+class worker_pool; // rfsoc_pool.hpp
 
 // ---- state shared by device and streamers ---------------------------------
 //! Streamers keep a shared_ptr to this, so they stay valid even if the user
@@ -239,4 +242,4 @@ private:
     local_iface _iface;
 };
 
-} // namespace zcu216
+} // namespace rfsoc

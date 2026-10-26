@@ -13,14 +13,14 @@ checks what.
   written next to it, never to make a result pass.
 - `oracle_builds.txt` / `oracle_builds_rfsoc4x2.txt` list every (build,
   rate) with the wire formats the daemon accepts for it; a change to the
-  builds (`fpga_board/`) or to the link rule (Protocol §10) is a change here.
+  builds (`fpga/boards/`) or to the link rule (Protocol §10) is a change here.
 
 ## How to run
-- PC side: `sudo env PATH=$PATH zcu216-uhd python3 benchmark/<script>.py --args
-  type=zcu216,addr=<board-ip>,channels=N ...` (from `host/`) with a daemon
+- PC side: `sudo env PATH=$PATH uhd-rfsoc python3 benchmark/<script>.py --args
+  type=rfsoc,addr=<board-ip>,channels=N ...` (from `host/`) with a daemon
   running on the board (`./run_daemon.sh` in the board's checkout).
   `bench_strict.sh`, `dpdk_rx_test.sh` and `rate_sweep.sh` call the wrapper
-  themselves (installed `zcu216-uhd`, else `../tools/zcu216-uhd`).
+  themselves (installed `uhd-rfsoc`, else `../tools/uhd-rfsoc`).
 - `oracle.sh` needs `BOARD=<user>@<board>` (passwordless ssh, and passwordless
   sudo on the board for `run_daemon.sh`) and takes the board over: it
   restarts the daemon per build and stops it at the end. Never run it on a
@@ -62,6 +62,6 @@ checks what.
 
 ## Results
 - Keep results and raw logs out of the repository (`oracle.sh` writes them
-  under `OUT`, default `/tmp/zcu216_oracle/<date-time>`).
+  under `OUT`, default `/tmp/uhd_rfsoc_oracle/<date-time>`).
 - Record with a result the layout, CPU isolation and governor it ran with; a
   PC under interactive or build load breaks the cases near the link limit.

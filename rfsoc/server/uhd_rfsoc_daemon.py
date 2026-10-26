@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
-"""ZCU216 UHD daemon: makes the ZCU216 look like a USRP to UHD (type=zcu216).
+"""uhd-rfsoc daemon: makes an RFSoC board look like a USRP to UHD (type=rfsoc).
 
 Contract: Protocol (../../AGENTS.md) -- UDP discovery (49700), line-based TCP control
 (49710), VRT-style UDP samples over the 100GbE CMAC link.
 
     # real hardware (root, PYNQ venv); every zcu216_v49_<N>ch_qsfp*.bit with a
     # .hwh in --bitstream-dir is a selectable build (N channels, one factor):
-    sudo -E python3 zcu216_uhd_daemon.py [--bitstream-dir DIR] [--bitstream X.bit]
+    sudo -E python3 uhd_rfsoc_daemon.py [--bitstream-dir DIR] [--bitstream X.bit]
 
 The same daemon serves an RFSoC 4x2 (rfsoc4x2_v49_<N>ch_qsfp*.bit, N = 1, 2):
 --board RFSoC4x2, or $UHD_BOARD, or nothing when the bitstream directory holds
-only RFSoC 4x2 builds (boards.py). UHD still sees type=zcu216 (the protocol);
+only RFSoC 4x2 builds (boards.py). UHD still sees type=rfsoc (the protocol);
 discovery reports product=rfsoc4x2.
 
 Addresses (Protocol §1, board_config.py): the management address in every
 reply is the one the request arrived on (nothing configured); the FPGA's 100G
-data IP/MAC come from zcu216_uhd.conf (or --data-ip / --data-mac).
+data IP/MAC come from uhd_rfsoc.conf (or --data-ip / --data-mac).
 """
 from __future__ import annotations
 
@@ -33,9 +33,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
-from protocol import (ControlCore, DISC_REQUEST, MAX_LINE, Session)  # noqa: E402
+from protocol import (ControlCore, MAX_LINE, Session)  # noqa: E402
 
-log = logging.getLogger("zcu216.daemon")
+log = logging.getLogger("uhd_rfsoc.daemon")
 
 # Linux <netinet/in.h>; Python's socket module does not always export it
 IP_PKTINFO = getattr(socket, "IP_PKTINFO", 8)
@@ -117,14 +117,15 @@ class DiscoveryServer(threading.Thread):
                     return
                 continue
             try:
-                if data.strip() != DISC_REQUEST.encode():
+                request = data.strip().decode(errors="replace")
+                if self.core.discovery_reply("", request) is None:
                     log.debug("discovery: ignoring %r from %s", data[:64], addr)
                     continue
                 # the board address the request arrived on (learned per
                 # request: a DHCP change needs no restart), unless overridden
                 ip = (self.mgmt_ip or pktinfo_local_ip(anc)
                       or local_ip_towards(addr[0]))
-                reply = self.core.discovery_reply(ip)
+                reply = self.core.discovery_reply(ip, request)
                 self.sock.sendto(reply.encode() + b"\n", addr)
                 log.info("discovery from %s:%d -> %s", addr[0], addr[1], ip)
             except Exception:
@@ -244,7 +245,8 @@ def build_argparser() -> argparse.ArgumentParser:
                    help="bitstream loaded at start (.hwh next to it) [<dir>/"
                         f"the board's default (ZCU216: zcu216_v49_1ch_qsfp_f2_fs2500.bit), "
                         f"else the highest-rate variant]")
-    p.add_argument("--board", default=None, type=str.upper, choices=("ZCU216", "RFSOC4X2"),
+    from boards import BOARDS
+    p.add_argument("--board", default=None, type=str.upper, choices=tuple(BOARDS),
                    help="board [$UHD_BOARD, else the board of --bitstream, else the "
                         "one whose v49 builds are in --bitstream-dir, else ZCU216]")
     p.add_argument("--no-load", action="store_true",
@@ -256,8 +258,8 @@ def build_argparser() -> argparse.ArgumentParser:
                    help="management IP to advertise, overriding the default: the "
                         "address each request arrived on")
     p.add_argument("--config", default=None,
-                   help="settings file [$ZCU216_UHD_CONF, <this dir>/zcu216_uhd.conf, "
-                        "/etc/zcu216_uhd.conf; see zcu216_uhd.conf.example]")
+                   help="settings file [$UHD_RFSOC_CONF, <this dir>/uhd_rfsoc.conf, "
+                        "/etc/uhd_rfsoc.conf; see uhd_rfsoc.conf.example]")
     p.add_argument("--data-ip", default=None,
                    help="FPGA 100G data IP [config data_ip]")
     p.add_argument("--data-mac", default=None,

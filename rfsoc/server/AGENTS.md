@@ -7,7 +7,7 @@ short version for people; this file is the reference for the code.
 ## Rules
 - Runs ON THE BOARD (PYNQ venv, root). Every FPGA address of the data plane
   lives in `eth100g.py`, `tx_beamformer.py`, `rx_beamformer.py` (sources
-  of truth: the RTL headers in `fpga_ip/ip_design/uhd_ip/src`). Blocks are
+  of truth: the RTL headers in `fpga/ip/src/uhd_ip/src`). Blocks are
   found by name in the overlay's `ip_dict`; the beamformers are never
   mapped from a fallback address (an AXI access to an unmapped address can
   hang the PS).
@@ -15,11 +15,13 @@ short version for people; this file is the reference for the code.
   comes up only through `RfdcTask` at the factor compiled into the build,
   then MTS (`_mts_lock`, which must end locked), then the NCOs. The one
   place that changes the factor afterwards is `HwBackend._retune_hw`.
-- No address in code: the FPGA data IP / MAC come from `zcu216_uhd.conf`
+- No address in code: the FPGA data IP / MAC come from `uhd_rfsoc.conf`
   (`board_config.py`), the management address from each incoming request.
 - `hw_backend.py` names no board: everything board-specific (bitstream
-  prefix, channel map, dual-ADC slice numbering, unpowered tiles, GT refclk
-  source, default build) is a `Board` in `boards.py`.
+  prefix, channel map, dual-ADC slice numbering, unpowered tiles, MTS tiles,
+  GT refclk source, default build, clock limits) is a `Board` in
+  `boards.py`, plain data, passed on to `rfsoc_lib` as arguments. A new
+  board is a new entry there (with its case in `tests/test_boards.py`).
 - Tests: `python3 -m unittest discover -s tests` must pass without a board
   (`test_protocol.py` drives `protocol.py` against a `Backend` with the
   hardware stubbed; add a case for every new command or rule);
@@ -30,21 +32,21 @@ short version for people; this file is the reference for the code.
 ## Files
 | file | what |
 |---|---|
-| `zcu216_uhd_daemon.py` | entry point: argument parsing, board detection, backend bring-up, the TCP control server (49710) and UDP discovery server (49700); a missing board setup step (`SetupError`) is one log line, any other bring-up failure a traceback |
+| `uhd_rfsoc_daemon.py` | entry point: argument parsing, board detection, backend bring-up, the TCP control server (49710) and UDP discovery server (49700); a missing board setup step (`SetupError`) is one log line, any other bring-up failure a traceback |
 | `protocol.py` | `ControlCore`: the §3 command parser / dispatcher, claim ownership, the §10 `otw=` options and the rate / format vetting before any reload, the §11 commands; transport-free |
 | `backend.py` | the `Backend` interface and everything that needs no hardware: rate selection (`coerce_rate`, `default_rate`), link checks (`link_problem`), the §3b tune plan, the §11 beamformer state, sensor helpers, `find_lib_root` |
 | `hw_backend.py` | `HwBackend`: the `.hwh` scan (`scan_bitstreams`, `Variant`, `Geometry`), the full bring-up, run-time retune (`_retune_hw`) and reload (`_switch_to`), NCO / DSA / VOP, streaming, sensors |
-| `boards.py` | `Board` (ZCU216, RFSoC 4x2) and `detect_board` |
-| `board_config.py` | `zcu216_uhd.conf`: search path, parsing, the eth0-derived default MAC |
+| `boards.py` | `Board` (ZCU216, RFSoC 4x2: data only) and `detect_board` |
+| `board_config.py` | `uhd_rfsoc.conf`: search path, parsing, the eth0-derived default MAC |
 | `eth100g.py` | `Eth100G`: udp_streamer, udp_player, CMAC ctl / status GPIO, clock meters |
 | `tx_beamformer.py`, `rx_beamformer.py` | the §11 register files (`eth100g/tx_beamformer` 0x8006_0000, `eth100g/rx_beamformer` 0x8007_0000); `rx_beamformer.beam_payload` is the bit-exact reference of the RX beam |
 | `bringup.py` | the 100G link steps (`link_bringup`, shared with `HwBackend`) and a CLI to run them by hand or dump the status |
 | `rx_cmdq.py` | the §4a RX stream-command queue over the streamer's one command slot |
 | `cmd_timer.py` | the §3c timed commands, run by the FPGA timekeeper |
 | `vrt.py` | the §4-7 packet formats, the §5 pattern, the §10 reference conversions; also imported by `host/tools/check_pattern_file.py` |
-| `zcu216_uhd.conf.example` | template of the board's settings file (the real one is gitignored) |
-| `zcu216-uhd.service` | systemd unit template; nothing installs it |
-| `tests/` | `test_protocol.py`, `test_xrfdc_mts_patch.py` (no board), `client_check.py` (against a daemon) |
+| `uhd_rfsoc.conf.example` | template of the board's settings file (the real one is gitignored) |
+| `uhd-rfsoc.service` | systemd unit template; nothing installs it |
+| `tests/` | `test_protocol.py`, `test_boards.py`, `test_xrfdc_mts_patch.py` (no board), `client_check.py` (against a daemon) |
 
 ## Bring-up (every load: at start and after a reload)
 
@@ -56,7 +58,7 @@ in the log):
    slices, if ADC and DAC want different LMX frequencies, or if
    `Fabric_Freq != fs / F / (samples per clock)`.
 2. `NEW_CONFIG` (fs, reference, PL clock, factor, initial NCOs) into
-   `rfsoc_lib`'s `ZCU216_CONFIG`; `RfdcTask.start()` / `join()` (an
+   `rfsoc_lib`'s `RFDC_CONFIG`; `RfdcTask.start()` / `join()` (an
    exception on the task thread is captured and re-raised). The clock plan
    programmed is logged: `[c] clocks: LMK... + LMX...`.
 3. MTS on every DAC and ADC tile (`_mts_lock`: `MyMTS.init()` up to
@@ -117,7 +119,7 @@ can carry in the client's formats is refused before anything is reloaded.
   the daemon is restarted; the reply is `ERR ... restored`.
 * **Reload** (`_switch_to` / `_reload`, another bitstream or channel
   count): quiesce, the whole bring-up above (a template's non-built factor
-  is then retuned), restore, then `ZCU216_RELOAD_SETTLE_S` (4 s) for the
+  is then retuned), restore, then `UHD_RFSOC_RELOAD_SETTLE_S` (4 s) for the
   far-end NIC to relink before replying. Failure: the previous build is
   reloaded (`ERR ... restored`); if that fails too, `_Unusable`.
 * **Restored after both** (`_restore`): per-channel NCOs (and §3b DSP
@@ -175,7 +177,7 @@ can carry in the client's formats is refused before anything is reloaded.
   and leaves the player as the DAC source, so the DAC outputs zeros. The
   untimed-start gate (USTART / UTIMEOUT, §6) is written at every setup.
   `fc_interval` = 512 words (1/8 of a smaller buffer);
-  `ZCU216_FC_INTERVAL` overrides it.
+  `UHD_RFSOC_FC_INTERVAL` overrides it.
 * The claim's release (unclaim or disconnect) stops RX streaming and TX
   playback, resets both beamformers and the client's formats and `spp`.
 * `set_bf_angle` / `set_rbf_angle` use `rfsoc_lib/dsp/beamformer.py`
@@ -193,18 +195,21 @@ else the bitstream names), `--no-load` (attach to the loaded bitstream),
 loopback, aligns without a NIC), `--cmac-timeout`. Protocol: `--port`,
 `--disc-port`, `--bind`, `--mgmt-ip`, `--chain-grace-ms`, `--config`,
 `--data-ip` / `--data-mac` / `--name`, `--serial`. Environment:
-`ZCU216_UHD_CONF`, `ZCU216_RELOAD_SETTLE_S`, `ZCU216_FC_INTERVAL`,
+`UHD_RFSOC_CONF`, `UHD_RFSOC_RELOAD_SETTLE_S`, `UHD_RFSOC_FC_INTERVAL`,
 `RFSOC_MTS_TARGET` (`../rfsoc_lib/AGENTS.md`).
 
-## RFSoC 4x2
+## Boards
 
-Served by the same code through its `Board`: `rfsoc4x2_v49_<N>ch_qsfp*`,
-N = 1 or 2, fs 5000 / 4915.2. Its RF-ADC tiles are dual (`.hwh`
-`C_High_Speed_ADC`): a converter's I and Q are two IP slices of Data_Width
-samples per clock each but ONE xrfdc block (`Board.adc_slices` /
-`adc_block` / `api_block`), ch1's ADC is `adc_tiles[0].blocks[1]`, tiles 1
-and 3 are left unpowered (`masked_tiles`: the readback lists their blocks
-without reading them), a bypassed ADC tile takes up to 5000 MHz
-(`RFSOC4X2_MIN_MAX_CONFIG`), and the 100G GT refclk is a Si570 running
+Every board is served by the same code through its `Board`: the ZCU216
+(`zcu216_v49_<N>ch_qsfp*`, N = 1 .. 16, quad RF-ADC tiles, channel c = tile
+c // 4, block c % 4, 8A34001 GT refclk programmed at bring-up) and the
+RFSoC 4x2 (`rfsoc4x2_v49_<N>ch_qsfp*`, N = 1 or 2). The 4x2's RF-ADC tiles
+are dual (`.hwh` `C_High_Speed_ADC`): a converter's I and Q are two IP
+slices of Data_Width samples per clock each but ONE xrfdc block
+(`Board.adc_slices` / `adc_block` / `api_block`), ch1's ADC is
+`adc_tiles[0].blocks[1]`, tiles 1 and 3 stay unpowered (`masked_tiles`: the
+readback lists their blocks without reading them) and out of MTS
+(`mts_tiles` 0b0101, reference tile 2), a bypassed ADC tile takes up to
+5000 MHz (`RFSOC4X2_MIN_MAX_CONFIG`), and the GT refclk is a Si570 running
 from power-up (`gt_refclk = "si570"`: never programmed). Discovery reports
-`product=rfsoc4x2`; `type` stays `zcu216`.
+the board as `product=` (`Board.prefix`); `type` is always `rfsoc`.

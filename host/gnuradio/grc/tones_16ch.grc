@@ -6,13 +6,13 @@ options:
     cmake_opt: ''
     comment: ''
     copyright: ''
-    description: 'ZCU216 normal 4ch (zcu216_v49_4ch_qsfp_f2_fs2500): timed tone bursts,
-      captured on every channel'
+    description: '16-channel timed tone bursts, captured on every channel
+      (any board with 16-channel builds)'
     gen_cmake: 'On'
     gen_linking: dynamic
     generate_options: qt_gui
     hier_block_src_path: '.:'
-    id: zcu216_tones_normal_4ch
+    id: tones_16ch
     max_nouts: '0'
     output_language: python
     placement: (0,0)
@@ -20,12 +20,12 @@ options:
     realtime_scheduling: ''
     run: 'True'
     run_command: /bin/bash -c 'exec pkexec env DISPLAY="$DISPLAY" XAUTHORITY="$XAUTHORITY"
-      /usr/local/bin/zcu216-uhd "$0" -u "$1"' {python} {filename}
+      /usr/local/bin/uhd-rfsoc "$0" -u "$1"' {python} {filename}
     run_options: prompt
     sizing_mode: fixed
     thread_safe_setters: ''
-    title: ZCU216 normal 4ch tones (625 MS/s, otw sc16), TX phase / amplitude per
-      channel
+    title: 16ch tones (otw sc16, default 156.25 MS/s), TX phase / amplitude
+      per channel
     window_size: (1400,1100)
   states:
     bus_sink: false
@@ -40,7 +40,7 @@ blocks:
   id: variable
   parameters:
     comment: ''
-    value: '32768'
+    value: '8192'
   states:
     bus_sink: false
     bus_source: false
@@ -52,7 +52,7 @@ blocks:
   id: variable
   parameters:
     comment: ''
-    value: '16384'
+    value: '4096'
   states:
     bus_sink: false
     bus_source: false
@@ -76,7 +76,7 @@ blocks:
   id: variable
   parameters:
     comment: ''
-    value: '"type=zcu216,product=zcu216,channels=4" + (",addr=" + addr if addr else
+    value: '"type=rfsoc,channels=16" + (",addr=" + addr if addr else
       "")'
   states:
     bus_sink: false
@@ -101,7 +101,7 @@ blocks:
   id: variable
   parameters:
     comment: ''
-    value: '4'
+    value: '16'
   states:
     bus_sink: false
     bus_source: false
@@ -134,10 +134,15 @@ blocks:
     rotation: 0
     state: enabled
 - name: samp_rate
-  id: variable
+  id: parameter
   parameters:
+    alias: ''
     comment: ''
-    value: '6.25e+08'
+    hide: none
+    label: per-channel sample rate (S/s; the daemon serves the highest at or below it)
+    short_id: r
+    type: eng_float
+    value: 1.5625e+08
   states:
     bus_sink: false
     bus_source: false
@@ -187,6 +192,132 @@ blocks:
     coordinate: [1576, 232]
     rotation: 0
     state: enabled
+- name: tx_amp10
+  id: variable_qtgui_range
+  parameters:
+    comment: ''
+    gui_hint: 'ctrl@1: 2,2,1,1'
+    label: ch 10
+    min_len: '100'
+    orient: QtCore.Qt.Horizontal
+    rangeType: float
+    start: '0'
+    step: '0.01'
+    stop: '1'
+    value: tx_amp_init[10]
+    widget: counter_slider
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1752, 344]
+    rotation: 0
+    state: enabled
+- name: tx_amp11
+  id: variable_qtgui_range
+  parameters:
+    comment: ''
+    gui_hint: 'ctrl@1: 2,3,1,1'
+    label: ch 11
+    min_len: '100'
+    orient: QtCore.Qt.Horizontal
+    rangeType: float
+    start: '0'
+    step: '0.01'
+    stop: '1'
+    value: tx_amp_init[11]
+    widget: counter_slider
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1928, 344]
+    rotation: 0
+    state: enabled
+- name: tx_amp12
+  id: variable_qtgui_range
+  parameters:
+    comment: ''
+    gui_hint: 'ctrl@1: 3,0,1,1'
+    label: ch 12
+    min_len: '100'
+    orient: QtCore.Qt.Horizontal
+    rangeType: float
+    start: '0'
+    step: '0.01'
+    stop: '1'
+    value: tx_amp_init[12]
+    widget: counter_slider
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [2104, 344]
+    rotation: 0
+    state: enabled
+- name: tx_amp13
+  id: variable_qtgui_range
+  parameters:
+    comment: ''
+    gui_hint: 'ctrl@1: 3,1,1,1'
+    label: ch 13
+    min_len: '100'
+    orient: QtCore.Qt.Horizontal
+    rangeType: float
+    start: '0'
+    step: '0.01'
+    stop: '1'
+    value: tx_amp_init[13]
+    widget: counter_slider
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [2280, 344]
+    rotation: 0
+    state: enabled
+- name: tx_amp14
+  id: variable_qtgui_range
+  parameters:
+    comment: ''
+    gui_hint: 'ctrl@1: 3,2,1,1'
+    label: ch 14
+    min_len: '100'
+    orient: QtCore.Qt.Horizontal
+    rangeType: float
+    start: '0'
+    step: '0.01'
+    stop: '1'
+    value: tx_amp_init[14]
+    widget: counter_slider
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [2456, 344]
+    rotation: 0
+    state: enabled
+- name: tx_amp15
+  id: variable_qtgui_range
+  parameters:
+    comment: ''
+    gui_hint: 'ctrl@1: 3,3,1,1'
+    label: ch 15
+    min_len: '100'
+    orient: QtCore.Qt.Horizontal
+    rangeType: float
+    start: '0'
+    step: '0.01'
+    stop: '1'
+    value: tx_amp_init[15]
+    widget: counter_slider
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [2632, 344]
+    rotation: 0
+    state: enabled
 - name: tx_amp2
   id: variable_qtgui_range
   parameters:
@@ -227,6 +358,132 @@ blocks:
     bus_source: false
     bus_structure: null
     coordinate: [1928, 232]
+    rotation: 0
+    state: enabled
+- name: tx_amp4
+  id: variable_qtgui_range
+  parameters:
+    comment: ''
+    gui_hint: 'ctrl@1: 1,0,1,1'
+    label: ch 4
+    min_len: '100'
+    orient: QtCore.Qt.Horizontal
+    rangeType: float
+    start: '0'
+    step: '0.01'
+    stop: '1'
+    value: tx_amp_init[4]
+    widget: counter_slider
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [2104, 232]
+    rotation: 0
+    state: enabled
+- name: tx_amp5
+  id: variable_qtgui_range
+  parameters:
+    comment: ''
+    gui_hint: 'ctrl@1: 1,1,1,1'
+    label: ch 5
+    min_len: '100'
+    orient: QtCore.Qt.Horizontal
+    rangeType: float
+    start: '0'
+    step: '0.01'
+    stop: '1'
+    value: tx_amp_init[5]
+    widget: counter_slider
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [2280, 232]
+    rotation: 0
+    state: enabled
+- name: tx_amp6
+  id: variable_qtgui_range
+  parameters:
+    comment: ''
+    gui_hint: 'ctrl@1: 1,2,1,1'
+    label: ch 6
+    min_len: '100'
+    orient: QtCore.Qt.Horizontal
+    rangeType: float
+    start: '0'
+    step: '0.01'
+    stop: '1'
+    value: tx_amp_init[6]
+    widget: counter_slider
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [2456, 232]
+    rotation: 0
+    state: enabled
+- name: tx_amp7
+  id: variable_qtgui_range
+  parameters:
+    comment: ''
+    gui_hint: 'ctrl@1: 1,3,1,1'
+    label: ch 7
+    min_len: '100'
+    orient: QtCore.Qt.Horizontal
+    rangeType: float
+    start: '0'
+    step: '0.01'
+    stop: '1'
+    value: tx_amp_init[7]
+    widget: counter_slider
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [2632, 232]
+    rotation: 0
+    state: enabled
+- name: tx_amp8
+  id: variable_qtgui_range
+  parameters:
+    comment: ''
+    gui_hint: 'ctrl@1: 2,0,1,1'
+    label: ch 8
+    min_len: '100'
+    orient: QtCore.Qt.Horizontal
+    rangeType: float
+    start: '0'
+    step: '0.01'
+    stop: '1'
+    value: tx_amp_init[8]
+    widget: counter_slider
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1400, 344]
+    rotation: 0
+    state: enabled
+- name: tx_amp9
+  id: variable_qtgui_range
+  parameters:
+    comment: ''
+    gui_hint: 'ctrl@1: 2,1,1,1'
+    label: ch 9
+    min_len: '100'
+    orient: QtCore.Qt.Horizontal
+    rangeType: float
+    start: '0'
+    step: '0.01'
+    stop: '1'
+    value: tx_amp_init[9]
+    widget: counter_slider
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1576, 344]
     rotation: 0
     state: enabled
 - name: tx_amp_init
@@ -295,6 +552,132 @@ blocks:
     coordinate: [1576, 8]
     rotation: 0
     state: enabled
+- name: tx_ph10
+  id: variable_qtgui_range
+  parameters:
+    comment: ''
+    gui_hint: 'ctrl@0: 2,2,1,1'
+    label: ch 10
+    min_len: '100'
+    orient: QtCore.Qt.Horizontal
+    rangeType: float
+    start: '-180'
+    step: '0.1'
+    stop: '180'
+    value: tx_phase_init[10]
+    widget: counter_slider
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1752, 120]
+    rotation: 0
+    state: enabled
+- name: tx_ph11
+  id: variable_qtgui_range
+  parameters:
+    comment: ''
+    gui_hint: 'ctrl@0: 2,3,1,1'
+    label: ch 11
+    min_len: '100'
+    orient: QtCore.Qt.Horizontal
+    rangeType: float
+    start: '-180'
+    step: '0.1'
+    stop: '180'
+    value: tx_phase_init[11]
+    widget: counter_slider
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1928, 120]
+    rotation: 0
+    state: enabled
+- name: tx_ph12
+  id: variable_qtgui_range
+  parameters:
+    comment: ''
+    gui_hint: 'ctrl@0: 3,0,1,1'
+    label: ch 12
+    min_len: '100'
+    orient: QtCore.Qt.Horizontal
+    rangeType: float
+    start: '-180'
+    step: '0.1'
+    stop: '180'
+    value: tx_phase_init[12]
+    widget: counter_slider
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [2104, 120]
+    rotation: 0
+    state: enabled
+- name: tx_ph13
+  id: variable_qtgui_range
+  parameters:
+    comment: ''
+    gui_hint: 'ctrl@0: 3,1,1,1'
+    label: ch 13
+    min_len: '100'
+    orient: QtCore.Qt.Horizontal
+    rangeType: float
+    start: '-180'
+    step: '0.1'
+    stop: '180'
+    value: tx_phase_init[13]
+    widget: counter_slider
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [2280, 120]
+    rotation: 0
+    state: enabled
+- name: tx_ph14
+  id: variable_qtgui_range
+  parameters:
+    comment: ''
+    gui_hint: 'ctrl@0: 3,2,1,1'
+    label: ch 14
+    min_len: '100'
+    orient: QtCore.Qt.Horizontal
+    rangeType: float
+    start: '-180'
+    step: '0.1'
+    stop: '180'
+    value: tx_phase_init[14]
+    widget: counter_slider
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [2456, 120]
+    rotation: 0
+    state: enabled
+- name: tx_ph15
+  id: variable_qtgui_range
+  parameters:
+    comment: ''
+    gui_hint: 'ctrl@0: 3,3,1,1'
+    label: ch 15
+    min_len: '100'
+    orient: QtCore.Qt.Horizontal
+    rangeType: float
+    start: '-180'
+    step: '0.1'
+    stop: '180'
+    value: tx_phase_init[15]
+    widget: counter_slider
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [2632, 120]
+    rotation: 0
+    state: enabled
 - name: tx_ph2
   id: variable_qtgui_range
   parameters:
@@ -335,6 +718,132 @@ blocks:
     bus_source: false
     bus_structure: null
     coordinate: [1928, 8]
+    rotation: 0
+    state: enabled
+- name: tx_ph4
+  id: variable_qtgui_range
+  parameters:
+    comment: ''
+    gui_hint: 'ctrl@0: 1,0,1,1'
+    label: ch 4
+    min_len: '100'
+    orient: QtCore.Qt.Horizontal
+    rangeType: float
+    start: '-180'
+    step: '0.1'
+    stop: '180'
+    value: tx_phase_init[4]
+    widget: counter_slider
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [2104, 8]
+    rotation: 0
+    state: enabled
+- name: tx_ph5
+  id: variable_qtgui_range
+  parameters:
+    comment: ''
+    gui_hint: 'ctrl@0: 1,1,1,1'
+    label: ch 5
+    min_len: '100'
+    orient: QtCore.Qt.Horizontal
+    rangeType: float
+    start: '-180'
+    step: '0.1'
+    stop: '180'
+    value: tx_phase_init[5]
+    widget: counter_slider
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [2280, 8]
+    rotation: 0
+    state: enabled
+- name: tx_ph6
+  id: variable_qtgui_range
+  parameters:
+    comment: ''
+    gui_hint: 'ctrl@0: 1,2,1,1'
+    label: ch 6
+    min_len: '100'
+    orient: QtCore.Qt.Horizontal
+    rangeType: float
+    start: '-180'
+    step: '0.1'
+    stop: '180'
+    value: tx_phase_init[6]
+    widget: counter_slider
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [2456, 8]
+    rotation: 0
+    state: enabled
+- name: tx_ph7
+  id: variable_qtgui_range
+  parameters:
+    comment: ''
+    gui_hint: 'ctrl@0: 1,3,1,1'
+    label: ch 7
+    min_len: '100'
+    orient: QtCore.Qt.Horizontal
+    rangeType: float
+    start: '-180'
+    step: '0.1'
+    stop: '180'
+    value: tx_phase_init[7]
+    widget: counter_slider
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [2632, 8]
+    rotation: 0
+    state: enabled
+- name: tx_ph8
+  id: variable_qtgui_range
+  parameters:
+    comment: ''
+    gui_hint: 'ctrl@0: 2,0,1,1'
+    label: ch 8
+    min_len: '100'
+    orient: QtCore.Qt.Horizontal
+    rangeType: float
+    start: '-180'
+    step: '0.1'
+    stop: '180'
+    value: tx_phase_init[8]
+    widget: counter_slider
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1400, 120]
+    rotation: 0
+    state: enabled
+- name: tx_ph9
+  id: variable_qtgui_range
+  parameters:
+    comment: ''
+    gui_hint: 'ctrl@0: 2,1,1,1'
+    label: ch 9
+    min_len: '100'
+    orient: QtCore.Qt.Horizontal
+    rangeType: float
+    start: '-180'
+    step: '0.1'
+    stop: '180'
+    value: tx_phase_init[9]
+    widget: counter_slider
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1576, 120]
     rotation: 0
     state: enabled
 - name: tx_phase_init
@@ -384,12 +893,12 @@ blocks:
       \        cmd.num_samps = tb.cap_len\n        cmd.stream_now = False\n      \
       \  cmd.time_spec = _uhd.time_spec(t0 + tb.cap_offset / tb.samp_rate)\n     \
       \   _src.issue_stream_cmd(cmd)\n        tb.bursts_sent += 1\n        _time.sleep(tb.period)\n\
-      threading.Thread(target=_bursts, daemon=True).start()\n# ZCU216_GR_SNAPSHOT=<png>:\
-      \ save the window after ZCU216_GR_SNAPSHOT_S (default 6) s and quit\n_snap =\
-      \ os.environ.get(\"ZCU216_GR_SNAPSHOT\")\nif _snap:\n    self.resize(1600, 600)\n\
+      threading.Thread(target=_bursts, daemon=True).start()\n# UHD_RFSOC_GR_SNAPSHOT=<png>:\
+      \ save the window after UHD_RFSOC_GR_SNAPSHOT_S (default 6) s and quit\n_snap =\
+      \ os.environ.get(\"UHD_RFSOC_GR_SNAPSHOT\")\nif _snap:\n    self.resize(1600, 600)\n\
       \    def _shot(tb=self):\n        tb.grab().save(_snap)\n        print(f\"snapshot\
       \ {_snap} after {tb.bursts_sent} bursts\", flush=True)\n        tb.close()\n\
-      \    _Qt.QTimer.singleShot(int(1000 * float(os.environ.get(\"ZCU216_GR_SNAPSHOT_S\"\
+      \    _Qt.QTimer.singleShot(int(1000 * float(os.environ.get(\"UHD_RFSOC_GR_SNAPSHOT_S\"\
       , \"6\"))), _shot)\n"
     comment: ''
     priority: '0'
@@ -406,7 +915,7 @@ blocks:
   parameters:
     alias: ''
     comment: ''
-    gui_hint: 1,0,1,2
+    gui_hint: 1,0,1,1
     label0: TX phase (deg)
     label1: TX amplitude (0-1, full scale 1)
     label10: Tab 10
@@ -487,7 +996,7 @@ blocks:
     fftsize: '4096'
     freqhalf: 'True'
     grid: 'True'
-    gui_hint: 0,1,1,1
+    gui_hint: 'tabs@0: 0,1,1,1'
     label: Relative Gain
     label1: '"RX 0"'
     label10: ''''''
@@ -533,6 +1042,283 @@ blocks:
     coordinate: [320, 540]
     rotation: 0
     state: enabled
+- name: spec1
+  id: qtgui_freq_sink_x
+  parameters:
+    affinity: ''
+    alias: ''
+    alpha1: '1.0'
+    alpha10: '1.0'
+    alpha2: '1.0'
+    alpha3: '1.0'
+    alpha4: '1.0'
+    alpha5: '1.0'
+    alpha6: '1.0'
+    alpha7: '1.0'
+    alpha8: '1.0'
+    alpha9: '1.0'
+    autoscale: 'False'
+    average: '1.0'
+    axislabels: 'True'
+    bw: samp_rate
+    color1: '"blue"'
+    color10: '"dark blue"'
+    color2: '"red"'
+    color3: '"green"'
+    color4: '"black"'
+    color5: '"cyan"'
+    color6: '"magenta"'
+    color7: '"yellow"'
+    color8: '"dark red"'
+    color9: '"dark green"'
+    comment: ''
+    ctrlpanel: 'False'
+    fc: freq
+    fftsize: '4096'
+    freqhalf: 'True'
+    grid: 'True'
+    gui_hint: 'tabs@1: 0,1,1,1'
+    label: Relative Gain
+    label1: '"RX 4"'
+    label10: ''''''
+    label2: '"RX 5"'
+    label3: '"RX 6"'
+    label4: '"RX 7"'
+    label5: ''''''
+    label6: ''''''
+    label7: ''''''
+    label8: ''''''
+    label9: ''''''
+    legend: 'True'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    name: '"RX 4-7: spectrum"'
+    nconnections: '4'
+    norm_window: 'False'
+    showports: 'False'
+    tr_chan: '0'
+    tr_level: '0.0'
+    tr_mode: qtgui.TRIG_MODE_FREE
+    tr_tag: '""'
+    type: complex
+    units: dB
+    update_time: '0.10'
+    width1: '1'
+    width10: '1'
+    width2: '1'
+    width3: '1'
+    width4: '1'
+    width5: '1'
+    width6: '1'
+    width7: '1'
+    width8: '1'
+    width9: '1'
+    wintype: window.WIN_BLACKMAN_hARRIS
+    ymax: '0'
+    ymin: '-130'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [320, 660]
+    rotation: 0
+    state: enabled
+- name: spec2
+  id: qtgui_freq_sink_x
+  parameters:
+    affinity: ''
+    alias: ''
+    alpha1: '1.0'
+    alpha10: '1.0'
+    alpha2: '1.0'
+    alpha3: '1.0'
+    alpha4: '1.0'
+    alpha5: '1.0'
+    alpha6: '1.0'
+    alpha7: '1.0'
+    alpha8: '1.0'
+    alpha9: '1.0'
+    autoscale: 'False'
+    average: '1.0'
+    axislabels: 'True'
+    bw: samp_rate
+    color1: '"blue"'
+    color10: '"dark blue"'
+    color2: '"red"'
+    color3: '"green"'
+    color4: '"black"'
+    color5: '"cyan"'
+    color6: '"magenta"'
+    color7: '"yellow"'
+    color8: '"dark red"'
+    color9: '"dark green"'
+    comment: ''
+    ctrlpanel: 'False'
+    fc: freq
+    fftsize: '4096'
+    freqhalf: 'True'
+    grid: 'True'
+    gui_hint: 'tabs@2: 0,1,1,1'
+    label: Relative Gain
+    label1: '"RX 8"'
+    label10: ''''''
+    label2: '"RX 9"'
+    label3: '"RX 10"'
+    label4: '"RX 11"'
+    label5: ''''''
+    label6: ''''''
+    label7: ''''''
+    label8: ''''''
+    label9: ''''''
+    legend: 'True'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    name: '"RX 8-11: spectrum"'
+    nconnections: '4'
+    norm_window: 'False'
+    showports: 'False'
+    tr_chan: '0'
+    tr_level: '0.0'
+    tr_mode: qtgui.TRIG_MODE_FREE
+    tr_tag: '""'
+    type: complex
+    units: dB
+    update_time: '0.10'
+    width1: '1'
+    width10: '1'
+    width2: '1'
+    width3: '1'
+    width4: '1'
+    width5: '1'
+    width6: '1'
+    width7: '1'
+    width8: '1'
+    width9: '1'
+    wintype: window.WIN_BLACKMAN_hARRIS
+    ymax: '0'
+    ymin: '-130'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [320, 780]
+    rotation: 0
+    state: enabled
+- name: spec3
+  id: qtgui_freq_sink_x
+  parameters:
+    affinity: ''
+    alias: ''
+    alpha1: '1.0'
+    alpha10: '1.0'
+    alpha2: '1.0'
+    alpha3: '1.0'
+    alpha4: '1.0'
+    alpha5: '1.0'
+    alpha6: '1.0'
+    alpha7: '1.0'
+    alpha8: '1.0'
+    alpha9: '1.0'
+    autoscale: 'False'
+    average: '1.0'
+    axislabels: 'True'
+    bw: samp_rate
+    color1: '"blue"'
+    color10: '"dark blue"'
+    color2: '"red"'
+    color3: '"green"'
+    color4: '"black"'
+    color5: '"cyan"'
+    color6: '"magenta"'
+    color7: '"yellow"'
+    color8: '"dark red"'
+    color9: '"dark green"'
+    comment: ''
+    ctrlpanel: 'False'
+    fc: freq
+    fftsize: '4096'
+    freqhalf: 'True'
+    grid: 'True'
+    gui_hint: 'tabs@3: 0,1,1,1'
+    label: Relative Gain
+    label1: '"RX 12"'
+    label10: ''''''
+    label2: '"RX 13"'
+    label3: '"RX 14"'
+    label4: '"RX 15"'
+    label5: ''''''
+    label6: ''''''
+    label7: ''''''
+    label8: ''''''
+    label9: ''''''
+    legend: 'True'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    name: '"RX 12-15: spectrum"'
+    nconnections: '4'
+    norm_window: 'False'
+    showports: 'False'
+    tr_chan: '0'
+    tr_level: '0.0'
+    tr_mode: qtgui.TRIG_MODE_FREE
+    tr_tag: '""'
+    type: complex
+    units: dB
+    update_time: '0.10'
+    width1: '1'
+    width10: '1'
+    width2: '1'
+    width3: '1'
+    width4: '1'
+    width5: '1'
+    width6: '1'
+    width7: '1'
+    width8: '1'
+    width9: '1'
+    wintype: window.WIN_BLACKMAN_hARRIS
+    ymax: '0'
+    ymin: '-130'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [320, 900]
+    rotation: 0
+    state: enabled
+- name: tabs
+  id: qtgui_tab_widget
+  parameters:
+    alias: ''
+    comment: ''
+    gui_hint: 0,0,1,1
+    label0: RX 0-3
+    label1: RX 4-7
+    label10: Tab 10
+    label11: Tab 11
+    label12: Tab 12
+    label13: Tab 13
+    label14: Tab 14
+    label15: Tab 15
+    label16: Tab 16
+    label17: Tab 17
+    label18: Tab 18
+    label19: Tab 19
+    label2: RX 8-11
+    label3: RX 12-15
+    label4: Tab 4
+    label5: Tab 5
+    label6: Tab 6
+    label7: Tab 7
+    label8: Tab 8
+    label9: Tab 9
+    num_tabs: '4'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [480, 480]
+    rotation: 0
+    state: enabled
 - name: time0
   id: qtgui_time_sink_x
   parameters:
@@ -564,7 +1350,7 @@ blocks:
     ctrlpanel: 'False'
     entags: 'False'
     grid: 'True'
-    gui_hint: 0,0,1,1
+    gui_hint: 'tabs@0: 0,0,1,1'
     label1: '"RX 0 Re"'
     label10: Signal 10
     label2: '"RX 0 Im"'
@@ -630,6 +1416,297 @@ blocks:
     coordinate: [320, 480]
     rotation: 0
     state: enabled
+- name: time1
+  id: qtgui_time_sink_x
+  parameters:
+    affinity: ''
+    alias: ''
+    alpha1: '1.0'
+    alpha10: '1.0'
+    alpha2: '1.0'
+    alpha3: '1.0'
+    alpha4: '1.0'
+    alpha5: '1.0'
+    alpha6: '1.0'
+    alpha7: '1.0'
+    alpha8: '1.0'
+    alpha9: '1.0'
+    autoscale: 'True'
+    axislabels: 'True'
+    color1: blue
+    color10: dark blue
+    color2: blue
+    color3: red
+    color4: red
+    color5: green
+    color6: green
+    color7: black
+    color8: black
+    color9: dark green
+    comment: ''
+    ctrlpanel: 'False'
+    entags: 'False'
+    grid: 'True'
+    gui_hint: 'tabs@1: 0,0,1,1'
+    label1: '"RX 4 Re"'
+    label10: Signal 10
+    label2: '"RX 4 Im"'
+    label3: '"RX 5 Re"'
+    label4: '"RX 5 Im"'
+    label5: '"RX 6 Re"'
+    label6: '"RX 6 Im"'
+    label7: '"RX 7 Re"'
+    label8: '"RX 7 Im"'
+    label9: Signal 9
+    legend: 'True'
+    marker1: '-1'
+    marker10: '-1'
+    marker2: '-1'
+    marker3: '-1'
+    marker4: '-1'
+    marker5: '-1'
+    marker6: '-1'
+    marker7: '-1'
+    marker8: '-1'
+    marker9: '-1'
+    name: '"RX 4-7: real (solid) and imaginary (dashed) part"'
+    nconnections: '4'
+    size: '512'
+    srate: samp_rate
+    stemplot: 'False'
+    style1: '1'
+    style10: '1'
+    style2: '2'
+    style3: '1'
+    style4: '2'
+    style5: '1'
+    style6: '2'
+    style7: '1'
+    style8: '2'
+    style9: '1'
+    tr_chan: '0'
+    tr_delay: '0'
+    tr_level: '0.0'
+    tr_mode: qtgui.TRIG_MODE_FREE
+    tr_slope: qtgui.TRIG_SLOPE_POS
+    tr_tag: '""'
+    type: complex
+    update_time: '0.10'
+    width1: '1'
+    width10: '1'
+    width2: '1'
+    width3: '1'
+    width4: '1'
+    width5: '1'
+    width6: '1'
+    width7: '1'
+    width8: '1'
+    width9: '1'
+    ylabel: Amplitude
+    ymax: '1'
+    ymin: '-1'
+    yunit: '""'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [320, 600]
+    rotation: 0
+    state: enabled
+- name: time2
+  id: qtgui_time_sink_x
+  parameters:
+    affinity: ''
+    alias: ''
+    alpha1: '1.0'
+    alpha10: '1.0'
+    alpha2: '1.0'
+    alpha3: '1.0'
+    alpha4: '1.0'
+    alpha5: '1.0'
+    alpha6: '1.0'
+    alpha7: '1.0'
+    alpha8: '1.0'
+    alpha9: '1.0'
+    autoscale: 'True'
+    axislabels: 'True'
+    color1: blue
+    color10: dark blue
+    color2: blue
+    color3: red
+    color4: red
+    color5: green
+    color6: green
+    color7: black
+    color8: black
+    color9: dark green
+    comment: ''
+    ctrlpanel: 'False'
+    entags: 'False'
+    grid: 'True'
+    gui_hint: 'tabs@2: 0,0,1,1'
+    label1: '"RX 8 Re"'
+    label10: Signal 10
+    label2: '"RX 8 Im"'
+    label3: '"RX 9 Re"'
+    label4: '"RX 9 Im"'
+    label5: '"RX 10 Re"'
+    label6: '"RX 10 Im"'
+    label7: '"RX 11 Re"'
+    label8: '"RX 11 Im"'
+    label9: Signal 9
+    legend: 'True'
+    marker1: '-1'
+    marker10: '-1'
+    marker2: '-1'
+    marker3: '-1'
+    marker4: '-1'
+    marker5: '-1'
+    marker6: '-1'
+    marker7: '-1'
+    marker8: '-1'
+    marker9: '-1'
+    name: '"RX 8-11: real (solid) and imaginary (dashed) part"'
+    nconnections: '4'
+    size: '512'
+    srate: samp_rate
+    stemplot: 'False'
+    style1: '1'
+    style10: '1'
+    style2: '2'
+    style3: '1'
+    style4: '2'
+    style5: '1'
+    style6: '2'
+    style7: '1'
+    style8: '2'
+    style9: '1'
+    tr_chan: '0'
+    tr_delay: '0'
+    tr_level: '0.0'
+    tr_mode: qtgui.TRIG_MODE_FREE
+    tr_slope: qtgui.TRIG_SLOPE_POS
+    tr_tag: '""'
+    type: complex
+    update_time: '0.10'
+    width1: '1'
+    width10: '1'
+    width2: '1'
+    width3: '1'
+    width4: '1'
+    width5: '1'
+    width6: '1'
+    width7: '1'
+    width8: '1'
+    width9: '1'
+    ylabel: Amplitude
+    ymax: '1'
+    ymin: '-1'
+    yunit: '""'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [320, 720]
+    rotation: 0
+    state: enabled
+- name: time3
+  id: qtgui_time_sink_x
+  parameters:
+    affinity: ''
+    alias: ''
+    alpha1: '1.0'
+    alpha10: '1.0'
+    alpha2: '1.0'
+    alpha3: '1.0'
+    alpha4: '1.0'
+    alpha5: '1.0'
+    alpha6: '1.0'
+    alpha7: '1.0'
+    alpha8: '1.0'
+    alpha9: '1.0'
+    autoscale: 'True'
+    axislabels: 'True'
+    color1: blue
+    color10: dark blue
+    color2: blue
+    color3: red
+    color4: red
+    color5: green
+    color6: green
+    color7: black
+    color8: black
+    color9: dark green
+    comment: ''
+    ctrlpanel: 'False'
+    entags: 'False'
+    grid: 'True'
+    gui_hint: 'tabs@3: 0,0,1,1'
+    label1: '"RX 12 Re"'
+    label10: Signal 10
+    label2: '"RX 12 Im"'
+    label3: '"RX 13 Re"'
+    label4: '"RX 13 Im"'
+    label5: '"RX 14 Re"'
+    label6: '"RX 14 Im"'
+    label7: '"RX 15 Re"'
+    label8: '"RX 15 Im"'
+    label9: Signal 9
+    legend: 'True'
+    marker1: '-1'
+    marker10: '-1'
+    marker2: '-1'
+    marker3: '-1'
+    marker4: '-1'
+    marker5: '-1'
+    marker6: '-1'
+    marker7: '-1'
+    marker8: '-1'
+    marker9: '-1'
+    name: '"RX 12-15: real (solid) and imaginary (dashed) part"'
+    nconnections: '4'
+    size: '512'
+    srate: samp_rate
+    stemplot: 'False'
+    style1: '1'
+    style10: '1'
+    style2: '2'
+    style3: '1'
+    style4: '2'
+    style5: '1'
+    style6: '2'
+    style7: '1'
+    style8: '2'
+    style9: '1'
+    tr_chan: '0'
+    tr_delay: '0'
+    tr_level: '0.0'
+    tr_mode: qtgui.TRIG_MODE_FREE
+    tr_slope: qtgui.TRIG_SLOPE_POS
+    tr_tag: '""'
+    type: complex
+    update_time: '0.10'
+    width1: '1'
+    width10: '1'
+    width2: '1'
+    width3: '1'
+    width4: '1'
+    width5: '1'
+    width6: '1'
+    width7: '1'
+    width8: '1'
+    width9: '1'
+    ylabel: Amplitude
+    ymax: '1'
+    ymin: '-1'
+    yunit: '""'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [320, 840]
+    rotation: 0
+    state: enabled
 - name: tone
   id: parameter
   parameters:
@@ -650,7 +1727,7 @@ blocks:
 - name: tones
   id: epy_block
   parameters:
-    _source_code: "\"\"\"\nEmbedded Python block (GRC epy_block) of the zcu216_tones_*\
+    _source_code: "\"\"\"\nEmbedded Python block (GRC epy_block) of the tones_*\
       \ flowgraphs:\none timed TX burst per message on the `fire` port, the same tone\
       \ on every\nchannel, each with its own phase and amplitude (`phases_deg`, `amps`).\n\
       \nChannel k carries amps[k] x exp(j phases_deg[k] pi / 180) x exp(j 2 pi tone_step\
@@ -670,8 +1747,8 @@ blocks:
       \ -- a late (L) event. Ending it at once,\nwell before its time, plays one zero\
       \ sample and reports nothing.\n\"\"\"\nimport numpy as np\nimport pmt\nfrom\
       \ gnuradio import gr\n\n\nclass blk(gr.sync_block):\n    def __init__(self,\
-      \ nchan=4, burst_len=32768, amp=0.25, tone_step=1.0 / 64,\n                \
-      \ phases_deg=(), amps=()):\n        gr.sync_block.__init__(self, name=\"ZCU216\
+      \ nchan=16, burst_len=32768, amp=0.25, tone_step=1.0 / 64,\n               \
+      \  phases_deg=(), amps=()):\n        gr.sync_block.__init__(self, name=\"RFSoC\
       \ tone bursts\", in_sig=None,\n                               out_sig=[np.complex64]\
       \ * int(nchan))\n        self.nchan, self.burst_len = int(nchan), int(burst_len)\n\
       \        n = np.arange(self.burst_len)\n        self._tone = np.exp(2j * np.pi\
@@ -712,19 +1789,25 @@ blocks:
     affinity: ''
     alias: ''
     amp: '0.25'
-    amps: '[tx_amp0, tx_amp1, tx_amp2, tx_amp3]'
+    amps: '[tx_amp0, tx_amp1, tx_amp2, tx_amp3, tx_amp4, tx_amp5, tx_amp6, tx_amp7,
+      tx_amp8, tx_amp9, tx_amp10, tx_amp11, tx_amp12, tx_amp13, tx_amp14, tx_amp15]'
     burst_len: burst_len
     comment: ''
     maxoutbuf: '0'
     minoutbuf: '0'
     nchan: nchan
-    phases_deg: '[tx_ph0, tx_ph1, tx_ph2, tx_ph3]'
+    phases_deg: '[tx_ph0, tx_ph1, tx_ph2, tx_ph3, tx_ph4, tx_ph5, tx_ph6, tx_ph7,
+      tx_ph8, tx_ph9, tx_ph10, tx_ph11, tx_ph12, tx_ph13, tx_ph14, tx_ph15]'
     tone_step: tone / samp_rate
   states:
-    _io_cache: ('ZCU216 tone bursts', 'blk', [('nchan', '4'), ('burst_len', '32768'),
+    _io_cache: ('RFSoC tone bursts', 'blk', [('nchan', '16'), ('burst_len', '32768'),
       ('amp', '0.25'), ('tone_step', '0.015625'), ('phases_deg', '()'), ('amps', '()')],
       [('fire', 'message', 1)], [('0', 'complex', 1), ('1', 'complex', 1), ('2', 'complex',
-      1), ('3', 'complex', 1)], '', ['amp', 'amps', 'burst_len', 'nchan', 'phases_deg'])
+      1), ('3', 'complex', 1), ('4', 'complex', 1), ('5', 'complex', 1), ('6', 'complex',
+      1), ('7', 'complex', 1), ('8', 'complex', 1), ('9', 'complex', 1), ('10', 'complex',
+      1), ('11', 'complex', 1), ('12', 'complex', 1), ('13', 'complex', 1), ('14',
+      'complex', 1), ('15', 'complex', 1)], '', ['amp', 'amps', 'burst_len', 'nchan',
+      'phases_deg'])
     bus_sink: false
     bus_source: false
     bus_structure: null
@@ -740,7 +1823,7 @@ blocks:
     label: TX amplitude per channel (0-1, comma-separated)
     short_id: ''
     type: str
-    value: 0.25,0.25,0.25,0.25
+    value: 0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25
   states:
     bus_sink: false
     bus_source: false
@@ -757,7 +1840,7 @@ blocks:
     label: TX phase per channel (deg, comma-separated)
     short_id: ''
     type: str
-    value: 0,0,0,0
+    value: 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
   states:
     bus_sink: false
     bus_source: false
@@ -772,12 +1855,12 @@ blocks:
     alias: ''
     ant0: '""'
     ant1: '""'
-    ant10: '"TX/RX"'
-    ant11: '"TX/RX"'
-    ant12: '"TX/RX"'
-    ant13: '"TX/RX"'
-    ant14: '"TX/RX"'
-    ant15: '"TX/RX"'
+    ant10: '""'
+    ant11: '""'
+    ant12: '""'
+    ant13: '""'
+    ant14: '""'
+    ant15: '""'
     ant16: '"TX/RX"'
     ant17: '"TX/RX"'
     ant18: '"TX/RX"'
@@ -796,12 +1879,12 @@ blocks:
     ant3: '""'
     ant30: '"TX/RX"'
     ant31: '"TX/RX"'
-    ant4: '"TX/RX"'
-    ant5: '"TX/RX"'
-    ant6: '"TX/RX"'
-    ant7: '"TX/RX"'
-    ant8: '"TX/RX"'
-    ant9: '"TX/RX"'
+    ant4: '""'
+    ant5: '""'
+    ant6: '""'
+    ant7: '""'
+    ant8: '""'
+    ant9: '""'
     bw0: '0'
     bw1: '0'
     bw10: '0'
@@ -836,12 +1919,12 @@ blocks:
     bw9: '0'
     center_freq0: freq
     center_freq1: freq
-    center_freq10: '0'
-    center_freq11: '0'
-    center_freq12: '0'
-    center_freq13: '0'
-    center_freq14: '0'
-    center_freq15: '0'
+    center_freq10: freq
+    center_freq11: freq
+    center_freq12: freq
+    center_freq13: freq
+    center_freq14: freq
+    center_freq15: freq
     center_freq16: '0'
     center_freq17: '0'
     center_freq18: '0'
@@ -860,12 +1943,12 @@ blocks:
     center_freq3: freq
     center_freq30: '0'
     center_freq31: '0'
-    center_freq4: '0'
-    center_freq5: '0'
-    center_freq6: '0'
-    center_freq7: '0'
-    center_freq8: '0'
-    center_freq9: '0'
+    center_freq4: freq
+    center_freq5: freq
+    center_freq6: freq
+    center_freq7: freq
+    center_freq8: freq
+    center_freq9: freq
     clock_rate: 0e0
     clock_source0: ''
     clock_source1: ''
@@ -880,12 +1963,12 @@ blocks:
     dev_args: '""'
     gain0: tx_gain
     gain1: tx_gain
-    gain10: '0'
-    gain11: '0'
-    gain12: '0'
-    gain13: '0'
-    gain14: '0'
-    gain15: '0'
+    gain10: tx_gain
+    gain11: tx_gain
+    gain12: tx_gain
+    gain13: tx_gain
+    gain14: tx_gain
+    gain15: tx_gain
     gain16: '0'
     gain17: '0'
     gain18: '0'
@@ -904,12 +1987,12 @@ blocks:
     gain3: tx_gain
     gain30: '0'
     gain31: '0'
-    gain4: '0'
-    gain5: '0'
-    gain6: '0'
-    gain7: '0'
-    gain8: '0'
-    gain9: '0'
+    gain4: tx_gain
+    gain5: tx_gain
+    gain6: tx_gain
+    gain7: tx_gain
+    gain8: tx_gain
+    gain9: tx_gain
     gain_type0: default
     gain_type1: default
     gain_type10: default
@@ -1049,12 +2132,12 @@ blocks:
     alias: ''
     ant0: '""'
     ant1: '""'
-    ant10: '"RX2"'
-    ant11: '"RX2"'
-    ant12: '"RX2"'
-    ant13: '"RX2"'
-    ant14: '"RX2"'
-    ant15: '"RX2"'
+    ant10: '""'
+    ant11: '""'
+    ant12: '""'
+    ant13: '""'
+    ant14: '""'
+    ant15: '""'
     ant16: '"RX2"'
     ant17: '"RX2"'
     ant18: '"RX2"'
@@ -1073,12 +2156,12 @@ blocks:
     ant3: '""'
     ant30: '"RX2"'
     ant31: '"RX2"'
-    ant4: '"RX2"'
-    ant5: '"RX2"'
-    ant6: '"RX2"'
-    ant7: '"RX2"'
-    ant8: '"RX2"'
-    ant9: '"RX2"'
+    ant4: '""'
+    ant5: '""'
+    ant6: '""'
+    ant7: '""'
+    ant8: '""'
+    ant9: '""'
     bw0: '0'
     bw1: '0'
     bw10: '0'
@@ -1113,12 +2196,12 @@ blocks:
     bw9: '0'
     center_freq0: freq
     center_freq1: freq
-    center_freq10: '0'
-    center_freq11: '0'
-    center_freq12: '0'
-    center_freq13: '0'
-    center_freq14: '0'
-    center_freq15: '0'
+    center_freq10: freq
+    center_freq11: freq
+    center_freq12: freq
+    center_freq13: freq
+    center_freq14: freq
+    center_freq15: freq
     center_freq16: '0'
     center_freq17: '0'
     center_freq18: '0'
@@ -1137,12 +2220,12 @@ blocks:
     center_freq3: freq
     center_freq30: '0'
     center_freq31: '0'
-    center_freq4: '0'
-    center_freq5: '0'
-    center_freq6: '0'
-    center_freq7: '0'
-    center_freq8: '0'
-    center_freq9: '0'
+    center_freq4: freq
+    center_freq5: freq
+    center_freq6: freq
+    center_freq7: freq
+    center_freq8: freq
+    center_freq9: freq
     clock_rate: 0e0
     clock_source0: ''
     clock_source1: ''
@@ -1221,12 +2304,12 @@ blocks:
     dev_args: '""'
     gain0: rx_gain
     gain1: rx_gain
-    gain10: '0'
-    gain11: '0'
-    gain12: '0'
-    gain13: '0'
-    gain14: '0'
-    gain15: '0'
+    gain10: rx_gain
+    gain11: rx_gain
+    gain12: rx_gain
+    gain13: rx_gain
+    gain14: rx_gain
+    gain15: rx_gain
     gain16: '0'
     gain17: '0'
     gain18: '0'
@@ -1245,12 +2328,12 @@ blocks:
     gain3: rx_gain
     gain30: '0'
     gain31: '0'
-    gain4: '0'
-    gain5: '0'
-    gain6: '0'
-    gain7: '0'
-    gain8: '0'
-    gain9: '0'
+    gain4: rx_gain
+    gain5: rx_gain
+    gain6: rx_gain
+    gain7: rx_gain
+    gain8: rx_gain
+    gain9: rx_gain
     gain_type0: default
     gain_type1: default
     gain_type10: default
@@ -1482,16 +2565,52 @@ blocks:
 connections:
 - [tones, '0', usrp_sink, '0']
 - [tones, '1', usrp_sink, '1']
+- [tones, '10', usrp_sink, '10']
+- [tones, '11', usrp_sink, '11']
+- [tones, '12', usrp_sink, '12']
+- [tones, '13', usrp_sink, '13']
+- [tones, '14', usrp_sink, '14']
+- [tones, '15', usrp_sink, '15']
 - [tones, '2', usrp_sink, '2']
 - [tones, '3', usrp_sink, '3']
+- [tones, '4', usrp_sink, '4']
+- [tones, '5', usrp_sink, '5']
+- [tones, '6', usrp_sink, '6']
+- [tones, '7', usrp_sink, '7']
+- [tones, '8', usrp_sink, '8']
+- [tones, '9', usrp_sink, '9']
 - [usrp_source, '0', spec0, '0']
 - [usrp_source, '0', time0, '0']
 - [usrp_source, '1', spec0, '1']
 - [usrp_source, '1', time0, '1']
+- [usrp_source, '10', spec2, '2']
+- [usrp_source, '10', time2, '2']
+- [usrp_source, '11', spec2, '3']
+- [usrp_source, '11', time2, '3']
+- [usrp_source, '12', spec3, '0']
+- [usrp_source, '12', time3, '0']
+- [usrp_source, '13', spec3, '1']
+- [usrp_source, '13', time3, '1']
+- [usrp_source, '14', spec3, '2']
+- [usrp_source, '14', time3, '2']
+- [usrp_source, '15', spec3, '3']
+- [usrp_source, '15', time3, '3']
 - [usrp_source, '2', spec0, '2']
 - [usrp_source, '2', time0, '2']
 - [usrp_source, '3', spec0, '3']
 - [usrp_source, '3', time0, '3']
+- [usrp_source, '4', spec1, '0']
+- [usrp_source, '4', time1, '0']
+- [usrp_source, '5', spec1, '1']
+- [usrp_source, '5', time1, '1']
+- [usrp_source, '6', spec1, '2']
+- [usrp_source, '6', time1, '2']
+- [usrp_source, '7', spec1, '3']
+- [usrp_source, '7', time1, '3']
+- [usrp_source, '8', spec2, '0']
+- [usrp_source, '8', time2, '0']
+- [usrp_source, '9', spec2, '1']
+- [usrp_source, '9', time2, '1']
 
 metadata:
   file_format: 1

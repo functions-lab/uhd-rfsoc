@@ -10,19 +10,19 @@
 #
 # Environment: ADDR [discovery], DEV_ARGS (e.g. channels=N; otw=sc8 for rates
 # only sc8 carries, e.g. a template's top rates), CHAN (0), LOG
-# (/tmp/zcu216_rate_sweep). The daemon must run with the template loaded; its
+# (/tmp/uhd_rfsoc_rate_sweep). The daemon must run with the template loaded; its
 # log shows each retune and its MTS result ("RATE CHANGE", "MTS LOCKED",
 # "converter clock measured"). Prints one PASS|FAIL line per rate, then a total.
 set -u
 [ $# -gt 0 ] || { echo "usage: rate_sweep.sh <rate>..." >&2; exit 2; }
-CHAN=${CHAN:-0}; LOG=${LOG:-/tmp/zcu216_rate_sweep}; mkdir -p "$LOG"
+CHAN=${CHAN:-0}; LOG=${LOG:-/tmp/uhd_rfsoc_rate_sweep}; mkdir -p "$LOG"
 HERE=$(cd "$(dirname "$0")" && pwd)
-if command -v zcu216-uhd >/dev/null; then RUN=$(command -v zcu216-uhd); else RUN=$HERE/../tools/zcu216-uhd; fi
+if command -v uhd-rfsoc >/dev/null; then RUN=$(command -v uhd-rfsoc); else RUN=$HERE/../tools/uhd-rfsoc; fi
 if [ -z "${ADDR:-}" ]; then
-    ADDR=$(uhd_find_devices --args type=zcu216 2>/dev/null | awk '/^ +addr: /{print $2; exit}')
-    [ -n "$ADDR" ] || { echo "no ZCU216 found by discovery; set ADDR=<board-ip>" >&2; exit 2; }
+    ADDR=$(uhd_find_devices --args type=rfsoc 2>/dev/null | awk '/^ +addr: /{print $2; exit}')
+    [ -n "$ADDR" ] || { echo "no board found by discovery; set ADDR=<board-ip>" >&2; exit 2; }
 fi
-A="type=zcu216,addr=$ADDR${DEV_ARGS:+,$DEV_ARGS}"
+A="type=rfsoc,addr=$ADDR${DEV_ARGS:+,$DEV_ARGS}"
 pass=0; fail=0
 for r in "$@"; do
     F=$LOG/rate_${r}_ch$CHAN.log

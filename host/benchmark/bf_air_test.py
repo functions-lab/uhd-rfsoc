@@ -26,7 +26,7 @@ channel r is y[r] = sum_c H[r, c] * w[c] / 32767 with H the TX -> RX channel
 TX channels whose column of H is in the noise (no antenna, or unheard) and RX
 channels that hear nothing are reported and left out of the comparison.
 
-    zcu216-uhd python3 benchmark/bf_air_test.py --args type=zcu216,addr=<board-ip>,channels=8
+    uhd-rfsoc python3 benchmark/bf_air_test.py --args type=rfsoc,addr=<board-ip>,channels=8
 """
 import argparse
 import math

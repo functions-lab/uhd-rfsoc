@@ -38,27 +38,27 @@ jobs:
       - name: Build
         run: cmake --build host/build -j"$(nproc)"
       - name: The module loads (every symbol resolves)
-        run: python3 -c "import ctypes; ctypes.CDLL('host/build/libuhd_zcu216.so', mode=ctypes.RTLD_GLOBAL | 2)"
+        run: python3 -c "import ctypes; ctypes.CDLL('host/build/libuhd_rfsoc.so', mode=ctypes.RTLD_GLOBAL | 2)"
       - name: "uhd_find_devices runs with the module loaded (no board: none found)"
         run: |
-          UHD_MODULE_PATH=$PWD/host/build/libuhd_zcu216.so uhd_find_devices --args type=zcu216 2>&1 | tee find.log || true
+          UHD_MODULE_PATH=$PWD/host/build/libuhd_rfsoc.so uhd_find_devices --args type=rfsoc 2>&1 | tee find.log || true
           ! grep -i -E 'error|failed|exception' find.log
       - name: Kernels, SIMD against scalar
         run: |
           grep -o -m1 -E 'avx512(f|bw)|asimd' /proc/cpuinfo | sort -u || true
-          host/build/zcu216_kernel_check
+          host/build/rfsoc_kernel_check
       - name: Package
         run: |
-          d=rfsoc-uhd-host-ubuntu24.04-${{ matrix.arch }}
+          d=uhd-rfsoc-host-ubuntu24.04-${{ matrix.arch }}
           mkdir -p $d
-          cp host/build/libuhd_zcu216.so host/build/zcu216-uhd \
-             host/build/zcu216_kernel_check host/build/zcu216_kernel_bench \
+          cp host/build/libuhd_rfsoc.so host/build/uhd-rfsoc \
+             host/build/rfsoc_kernel_check host/build/rfsoc_kernel_bench \
              host/setup_cx5.sh host/setup_dpdk.sh $d/
           tar czf $d.tar.gz $d
       - uses: actions/upload-artifact@v4
         with:
           name: host-${{ matrix.arch }}
-          path: rfsoc-uhd-host-ubuntu24.04-${{ matrix.arch }}.tar.gz
+          path: uhd-rfsoc-host-ubuntu24.04-${{ matrix.arch }}.tar.gz
 
   sources:
     name: Python and shell sources
@@ -68,16 +68,16 @@ jobs:
       - name: Python compiles
         run: python3 -m compileall -q -x '/(uhd|gnuradio/gnuradio)/' rfsoc host
       - name: The daemon parses its arguments without a board
-        run: python3 rfsoc/server/zcu216_uhd_daemon.py --help > /dev/null
+        run: python3 rfsoc/server/uhd_rfsoc_daemon.py --help > /dev/null
       - name: Daemon unit tests
         run: python3 -m unittest discover -s rfsoc/server/tests
       - name: Shell scripts parse
         run: |
-          for f in $(git ls-files '*.sh') host/tools/zcu216-uhd; do bash -n "$f"; done
+          for f in $(git ls-files '*.sh') host/tools/uhd-rfsoc; do bash -n "$f"; done
       - name: shellcheck (errors)
         run: |
           sudo apt-get update && sudo apt-get install -y --no-install-recommends shellcheck
-          shellcheck -S error $(git ls-files '*.sh') host/tools/zcu216-uhd
+          shellcheck -S error $(git ls-files '*.sh') host/tools/uhd-rfsoc
 
   gnuradio:
     name: GNU Radio flowgraphs

@@ -1,5 +1,5 @@
 //
-// uhd_zcu216 -- the DPDK sample data plane (the only one).
+// uhd_rfsoc -- the DPDK sample data plane (the only one).
 //
 // The 100G port is driven by DPDK's mlx5 PMD in *bifurcated, isolated* mode:
 // rte_flow rules steer only IPv4/UDP to <host ip>:[recv_port, recv_port+nports)
@@ -15,17 +15,17 @@
 // payloads; TSF merge, gap detection, de-interleave, conversion, trimming
 // and flow control live in the streamers.
 //
-// This header does not include DPDK (only zcu216_dpdk.cpp sees its flags).
+// This header does not include DPDK (only rfsoc_dpdk.cpp sees its flags).
 //
 #pragma once
 #include <atomic>
 
-#include "zcu216_common.hpp"
+#include "rfsoc_common.hpp"
 #include <memory>
 #include <string>
 #include <vector>
 
-namespace zcu216 {
+namespace rfsoc {
 namespace dpdk {
 
 //! Producer side of one RX ring. The lcore that polls queue k is the only
@@ -111,7 +111,7 @@ port_sptr open_port(const uhd::device_addr_t& args, const local_iface& ifc, size
 //!   workers  the first thread of every other core (on big.LITTLE one fast
 //!         core after C0 is left out, for the application)
 //! The application gets what is left -- C0 beside the main lcore, and the
-//! spare fast core on big.LITTLE (zcu216_device::_place_app derives it from
+//! spare fast core on big.LITTLE (rfsoc_device::_place_app derives it from
 //! the lcores and workers in use). Measured on a 6-core/12-thread x86 host,
 //! ConnectX-5 at PCIe Gen3 x16, 8 x 312.5 MS/s sc16, benchmark_rate with
 //! 32-packet buffers: lcores sharing one core gave TX 98.8-99.6 % against
@@ -223,4 +223,4 @@ std::string fpga_mac(const std::string& override_mac,
     const std::string& info_mac);
 
 } // namespace dpdk
-} // namespace zcu216
+} // namespace rfsoc

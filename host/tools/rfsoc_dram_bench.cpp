@@ -1,10 +1,10 @@
 //
-// zcu216_dram_bench -- can the host keep up with the 100GbE link out of DRAM?
+// rfsoc_dram_bench -- can the host keep up with the 100GbE link out of DRAM?
 //
-// zcu216_kernel_bench measures the conversion kernels on a cache-resident
+// rfsoc_kernel_bench measures the conversion kernels on a cache-resident
 // 512 KB payload; at 10-12 GB/s per direction the limit is DRAM bandwidth
 // instead, shared with the NIC's own DMA. This bench runs the module's real
-// kernels (zcu216_kernels) and worker pool (zcu216_pool) the way recv() and
+// kernels (rfsoc_kernels) and worker pool (rfsoc_pool) the way recv() and
 // send() do, against a packet ring much larger than L3, while a "NIC" thread
 // streams the DMA traffic (writes the ring for RX, reads it for TX) at a set
 // rate. Host and NIC are coupled through the ring as on the real link: RX,
@@ -13,7 +13,7 @@
 // the NIC, and a NIC that finds nothing to send is an underrun. Sustained =
 // host and NIC at the target rate with no overflow / underrun.
 //
-//   zcu216_dram_bench --dir rx|tx|duplex [--n 16] [--otw sc16] [--cpu sc16|fc32]
+//   rfsoc_dram_bench --dir rx|tx|duplex [--n 16] [--otw sc16] [--cpu sc16|fc32]
 //       [--workers 1,3,5] [--main 2] [--nic 0[,6]] [--nic-gbps 12] [--spb 32]
 //       [--app-mb 0] [--ring-mb 512] [--tx-ring-mb (duplex TX; default --ring-mb)] [--secs 3]
 //   duplex: the TX side uses --tx-workers / --tx-main / --tx-nic (CPUs).
@@ -25,8 +25,8 @@
 //   benchmark_rate); > 0: they walk through a region of that size (an
 //   application that keeps the samples).
 //
-#include "zcu216_kernels.hpp"
-#include "zcu216_pool.hpp"
+#include "rfsoc_kernels.hpp"
+#include "rfsoc_pool.hpp"
 #include <immintrin.h>
 #include <pthread.h>
 #include <sched.h>
@@ -40,7 +40,7 @@
 #include <thread>
 #include <vector>
 
-using namespace zcu216;
+using namespace rfsoc;
 using clk = std::chrono::steady_clock;
 
 namespace {

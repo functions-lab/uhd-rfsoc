@@ -1,8 +1,8 @@
-# zcu216_uhd.conf -- board-local settings of the UHD daemon (ZCU216 or RFSoC 4x2).
+# uhd_rfsoc.conf -- board-local settings of the UHD daemon (ZCU216 or RFSoC 4x2).
 #
-# Copy to zcu216_uhd.conf (next to zcu216_uhd_daemon.py, or /etc/zcu216_uhd.conf,
-# or point $ZCU216_UHD_CONF at it; rfsoc/setup_board.sh makes the copy) and
-# fill in. zcu216_uhd.conf is git-ignored: addresses belong to the
+# Copy to uhd_rfsoc.conf (next to uhd_rfsoc_daemon.py, or /etc/uhd_rfsoc.conf,
+# or point $UHD_RFSOC_CONF at it; rfsoc/setup_board.sh makes the copy) and
+# fill in. uhd_rfsoc.conf is git-ignored: addresses belong to the
 # installation, not to the code.
 #
 # The board's LAN (management) address is NOT set here: the daemon answers

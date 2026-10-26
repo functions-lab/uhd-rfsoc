@@ -4,7 +4,7 @@ What a change here must keep (the daemon, `../server/hw_backend.py`, is the
 only caller of the bring-up; `README.md` maps the modules).
 
 - **One configuration dict.** `rfdc.py` and `rfdc_task.py` read the
-  module-global `rfdc_config.ZCU216_CONFIG` whatever the board. The daemon
+  module-global `rfdc_config.RFDC_CONFIG` whatever the board. The daemon
   copies the board's clock limits (`RFSOC4X2_MIN_MAX_CONFIG`) and then the
   loaded build's geometry (`NEW_CONFIG`: fs, factor, NCOs, PL clock) into
   it before `RfdcTask`. Per-tile / per-block keys (`DACNCO<t><b>`,
@@ -32,11 +32,11 @@ only caller of the bring-up; `README.md` maps the modules).
   inside the sync; keep them.
 - `RFSOC_MTS_TARGET="<dac>,<adc>"` (environment) sets a fixed MTS target
   latency instead of -1 (align to the slowest tile); opt-in, not yet
-  characterised. `ZCU216_CONFIG['NCOEventSource'] = "SYSREF"` applies
+  characterised. `RFDC_CONFIG['NCOEventSource'] = "SYSREF"` applies
   mixer updates on a SYSREF edge instead of per tile (groundwork for
   cross-tile NCO phase, Protocol §3d); the daemon does not set it.
 - `clk_wiz.mmcm_exact` must give the same (D, M, O) the FPGA build's
-  `v49_clk_exact` gives (`fpga_board/`): a factor the MMCM cannot make
+  `v49_clk_exact` gives (`fpga/boards/`): a factor the MMCM cannot make
   exactly from the build's PL clock is not offered.
 - `gt_refclk.py` (ZCU216 only; the RFSoC 4x2's refclk is a fixed Si570):
   reads need no bus write; `program_gt_refclk` refuses a register file that

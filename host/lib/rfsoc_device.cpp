@@ -1,14 +1,14 @@
 //
-// uhd_zcu216 -- the uhd::device: discovery registration, claim, and the
+// uhd_rfsoc -- the uhd::device: discovery registration, claim, and the
 // legacy (non-RFNoC) property tree that multi_usrp_impl and uhd_usrp_probe
 // walk. Pattern follows pothosware/SoapyUHD UHDSoapyDevice.cpp.
 //
-#include "zcu216_common.hpp"
-#include "zcu216_dpdk.hpp"
-#include "zcu216_otw.hpp"
-#include "zcu216_pool.hpp"
-#include "zcu216_rx_streamer.hpp"
-#include "zcu216_tx_streamer.hpp"
+#include "rfsoc_common.hpp"
+#include "rfsoc_dpdk.hpp"
+#include "rfsoc_otw.hpp"
+#include "rfsoc_pool.hpp"
+#include "rfsoc_rx_streamer.hpp"
+#include "rfsoc_tx_streamer.hpp"
 #include <uhd/device.hpp>
 #include <uhd/property_tree.hpp>
 #include <uhd/types/ranges.hpp>
@@ -35,14 +35,14 @@
 
 using namespace uhd;
 
-namespace zcu216 {
+namespace rfsoc {
 
 static sensor_value_t parse_sensor(const std::string& name, const std::string& reply)
 {
     // "<type> <value> <unit>"; value may contain spaces for strings, unit may be empty
     const auto t = split(reply, ' ', true);
     if (t.empty() or t[0].empty())
-        throw uhd::runtime_error("ZCU216: empty sensor reply for " + name);
+        throw uhd::runtime_error("rfsoc: empty sensor reply for " + name);
     const std::string type = t[0];
     std::string value, unit;
     if (t.size() == 2)
@@ -74,7 +74,7 @@ static meta_range_t rates_range(const std::vector<std::string>& toks)
     for (double x : v)
         r.push_back(range_t(x));
     if (r.empty())
-        throw uhd::runtime_error("ZCU216: daemon reports no supported rates");
+        throw uhd::runtime_error("rfsoc: daemon reports no supported rates");
     return r;
 }
 
@@ -90,7 +90,7 @@ static std::string fmt_stream_mode(stream_cmd_t::stream_mode_t m)
         case stream_cmd_t::STREAM_MODE_NUM_SAMPS_AND_MORE:
             return "num_more";
         default:
-            throw uhd::value_error("ZCU216: bad stream mode");
+            throw uhd::value_error("rfsoc: bad stream mode");
     }
 }
 
@@ -139,11 +139,11 @@ public:
         if (present())
             return;
         if (_rx)
-            throw uhd::not_implemented_error("ZCU216: this " + std::to_string(_st->nchan)
+            throw uhd::not_implemented_error("rfsoc: this " + std::to_string(_st->nchan)
                                              + "-channel build has no RX beamformer (Protocol §11: "
                                                "eth100g/rx_beamformer, in the N >= 2 builds that carry "
                                                "it; info rbf=0)");
-        throw uhd::not_implemented_error("ZCU216: this " + std::to_string(_st->nchan)
+        throw uhd::not_implemented_error("rfsoc: this " + std::to_string(_st->nchan)
                                          + "-channel build has no TX beamformer (Protocol "
                                            "§11: N >= 2 builds; info bf=0)");
     }
@@ -178,13 +178,13 @@ public:
     void set_params(double carrier, double spacing)
     {
         if (not(carrier > 0.0) or not(spacing > 0.0))
-            throw uhd::value_error("ZCU216: " + _what + " carrier_freq and element_spacing must be > 0");
+            throw uhd::value_error("rfsoc: " + _what + " carrier_freq and element_spacing must be > 0");
         _st->ctrl->call("set_" + _cmd + "_params " + fmt_double(carrier) + " " + fmt_double(spacing));
     }
     void set_weights(const std::vector<std::complex<int>>& w)
     {
         if (w.size() != _st->nchan)
-            throw uhd::value_error("ZCU216: the " + _what + " takes " + std::to_string(_st->nchan)
+            throw uhd::value_error("rfsoc: the " + _what + " takes " + std::to_string(_st->nchan)
                                    + " weights (one per channel), got " + std::to_string(w.size()));
         std::string req = "set_" + _cmd + "_weights";
         for (const auto& x : w)
@@ -195,9 +195,9 @@ public:
     int set_shift(int sh)
     {
         if (not _rx)
-            throw uhd::value_error("ZCU216: the TX beamformer has no shift");
+            throw uhd::value_error("rfsoc: the TX beamformer has no shift");
         if (sh < 0 or sh > 15)
-            throw uhd::value_error("ZCU216: RX beamformer shift " + std::to_string(sh) + " not in 0..15");
+            throw uhd::value_error("rfsoc: RX beamformer shift " + std::to_string(sh) + " not in 0..15");
         const auto r = _st->ctrl->call_tokens("set_rbf_shift " + std::to_string(sh));
         return r.empty() ? sh : int(parse_ll(r[0], "set_rbf_shift"));
     }
@@ -236,7 +236,7 @@ public:
             _load_staged();
             _staged[r - kW0] = std::complex<int>(int16_t(data & 0xFFFF), int16_t(data >> 16));
         } else {
-            throw uhd::value_error("ZCU216: no " + _what + " user register " + std::to_string(base() + r) + " ("
+            throw uhd::value_error("rfsoc: no " + _what + " user register " + std::to_string(base() + r) + " ("
                                    + _map_desc() + ")");
         }
     }
@@ -265,7 +265,7 @@ public:
             const auto x = s.w[r - kW0];
             return (uint32_t(uint16_t(int16_t(x.real())))) | (uint32_t(uint16_t(int16_t(x.imag()))) << 16);
         }
-        throw uhd::value_error("ZCU216: no " + _what + " user register " + std::to_string(base() + r) + " ("
+        throw uhd::value_error("rfsoc: no " + _what + " user register " + std::to_string(base() + r) + " ("
                                + _map_desc() + ")");
     }
 
@@ -320,7 +320,7 @@ private:
             return *_tx;
         if (addr >= bf_ctl::kRxBase and addr < bf_ctl::kRxBase + bf_ctl::kMapSize)
             return *_rx;
-        throw uhd::value_error("ZCU216: no user register " + std::to_string(addr)
+        throw uhd::value_error("rfsoc: no user register " + std::to_string(addr)
                                + " (Protocol §11: 0..31 TX beamformer, 64..95 RX beamformer)");
     }
     std::shared_ptr<bf_ctl> _tx, _rx;
@@ -346,11 +346,11 @@ private:
     std::shared_ptr<bf_regs> _c;
 };
 
-class zcu216_device : public uhd::device
+class rfsoc_device : public uhd::device
 {
 public:
-    explicit zcu216_device(const device_addr_t& args);
-    ~zcu216_device() override;
+    explicit rfsoc_device(const device_addr_t& args);
+    ~rfsoc_device() override;
     rx_streamer::sptr get_rx_stream(const stream_args_t& args) override;
     tx_streamer::sptr get_tx_stream(const stream_args_t& args) override;
     bool recv_async_msg(async_metadata_t& md, double timeout) override;
@@ -413,23 +413,23 @@ private:
     bool _pps_emulation = true;
 };
 
-zcu216_device::zcu216_device(const device_addr_t& args)
+rfsoc_device::rfsoc_device(const device_addr_t& args)
 {
     _type = device::USRP;
     _st   = std::make_shared<dev_state>();
     _st->args = args;
     if (not args.has_key("addr"))
-        throw uhd::key_error("ZCU216: device args need addr=<board management IP>");
+        throw uhd::key_error("rfsoc: device args need addr=<board management IP>");
     const auto ctrl_port = uint16_t(args.cast<int>("ctrl_port", kCtrlPort));
     const double tmo     = args.cast<double>("ctrl_timeout", 10.0);
     _st->rate_timeout    = args.cast<double>("rate_timeout", 120.0);
-    ZLOG_INFO("Connecting to ZCU216 daemon at " << args["addr"] << ":" << ctrl_port);
+    ZLOG_INFO("Connecting to the uhd-rfsoc daemon at " << args["addr"] << ":" << ctrl_port);
     _st->ctrl = std::make_shared<ctrl_client>(args["addr"], ctrl_port, tmo);
     try {
         _st->ctrl->call("claim");
     } catch (const uhd::runtime_error& e) {
         throw uhd::runtime_error(std::string(e.what())
-                                 + " -- the ZCU216 is in use by another UHD session");
+                                 + " -- the board is in use by another UHD session");
     }
     try {
         _select_channels(args);
@@ -442,13 +442,13 @@ zcu216_device::zcu216_device(const device_addr_t& args)
         // here; data_ip= overrides it (it must then be what the FPGA answers ARP for).
         _st->data_ip   = args.get("data_ip", info.get("data_ip", ""));
         if (_st->data_ip.empty())
-            throw uhd::runtime_error("ZCU216: the daemon reports no FPGA data IP (set data_ip in "
-                                     "the board's zcu216_uhd.conf or start the daemon with "
+            throw uhd::runtime_error("rfsoc: the daemon reports no FPGA data IP (set data_ip in "
+                                     "the board's uhd_rfsoc.conf or start the daemon with "
                                      "--data-ip), and no data_ip= device arg was given");
         _st->data_mac  = info.get("data_mac", "");
         _st->apply_info(info); // tick rate, beat, spp, mtu, §10 formats, §11 bf/rbf
         if (_st->tick_rate <= 0.0)
-            throw uhd::runtime_error("ZCU216: daemon reports no tick_rate");
+            throw uhd::runtime_error("rfsoc: daemon reports no tick_rate");
         // §3: the format the client streams in, declared with set_rx_rate
         if (args.has_key("otw"))
             _st->set_cur_otw(otw_lookup(args["otw"]).name);
@@ -478,7 +478,7 @@ zcu216_device::zcu216_device(const device_addr_t& args)
             ZLOG_WARN("tick rate " << _st->tick_rate.load() << " / per-channel rate "
                                    << _st->get_rx_rate(0) << " is not a multiple of N="
                                    << _st->nchan << " (Protocol §9: one tick per slot)");
-        // The DPDK data plane (zcu216_dpdk.hpp) carries every sample packet.
+        // The DPDK data plane (rfsoc_dpdk.hpp) carries every sample packet.
         // Opened here so that a missing privilege/hugepage/port shows up at
         // make(), not when streaming starts.
         for (const char* k : {"use_dpdk", "recv_buff_size", "send_buff_size"})
@@ -486,7 +486,7 @@ zcu216_device::zcu216_device(const device_addr_t& args)
                 ZLOG_WARN("Device arg " << k << " is obsolete and ignored: DPDK is the only "
                                                "sample transport (host/AGENTS.md)");
         if (_st->data_ip.compare(0, 4, "127.") == 0)
-            throw uhd::value_error("ZCU216: data IP " + _st->data_ip
+            throw uhd::value_error("rfsoc: data IP " + _st->data_ip
                                    + " is loopback, but samples travel over DPDK, which needs a "
                                      "NIC port (the board's 100G data IP).");
         _st->dpdk = dpdk::open_port(args, _st->host_data_iface(), _st->mtu);
@@ -495,7 +495,8 @@ zcu216_device::zcu216_device(const device_addr_t& args)
         _rx_streamers.resize(_st->num_rx);
         _tx_streamers.resize(_st->num_tx);
         _build_tree(info);
-        ZLOG_INFO("ZCU216 " << _st->serial << " (" << info.get("fpga", "?") << "): "
+        ZLOG_INFO(board_display_name(info.get("product", "zcu216"))
+                  << " " << _st->serial << " (" << info.get("fpga", "?") << "): "
                             << _st->num_rx << " RX / " << _st->num_tx << " TX"
                             << (_st->nchan > 1 ? " (one interleaved stream)" : "")
                             << ", tick rate " << _st->tick_rate / 1e6 << " MHz, "
@@ -513,11 +514,11 @@ zcu216_device::zcu216_device(const device_addr_t& args)
     }
 }
 
-void zcu216_device::_select_channels(const device_addr_t& args)
+void rfsoc_device::_select_channels(const device_addr_t& args)
 {
     const long long want = parse_ll(args.get("channels", "1"), "channels");
     if (want != 1 and want != 2 and want != 4 and want != 8 and want != 16)
-        throw uhd::value_error("ZCU216: channels=" + std::to_string(want)
+        throw uhd::value_error("rfsoc: channels=" + std::to_string(want)
                                + " is not a build (1, 2, 4, 8 or 16)");
     std::vector<std::string> rep;
     // otw=: declare the format with the choice of build (§9), so a loaded
@@ -546,17 +547,17 @@ void zcu216_device::_select_channels(const device_addr_t& args)
         return;
     }
     if (rep.empty())
-        throw uhd::runtime_error("ZCU216: empty reply to set_channels");
+        throw uhd::runtime_error("rfsoc: empty reply to set_channels");
     const long long n = parse_ll(rep[0], "set_channels N");
     if (n != want)
-        throw uhd::runtime_error("ZCU216: asked for " + std::to_string(want)
+        throw uhd::runtime_error("rfsoc: asked for " + std::to_string(want)
                                  + " channels, daemon set " + rep[0]);
     if (rep.size() >= 2)
         _sc_tick_rate = parse_double(rep[1], "set_channels tick_rate");
     _st->nchan = size_t(n);
 }
 
-zcu216_device::~zcu216_device()
+rfsoc_device::~rfsoc_device()
 {
     std::vector<std::shared_ptr<rx_streamer_impl>> rx;
     std::vector<std::shared_ptr<tx_streamer_impl>> tx;
@@ -584,7 +585,7 @@ zcu216_device::~zcu216_device()
     }
 }
 
-stream_args_t zcu216_device::_map_args(bool rx, const stream_args_t& in)
+stream_args_t rfsoc_device::_map_args(bool rx, const stream_args_t& in)
 {
     stream_args_t args = in;
     if (args.channels.empty())
@@ -594,7 +595,7 @@ stream_args_t zcu216_device::_map_args(bool rx, const stream_args_t& in)
     const auto& m = rx ? _rx_map : _tx_map;
     for (auto& ch : args.channels) {
         if (ch >= m.size())
-            throw uhd::index_error(std::string("ZCU216: ") + (rx ? "RX" : "TX") + " channel "
+            throw uhd::index_error(std::string("rfsoc: ") + (rx ? "RX" : "TX") + " channel "
                                    + std::to_string(ch) + " out of range (the subdev spec has "
                                    + std::to_string(m.size()) + " of " + std::to_string(n) + ")");
         ch = m[ch];
@@ -602,7 +603,7 @@ stream_args_t zcu216_device::_map_args(bool rx, const stream_args_t& in)
     return args;
 }
 
-rx_streamer::sptr zcu216_device::get_rx_stream(const stream_args_t& args_in)
+rx_streamer::sptr rfsoc_device::get_rx_stream(const stream_args_t& args_in)
 {
     const stream_args_t args = _map_args(true, args_in);
     std::lock_guard<std::mutex> l(_streamers_mutex);
@@ -629,9 +630,9 @@ rx_streamer::sptr zcu216_device::get_rx_stream(const stream_args_t& args_in)
             for (size_t ch : args.channels)
                 want += (want.empty() ? "" : ",") + std::to_string(ch);
             throw uhd::runtime_error(
-                "ZCU216: an RX streamer for converter channel(s) " + have
+                "rfsoc: an RX streamer for converter channel(s) " + have
                 + " still exists; a second RX streamer (channel(s) " + want
-                + ") cannot run beside it: the ZCU216 has ONE RX stream for all channels "
+                + ") cannot run beside it: the board has ONE RX stream for all channels "
                   "(Protocol §9). Create one streamer with all the channels you need "
                   "(stream_args.channels), or destroy the first one before creating another.");
         }
@@ -639,7 +640,7 @@ rx_streamer::sptr zcu216_device::get_rx_stream(const stream_args_t& args_in)
     for (auto& w : _rx_streamers)
         w.reset();
     for (auto& old : olds) {
-        ZLOG_WARN("New RX streamer: shutting down the previous one (the ZCU216 has one "
+        ZLOG_WARN("New RX streamer: shutting down the previous one (the board has one "
                   "RX stream for all channels; use one streamer for several channels)");
         old->shutdown();
     }
@@ -649,7 +650,7 @@ rx_streamer::sptr zcu216_device::get_rx_stream(const stream_args_t& args_in)
     return s;
 }
 
-tx_streamer::sptr zcu216_device::get_tx_stream(const stream_args_t& args_in)
+tx_streamer::sptr rfsoc_device::get_tx_stream(const stream_args_t& args_in)
 {
     const stream_args_t args = _map_args(false, args_in);
     std::lock_guard<std::mutex> l(_streamers_mutex);
@@ -663,7 +664,7 @@ tx_streamer::sptr zcu216_device::get_tx_stream(const stream_args_t& args_in)
         w.reset();
     }
     for (auto& old : olds) {
-        ZLOG_WARN("New TX streamer: shutting down the previous one (the ZCU216 has one "
+        ZLOG_WARN("New TX streamer: shutting down the previous one (the board has one "
                   "TX stream for all channels; use one streamer for several channels)");
         old->shutdown();
     }
@@ -674,7 +675,7 @@ tx_streamer::sptr zcu216_device::get_tx_stream(const stream_args_t& args_in)
     return s;
 }
 
-bool zcu216_device::recv_async_msg(async_metadata_t& md, double timeout)
+bool rfsoc_device::recv_async_msg(async_metadata_t& md, double timeout)
 {
     std::shared_ptr<tx_streamer_impl> s;
     {
@@ -690,18 +691,19 @@ bool zcu216_device::recv_async_msg(async_metadata_t& md, double timeout)
 // ---------------------------------------------------------------------------
 // property tree
 // ---------------------------------------------------------------------------
-void zcu216_device::_build_tree(const device_addr_t& info)
+void rfsoc_device::_build_tree(const device_addr_t& info)
 {
     _tree                       = property_tree::make();
     auto st                     = _st;
     auto ctrl                   = _st->ctrl;
     const fs_path mb            = "/mboards/0";
     const std::string product   = info.get("product", "zcu216");
-    const std::string name      = info.get("name", "zcu216");
+    const std::string name      = info.get("name", product);
+    const std::string board     = board_display_name(product);
 
-    _tree->create<std::string>("/name").set("ZCU216 RFSoC (uhd_zcu216)");
-    _tree->create<std::string>(mb / "name").set("ZCU216");
-    _tree->create<std::string>(mb / "codename").set("zcu216");
+    _tree->create<std::string>("/name").set(board + " RFSoC (uhd_rfsoc)");
+    _tree->create<std::string>(mb / "name").set(board);
+    _tree->create<std::string>(mb / "codename").set(product);
 
     usrp::mboard_eeprom_t eeprom;
     eeprom["name"]    = name;
@@ -712,7 +714,7 @@ void zcu216_device::_build_tree(const device_addr_t& info)
         .add_coerced_subscriber([](const usrp::mboard_eeprom_t&) {});
     _tree->create<std::string>(mb / "fpga_version").set(info.get("fpga", "unknown"));
     _tree->create<std::string>(mb / "fw_version")
-        .set("zcu216_uhd_daemon protocol " + info.get("version", "?"));
+        .set("uhd_rfsoc_daemon protocol " + info.get("version", "?"));
 
     _tree->create<double>(mb / "tick_rate")
         .set_coercer([st](double r) {
@@ -744,7 +746,7 @@ void zcu216_device::_build_tree(const device_addr_t& info)
     _pps_emulation = parse_ll(_st->args.get("pps_emulation", "1"), "pps_emulation") != 0;
     const bool pps_emu = _pps_emulation;
     auto no_pps        = [] {
-        throw uhd::runtime_error("ZCU216: no PPS input (sensor pps_present is false), and the "
+        throw uhd::runtime_error("rfsoc: no PPS input (sensor pps_present is false), and the "
                                  "device arg pps_emulation=0 disables the host emulation");
     };
     _tree->create<time_spec_t>(mb / "time/pps")
@@ -758,7 +760,7 @@ void zcu216_device::_build_tree(const device_addr_t& info)
                 no_pps();
             if (not _warned_pps) {
                 _warned_pps = true;
-                ZLOG_INFO("No PPS on the ZCU216: set_time_next_pps() is emulated -- the PPS "
+                ZLOG_INFO("No PPS on this board: set_time_next_pps() is emulated -- the PPS "
                           "edges are the whole seconds of device time (pps_emulation=0 to refuse)");
             }
             // the next emulated edge: the daemon sets the time AT it (§3c
@@ -801,7 +803,7 @@ void zcu216_device::_build_tree(const device_addr_t& info)
                 // --sync pps) work; the source stays internal
                 if (kind == "time" and s == "external" and _pps_emulation
                     and std::find(opts.begin(), opts.end(), s) == opts.end()) {
-                    ZLOG_WARN("No PPS input on the ZCU216: time source 'external' is emulated "
+                    ZLOG_WARN("No PPS input on this board: time source 'external' is emulated "
                               "(the time source stays internal; pps_emulation=0 refuses it)");
                     return std::string("internal");
                 }
@@ -842,12 +844,12 @@ void zcu216_device::_build_tree(const device_addr_t& info)
     for (size_t ch = 0; ch < _st->num_tx; ch++)
         _tx_map.push_back(ch);
     // GPIO: multi_usrp lists banks RXA/TXA for dboard A and reaches them
-    // through dboards/A/iface. The ZCU216 has no GPIO behind the converters:
+    // through dboards/A/iface. The boards have no GPIO behind the converters:
     // say so instead of "path not found".
     _tree->create<usrp::dboard_iface::sptr>(mb / "dboards/A/iface")
         .set_publisher([]() -> usrp::dboard_iface::sptr {
             throw uhd::not_implemented_error(
-                "ZCU216: no GPIO -- the RFDC converters have no dboard GPIO banks "
+                "rfsoc: no GPIO -- the RFDC converters have no dboard GPIO banks "
                 "(RXA/TXA are listed by multi_usrp for every dboard)");
         });
     for (size_t ch = 0; ch < _st->num_rx; ch++)
@@ -875,7 +877,7 @@ void zcu216_device::_build_tree(const device_addr_t& info)
         _tree->create<usrp::subdev_spec_t>(mb / (rx ? "rx_subdev_spec" : "tx_subdev_spec"))
             .set_coercer([this, n, rx](const usrp::subdev_spec_t& s) {
                 if (s.empty())
-                    throw uhd::value_error("ZCU216: empty subdev spec");
+                    throw uhd::value_error("rfsoc: empty subdev spec");
                 std::vector<size_t> m;
                 for (size_t i = 0; i < s.size(); i++) {
                     long long fe = -1;
@@ -887,7 +889,7 @@ void zcu216_device::_build_tree(const device_addr_t& info)
                         or std::to_string(fe) != s[i].sd_name
                         or std::find(m.begin(), m.end(), size_t(fe)) != m.end())
                         throw uhd::value_error(
-                            std::string("ZCU216: ") + (rx ? "RX" : "TX") + " subdev spec '"
+                            std::string("rfsoc: ") + (rx ? "RX" : "TX") + " subdev spec '"
                             + s.to_string() + "': each entry must be a distinct frontend A:0 .. A:"
                             + std::to_string(n - 1));
                     m.push_back(size_t(fe));
@@ -901,7 +903,7 @@ void zcu216_device::_build_tree(const device_addr_t& info)
     _build_bf();
 }
 
-std::string zcu216_device::_at()
+std::string rfsoc_device::_at()
 {
     std::lock_guard<std::mutex> l(_cmd_mutex);
     if (_cmd_time == time_spec_t(0.0))
@@ -924,7 +926,7 @@ static bool antenna_alias(bool rx, const std::string& a)
     return std::find(v.begin(), v.end(), u) != v.end();
 }
 
-void zcu216_device::_build_chan(bool rx, size_t ch)
+void rfsoc_device::_build_chan(bool rx, size_t ch)
 {
     auto st                = _st;
     auto ctrl              = _st->ctrl;
@@ -950,7 +952,7 @@ void zcu216_device::_build_chan(bool rx, size_t ch)
         line += _at();
         const auto t = ctrl->call_tokens(line);
         if (t.empty())
-            throw uhd::runtime_error("ZCU216: empty reply to " + line);
+            throw uhd::runtime_error("rfsoc: empty reply to " + line);
         fc.freq = parse_double(t[0], "tuned rf");
         fc.dsp  = t.size() > 1 ? parse_double(t[1], "tuned dsp") : 0.0;
     };
@@ -1050,7 +1052,7 @@ void zcu216_device::_build_chan(bool rx, size_t ch)
         _tree->create<std::string>(l / "source/value")
             .set_coercer([](const std::string& v) {
                 if (v != "internal")
-                    throw uhd::value_error("ZCU216: the NCO runs from the converter tile clock; "
+                    throw uhd::value_error("rfsoc: the NCO runs from the converter tile clock; "
                                            "LO source '" + v + "' is not available (internal only)");
                 return v;
             })
@@ -1058,7 +1060,7 @@ void zcu216_device::_build_chan(bool rx, size_t ch)
         _tree->create<bool>(l / "export")
             .set_coercer([](bool e) {
                 if (e)
-                    throw uhd::value_error("ZCU216: the NCO cannot be exported");
+                    throw uhd::value_error("rfsoc: the NCO cannot be exported");
                 return false;
             })
             .set(false);
@@ -1080,7 +1082,7 @@ void zcu216_device::_build_chan(bool rx, size_t ch)
     const std::string gname = rx ? "DSA" : "VOP";
     const auto gr = ctrl->call_tokens("get_" + dir + "_gain_range " + c);
     if (gr.size() < 2)
-        throw uhd::runtime_error("ZCU216: bad get_" + dir + "_gain_range reply");
+        throw uhd::runtime_error("rfsoc: bad get_" + dir + "_gain_range reply");
     double step = gr.size() >= 3 ? parse_double(gr[2], "gain step") : 1.0;
     if (step <= 0.0) // gain_group divides by the step
         step = 0.01;
@@ -1108,7 +1110,7 @@ void zcu216_device::_build_chan(bool rx, size_t ch)
     _tree->create<std::string>(fe / "antenna/value")
         .set_coercer([rx, &cache](const std::string& a) {
             if (a != cache.ant and not antenna_alias(rx, a))
-                throw uhd::value_error("ZCU216: " + std::string(rx ? "RX" : "TX") + " antenna '" + a
+                throw uhd::value_error("rfsoc: " + std::string(rx ? "RX" : "TX") + " antenna '" + a
                                        + "' does not exist; the only port is '" + cache.ant
                                        + "' (aliases: RX2, TX/RX, " + (rx ? "RX1" : "TX1") + ", ...)");
             return cache.ant;
@@ -1135,7 +1137,7 @@ void zcu216_device::_build_chan(bool rx, size_t ch)
     });
 }
 
-void zcu216_device::_make_pool(const device_addr_t& args)
+void rfsoc_device::_make_pool(const device_addr_t& args)
 {
     // dpdk::default_layout(): one worker per physical core other than the
     // first two (main lcore + application, then the RX/TX lcores)
@@ -1151,7 +1153,7 @@ void zcu216_device::_make_pool(const device_addr_t& args)
         return;
     }
     if (nw > 64)
-        throw uhd::value_error("ZCU216: rx_workers=" + std::to_string(nw) + " (at most 64)");
+        throw uhd::value_error("rfsoc: rx_workers=" + std::to_string(nw) + " (at most 64)");
     std::vector<int> cpus;
     if (args.has_key("worker_cpus") or (not own_lcores and not L.workers.empty())) {
         const auto l = args.has_key("worker_cpus") ? parse_cpus(args["worker_cpus"], "worker_cpus")
@@ -1224,9 +1226,9 @@ std::string cpu_set_str(const std::set<unsigned>& s)
 }
 } // namespace
 
-void zcu216_device::_place_app(const device_addr_t& args)
+void rfsoc_device::_place_app(const device_addr_t& args)
 {
-    // What zcu216-uhd's taskset did, for any UHD application started plainly
+    // What uhd-rfsoc's taskset did, for any UHD application started plainly
     // (sudo <app>): the thread that opens the device -- and so every thread it
     // starts afterwards (GNU Radio's block threads, an app's RX/TX threads) --
     // goes to CPUs that no polling lcore and no conversion worker uses, nor
@@ -1304,12 +1306,12 @@ void zcu216_device::_place_app(const device_addr_t& args)
     for (unsigned c : want)
         CPU_SET(c, &set);
     if (pthread_setaffinity_np(pthread_self(), sizeof(set), &set) != 0)
-        throw uhd::value_error("ZCU216: app_cpus " + cpu_set_str(want) + ": cannot pin the application there");
+        throw uhd::value_error("rfsoc: app_cpus " + cpu_set_str(want) + ": cannot pin the application there");
     ZLOG_INFO("application threads on CPUs " << cpu_set_str(want)
                                              << " (off the DPDK lcores and workers; app_cpus= overrides)");
 }
 
-void zcu216_device::_build_bf()
+void rfsoc_device::_build_bf()
 {
     const fs_path mb = "/mboards/0";
     _bf              = std::make_shared<bf_ctl>(_st, false);
@@ -1338,7 +1340,7 @@ void zcu216_device::_build_bf()
             .set(iface);
 }
 
-void zcu216_device::_build_bf_nodes(const fs_path& b, std::shared_ptr<bf_ctl> bf)
+void rfsoc_device::_build_bf_nodes(const fs_path& b, std::shared_ptr<bf_ctl> bf)
 {
     _tree->create<bool>(b / "enable")
         .set_coercer([bf](bool e) { return bf->set_enable(e); })
@@ -1406,13 +1408,14 @@ void zcu216_device::_build_bf_nodes(const fs_path& b, std::shared_ptr<bf_ctl> bf
 // ---------------------------------------------------------------------------
 // registration
 // ---------------------------------------------------------------------------
-static device_addrs_t zcu216_find(const device_addr_t& hint_in)
+static device_addrs_t rfsoc_find(const device_addr_t& hint_in)
 {
-    // type=zcu216: any board this module serves (the protocol's name);
-    // type=rfsoc4x2: only RFSoC 4x2 boards (product=rfsoc4x2), reported as
-    // type=rfsoc4x2
-    const std::string type = hint_in.get("type", "zcu216");
-    if (type != "zcu216" and type != "rfsoc4x2")
+    // type=rfsoc: any board this module serves (the protocol's name). The
+    // names from before the rename still work as they did: type=zcu216 = any
+    // board, type=rfsoc4x2 = RFSoC 4x2 boards only (product=rfsoc4x2). A
+    // device is reported with the type it was asked for.
+    const std::string type = hint_in.get("type", "rfsoc");
+    if (type != "rfsoc" and type != "zcu216" and type != "rfsoc4x2")
         return {};
     device_addr_t hint = hint_in;
     if (type == "rfsoc4x2") {
@@ -1430,7 +1433,7 @@ static device_addrs_t zcu216_find(const device_addr_t& hint_in)
     } catch (const std::exception& e) {
         ZLOG_DEBUG("discovery failed: " << e.what());
     }
-    // Fallback: explicit type=zcu216,addr=... but UDP discovery filtered:
+    // Fallback: explicit type=rfsoc,addr=... but UDP discovery filtered:
     // ask the control port directly.
     if (found.empty() and hint.has_key("addr") and hint_in.has_key("type")) {
         try {
@@ -1441,7 +1444,7 @@ static device_addrs_t zcu216_find(const device_addr_t& hint_in)
                      "claimed", "fpga", "version"})
                 if (info.has_key(k))
                     dev[k] = info[k];
-            dev["type"] = "zcu216";
+            dev["type"] = "rfsoc";
             if (not dev.has_key("addr"))
                 dev["addr"] = hint["addr"];
             if (not hint.has_key("product") or dev.get("product", "") == hint["product"])
@@ -1462,20 +1465,19 @@ static device_addrs_t zcu216_find(const device_addr_t& hint_in)
         for (const auto& k : hint.keys())
             if (not dev.has_key(k) and k != "find_all")
                 dev[k] = hint[k];
-    if (type == "rfsoc4x2")
-        for (auto& dev : found)
-            dev["type"] = "rfsoc4x2";
+    for (auto& dev : found)
+        dev["type"] = type;
     return found;
 }
 
-static device::sptr zcu216_make(const device_addr_t& args)
+static device::sptr rfsoc_make(const device_addr_t& args)
 {
-    return std::make_shared<zcu216_device>(args);
+    return std::make_shared<rfsoc_device>(args);
 }
 
-UHD_STATIC_BLOCK(register_zcu216_device)
+UHD_STATIC_BLOCK(register_rfsoc_device)
 {
-    device::register_device(&zcu216_find, &zcu216_make, device::USRP);
+    device::register_device(&rfsoc_find, &rfsoc_make, device::USRP);
 }
 
-} // namespace zcu216
+} // namespace rfsoc

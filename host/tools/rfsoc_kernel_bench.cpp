@@ -1,26 +1,26 @@
 //
-// zcu216_kernel_bench -- throughput of the uhd_zcu216 sample kernels, the
+// rfsoc_kernel_bench -- throughput of the uhd_rfsoc sample kernels, the
 // per-sample work of recv() / send(): the fused channel (de-)interleave and
 // format conversion, SIMD (AVX-512 / NEON) against scalar against UHD 4.6's own converter, one
 // thread on a cache-resident 512 KB payload (64 packets of 2048 sc16 slots,
 // packet by packet like recv()), and the worker pool on a 64-packet call.
 // GS/s of wire slots. No device, no root.
 //
-//   zcu216_kernel_bench [--cpu C]     # --cpu: the single-thread rows pinned to
+//   rfsoc_kernel_bench [--cpu C]     # --cpu: the single-thread rows pinned to
 //                                     # CPU C (one the module's lcores do not
 //                                     # use); the pool rows keep the original
 //                                     # affinity (unpinned workers)
-//   zcu216_kernel_bench --pool-cpus 2,3,4,5   # pool workers pinned like the module's
-//   zcu216_kernel_bench --sweep [--secs S]    # RX sc16 -> fc32 and TX fc32 -> sc16 only,
+//   rfsoc_kernel_bench --pool-cpus 2,3,4,5   # pool workers pinned like the module's
+//   rfsoc_kernel_bench --sweep [--secs S]    # RX sc16 -> fc32 and TX fc32 -> sc16 only,
 //                                             # N = 1, 2, 4, 8, 16, each row timed for S s
 //                                             # (default 0.3)
 //
-// What the host can convert at all; zcu216_dram_bench then measures the same
+// What the host can convert at all; rfsoc_dram_bench then measures the same
 // kernels against DRAM with the NIC's DMA traffic, where a 100GbE stream
 // usually hits its limit first.
 //
-#include "zcu216_kernels.hpp"
-#include "zcu216_pool.hpp"
+#include "rfsoc_kernels.hpp"
+#include "rfsoc_pool.hpp"
 #include <uhd/convert.hpp>
 #include <uhd/exception.hpp>
 #include <pthread.h>
@@ -39,7 +39,7 @@
 #include <thread>
 #include <vector>
 
-using namespace zcu216;
+using namespace rfsoc;
 
 namespace {
 
@@ -377,7 +377,7 @@ int main(int argc, char** argv)
                 return 2;
             }
         } else {
-            std::fprintf(stderr, "usage: zcu216_kernel_bench [--cpu C] [--pool-cpus a,b,c,d] [--sweep] [--secs S]\n");
+            std::fprintf(stderr, "usage: rfsoc_kernel_bench [--cpu C] [--pool-cpus a,b,c,d] [--sweep] [--secs S]\n");
             return 2;
         }
     }

@@ -17,7 +17,7 @@ antenna; one timed capture per step, every RX channel, sc16 on the wire:
 Channels 1..N-1 keep delivering raw samples while the beamformer runs; they
 are checked against step 1 as well.
 
-    zcu216-uhd python3 benchmark/rx_bf_air_test.py --args type=zcu216,addr=<board-ip>,channels=4
+    uhd-rfsoc python3 benchmark/rx_bf_air_test.py --args type=rfsoc,addr=<board-ip>,channels=4
 """
 import argparse
 import math
