@@ -22,7 +22,7 @@ PY=${UHD_DAEMON_PYTHON:-/usr/local/share/pynq-venv/bin/python3}
 LOG=/tmp/uhd_daemon.log
 OUT=/tmp/uhd_daemon.out
 
-pids() { pgrep -f '[z]cu216_uhd_daemon[.]py' || true; }
+pids() { pgrep -f '[u]hd_rfsoc_daemon[.]py' || true; }
 
 # PYNQ's board name (its xrfclk needs $BOARD set), as /etc/profile.d/boardname.sh sets it
 pynq_board() { [ -n "${BOARD:-}" ] && echo "$BOARD" || tr -d '\0' 2>/dev/null < /proc/device-tree/chosen/pynq_board || echo ZCU216; }
