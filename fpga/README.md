@@ -12,12 +12,14 @@ converter rate fs in MS/s, its decimal point as `p`).
 
 ## Prerequisites
 
-- Linux x86_64 with **Vivado 2021.1** (exactly this version), set up in the
-  shell: `source <Vivado install>/2021.1/settings64.sh`.
+- Linux x86_64 with **Vivado 2021.1** (exactly this version) on PATH:
+  `vivado -version` must say v2021.1, else `source <Vivado
+  install>/2021.1/settings64.sh` (`make` checks it).
 - The no-charge AMD license for the **UltraScale+ Integrated 100G Ethernet
   Subsystem** (`cmac_usplus`), installed for Vivado (e.g.
   `~/.Xilinx/<host>.lic`). Without it implementation fails.
-- Per build running at once: ~16 GB RAM and ~15 GB free disk.
+- Per build running at once: ~16 GB RAM and ~15 GB free disk (`MAXPAR=1`
+  runs one build at a time; the next starts only with 12 GB of disk free).
 
 The RFSoC 4x2's board files are in `boards/rfsoc4x2/board_files/`; the
 ZCU216's ship with Vivado. Nothing gets installed.
@@ -27,18 +29,21 @@ ZCU216's ship with Vivado. Nothing gets installed.
 From this directory:
 
 ```sh
-make package                    # once: the UHD cores -> ip/repo/uhd_ip
 make BOARD=zcu216 templates     # the ZCU216's 10 templates
 make BOARD=rfsoc4x2 templates   # the RFSoC 4x2's 4 templates
-make BOARD=zcu216 list          # every build of the board and whether it is built
+make BOARD=zcu216 list          # every build of the board: built, TIMING-FAIL or - (not built)
 ```
+
+The custom cores come packaged (`ip/repo/`, in git); `make package`
+repackages them, needed only after a change to their sources
+(`ip/src/uhd_ip/`; it also updates the packages' timestamps in git).
 
 The RFSoC 4x2 has one extra build, sc8max (2 channels at 2 x 2500 MS/s in
 sc8): `make BOARD=rfsoc4x2 bitstream N=2 F=2`.
 
 A template is a channel count's top build at an fs. At run time the board's
 daemon retunes it to every lower RFDC factor, so the templates alone cover
-every rate (each about 35 min on a 12-core machine; `MAXPAR=2` builds run at
+every rate (each about 25 min on a 12-core machine; `MAXPAR=2` builds run at
 once, `JOBS=6` threads each). `make help` lists every target and option.
 
 | | |

@@ -37,7 +37,7 @@ UHD 4.6.0.0 and GNU Radio 3.10.9.2 are pinned as reference submodules
 release, or build them:
 
 ```sh
-cd fpga && make package && make BOARD=zcu216 templates   # or BOARD=rfsoc4x2; -> fpga/build/<board>/bitstreams/
+cd fpga && make BOARD=zcu216 templates   # or BOARD=rfsoc4x2; -> fpga/build/<board>/bitstreams/
 ```
 
 **2. The board** (PYNQ, user `xilinx`):

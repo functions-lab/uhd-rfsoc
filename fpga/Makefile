@@ -2,7 +2,7 @@
 # flow/ladder.sh) fed by each board's directory (boards/<board>/: board.tcl,
 # builds.txt, block_designs/). Vivado 2021.1 on PATH. See README.md.
 #
-#   make package                                    once: the UHD cores -> ip/repo/uhd_ip
+#   make package                                    repackage the UHD cores (after a source change)
 #   make BOARD=<b> templates [FS=<MS/s>]            the board's run-time-rate templates
 #   make BOARD=<b> bitstream N=<n> [F=<f>] [FS=<MS/s>] [STEP=bd|synth|bit|impl]
 #   make BOARD=<b> ladder [FS=<MS/s>]               every build of boards/<b>/builds.txt
@@ -52,6 +52,7 @@ bitstream: check-board check-vivado
 	exit $$rc
 
 list: check-board
+	@printf "%-38s %-9s %s\n" build kind "status (built / TIMING-FAIL / - not built)"
 	@grep -v '^#' boards/$(BOARD)/builds.txt | while read -r n f fs kind s; do \
 	    [ -n "$$n" ] || continue; \
 	    name=$(BOARD)_v49_$${n}ch_qsfp_f$${f}_fs$$(echo $$fs | tr . p); \
