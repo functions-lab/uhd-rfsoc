@@ -1,4 +1,4 @@
-# rfsoc-uhd
+# uhd-rfsoc
 
 Xilinx RFSoC boards as UHD devices over 100 GbE. Stock UHD 4.6 applications
 (`uhd_usrp_probe`, `rx_samples_to_file`, `benchmark_rate`, GNU Radio, Python
@@ -9,7 +9,7 @@ application picks it through UHD (`set_rx_rate`, `--rate`), from 61.44 to
 1250 MS/s per channel on the ZCU216 and from 122.88 to 2500 MS/s on the
 RFSoC 4x2, and the board retunes or reloads itself to serve it.
 
-[![CI](https://github.com/WeiCheng14159/rfsoc-uhd/actions/workflows/ci.yml/badge.svg)](https://github.com/WeiCheng14159/rfsoc-uhd/actions/workflows/ci.yml)
+[![CI](https://github.com/WeiCheng14159/uhd-rfsoc/actions/workflows/ci.yml/badge.svg)](https://github.com/WeiCheng14159/uhd-rfsoc/actions/workflows/ci.yml)
 
 ## What you need
 
@@ -17,7 +17,7 @@ RFSoC 4x2, and the board retunes or reloads itself to serve it.
 |---|---|
 | board | a **ZCU216** (1, 2, 4, 8 or 16 channels, fs 2500 or 2457.6 MS/s) or a **Real Digital RFSoC 4x2** (1 or 2 channels, fs 5000 or 4915.2 MS/s), running PYNQ 3.x, with a QSFP28 100G cable to the host |
 | host | Linux, x86_64 (AVX-512 used when present) or aarch64 (NEON), a 100G NVIDIA/Mellanox ConnectX NIC (ConnectX-5/6/7, mlx5), Ubuntu 24.04 packages `libuhd-dev` 4.6, `uhd-host`, `python3-uhd`, `dpdk` / `libdpdk-dev` 23.11, `rdma-core`; optionally `gnuradio` 3.10 |
-| FPGA builds (optional) | Vivado 2021.1; prebuilt bitstreams are attached to each [release](https://github.com/WeiCheng14159/rfsoc-uhd/releases) |
+| FPGA builds (optional) | Vivado 2021.1; prebuilt bitstreams are attached to each [release](https://github.com/WeiCheng14159/uhd-rfsoc/releases) |
 
 The only software dependencies are UHD and GNU Radio (and DPDK for the data
 plane); the exact upstream releases are pinned as git submodules for
@@ -28,11 +28,10 @@ reference (`host/uhd` at v4.6.0.0, `host/gnuradio/gnuradio` at v3.10.9.2:
 
 | directory | what | runs on |
 |---|---|---|
-| `host/` | the UHD device module `libuhd_zcu216.so` (DPDK data plane), its wrapper and tools, hardware tests (`host/benchmark/`), GNU Radio flowgraphs (`host/gnuradio/`) | host PC |
+| `host/` | the UHD device module `libuhd_rfsoc.so` (DPDK data plane), its wrapper and tools, hardware tests (`host/benchmark/`), GNU Radio flowgraphs (`host/gnuradio/`) | host PC |
 | `rfsoc/` | the board daemon (`server/`) and the `rfsoc_lib` modules it uses (RFDC, clocks, MTS) | board (PYNQ) |
 | `run_daemon.sh` | start / stop the daemon on the board | board |
-| `fpga_board/` | per board: the block designs (`block_designs/<board>_uhd_v49/` and, for the 245.76 MHz clock family, `<board>_uhd_v49_245m76/`; each one `.tcl` + `.xdc` for every channel count) and their build flow | Vivado |
-| `fpga_ip/` | the custom FPGA IP: UHD data-plane cores, the 100G CMAC wrapper, the RFSoC 4x2 dual-ADC I/Q joiners | Vivado |
+| `fpga/` | the bitstreams: one build flow (`fpga/flow/`, `fpga/Makefile`) for every board in `fpga/boards/<board>/` (block designs, board facts, build list), and the custom IP (`fpga/ip/`) | Vivado |
 
 ## Bitstreams
 
@@ -70,17 +69,16 @@ channel count serves every factor; its top rates carry only `otw=sc8` (and
 | RFSoC 4x2 | `rfsoc4x2_v49_1ch_qsfp_f2_fs4915p2.bit` | 1 | 2457.6 .. 122.88 (all) |
 | | `rfsoc4x2_v49_2ch_qsfp_f2_fs4915p2.bit` | 2 | 2457.6 .. 122.88 (1228.8) |
 
-Download them (with their `.hwh`) from the release, or build them:
+Download them (with their `.hwh`) from the release, or build them
+(`fpga/README.md` has the prerequisites):
 
 ```sh
-# Vivado 2021.1 on PATH
-make -C fpga_board/zcu216 v49-package          # package the custom cores (once)
-make -C fpga_board/zcu216 v49-templates        # the five ZCU216 templates
-make -C fpga_board/zcu216 v49 N=8 F=4 FS=2500  # one build, e.g. the 8ch template
-make -C fpga_board/rfsoc4x2 v49-templates      # the two RFSoC 4x2 templates
-make -C fpga_board/zcu216 v49-templates-245m76    # the 245.76 MHz family (fs 2457.6)
-make -C fpga_board/rfsoc4x2 v49-templates-245m76  # the 245.76 MHz family (fs 4915.2)
-# -> fpga_board/<board>/build/v49_qsfp/bitstreams/
+cd fpga
+make package                    # once: the custom cores
+make BOARD=zcu216 templates     # the 10 ZCU216 templates (both clock families)
+make BOARD=rfsoc4x2 templates   # the 4 RFSoC 4x2 templates
+make BOARD=rfsoc4x2 bitstream N=2 F=2   # the RFSoC 4x2's sc8max build
+# -> fpga/build/<board>/bitstreams/
 ```
 
 ## Sample rate (bandwidth) and carrier frequency
@@ -155,10 +153,10 @@ clean in strict full-rate tests, bar an occasional run lost to the host.
 On the PYNQ board (user `xilinx`):
 
 ```sh
-git clone https://github.com/WeiCheng14159/rfsoc-uhd.git ~/jupyter_notebooks/rfsoc-uhd
-cd ~/jupyter_notebooks/rfsoc-uhd
-sudo rfsoc/setup_board.sh   # once: xrfdc MTS bindings if the image lacks them, zcu216_uhd.conf from the example
-# then set data_ip (the FPGA's 100G address) in rfsoc/server/zcu216_uhd.conf
+git clone https://github.com/WeiCheng14159/uhd-rfsoc.git ~/jupyter_notebooks/uhd-rfsoc
+cd ~/jupyter_notebooks/uhd-rfsoc
+sudo rfsoc/setup_board.sh   # once: xrfdc MTS bindings if the image lacks them, uhd_rfsoc.conf from the example
+# then set data_ip (the FPGA's 100G address) in rfsoc/server/uhd_rfsoc.conf
 ```
 
 Put the bitstreams and their `.hwh` files in `rfsoc/server/` (from the
@@ -179,7 +177,7 @@ sudo host/setup_cx5.sh <100g-iface> <host-data-ip>/24     # 100G without autoneg
 sudo host/setup_dpdk.sh <100g-iface> --install            # hugepages, mlx5 / RDMA checks
 cmake -S host -B host/build -DCMAKE_BUILD_TYPE=Release
 cmake --build host/build -j
-sudo cmake --install host/build                           # module into UHD's module dir, wrapper zcu216-uhd
+sudo cmake --install host/build                           # module into UHD's module dir, wrapper uhd-rfsoc
 ```
 
 `host/setup_cx5.sh` takes the port down to 100G CAUI-4, so a 200G / 400G
@@ -206,7 +204,7 @@ A new `channels=` reloads the bitstream (~16 s). Within one channel count
 sc8 (or sc12) fits pass `otw=sc8` (`otw=sc12`).
 
 More: `host/README.md` (host setup), `host/AGENTS.md` (host module, device arguments), `rfsoc/server/README.md`
-(daemon), `fpga_board/README.md` (FPGA), `host/benchmark/README.md`
+(daemon), `fpga/boards/README.md` (FPGA), `host/benchmark/README.md`
 (hardware tests), `host/gnuradio/README.md` (GNU Radio). Internals and the
 wire protocol: `AGENTS.md`.
 
@@ -214,6 +212,6 @@ wire protocol: `AGENTS.md`.
 
 `.github/workflows/ci.yml` builds the host module on x86_64 and aarch64
 (Ubuntu 24.04, UHD 4.6, DPDK 23.11), checks the SIMD kernels bit for bit
-against the scalar ones (`zcu216_kernel_check`), and checks the Python and
+against the scalar ones (`rfsoc_kernel_check`), and checks the Python and
 shell sources. A `v*` tag publishes a GitHub release
 (`.github/workflows/release.yml`).

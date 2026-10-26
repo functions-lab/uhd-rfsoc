@@ -1,7 +1,7 @@
 # build output
-fpga_board/*/build/
+fpga/build/
 host/build*/
-fpga_ip/ip_design/uhd_ip/sim/xsim*/
+fpga/ip/src/uhd_ip/sim/xsim*/
 .Xil/
 *.jou
 *.log
@@ -12,4 +12,4 @@ __pycache__/
 # (rfsoc/push_bitstreams.sh) and the board's own settings
 rfsoc/server/*.bit
 rfsoc/server/*.hwh
-rfsoc/server/zcu216_uhd.conf
+rfsoc/server/uhd_rfsoc.conf

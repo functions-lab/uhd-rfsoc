@@ -1,0 +1,36 @@
+# builds.txt -- the RFSoC 4x2 bitstreams: one line per build, read by fpga/flow/ladder.sh.
+#   N  F  fs  kind  [strategy]
+# kind: template = a channel count's top build at an fs, which the daemon
+# retunes at run time to every lower factor (Protocol §8): the templates
+# alone cover every rate. ladder = a fixed-factor build of the same design,
+# for fixed-rate comparisons only (2ch F2 at fs 5000 is the sc8-only
+# 2 x 2500 MS/s build). strategy: Vivado implementation strategy (default:
+# Vivado's). On this part (xczu48dr) the marked builds miss timing by
+# 0.02-0.24 ns with the default, on routing-dominated paths in the 322 MHz
+# CMAC domain (udp_player / axis_pkt_arb); Performance_ExtraTimingOpt closes
+# them, except 2ch F16, which needs Performance_Explore.
+1  2  5000   template Performance_ExtraTimingOpt
+2  4  5000   template
+1  2  4915.2 template Performance_ExtraTimingOpt
+2  2  4915.2 template Performance_ExtraTimingOpt
+2  2  5000   ladder   Performance_ExtraTimingOpt
+1  3  5000   ladder
+1  4  5000   ladder
+1  5  5000   ladder
+1  6  5000   ladder
+1  8  5000   ladder
+1  10 5000   ladder   Performance_ExtraTimingOpt
+1  12 5000   ladder
+1  16 5000   ladder
+1  20 5000   ladder   Performance_ExtraTimingOpt
+1  24 5000   ladder
+1  40 5000   ladder
+2  5  5000   ladder   Performance_ExtraTimingOpt
+2  6  5000   ladder
+2  8  5000   ladder
+2  10 5000   ladder
+2  12 5000   ladder
+2  16 5000   ladder   Performance_Explore
+2  20 5000   ladder
+2  24 5000   ladder
+2  40 5000   ladder
