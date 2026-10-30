@@ -3,8 +3,8 @@
 Design rules and board facts of the RFSoC 4x2 builds; the flow rules are in
 `../../AGENTS.md`. What differs from the ZCU216 (`../zcu216/AGENTS.md`):
 
-- Designs: `block_designs/rfsoc4x2_uhd_v49/` (250 MHz family, fs 5000:
-  `rfsoc/rfsoc_lib/xrfclk/RFSoC4x2/LMX2594_250.0_5000.0.txt`) and
+- Designs: `block_designs/rfsoc4x2_uhd_v49/` (250 MHz family, fs 5000 and 4800:
+  `rfsoc/rfsoc_lib/xrfclk/RFSoC4x2/LMX2594_250.0_{5000,4800}.0.txt`) and
   `block_designs/rfsoc4x2_uhd_v49_245m76/` (245.76 MHz family, fs 4915.2,
   PL_CLK 122.88 MHz, SYSREF 7.68 MHz; Protocol §8a). Non-Xilinx IP:
   `fpga/ip/repo/uhd_ip` and the two I/Q joiners in `fpga/ip/repo`

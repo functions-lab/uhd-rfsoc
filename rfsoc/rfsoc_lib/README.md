@@ -34,7 +34,7 @@ from the build's `.hwh` (converter `Refclk_Freq` = fs, MTS clocking wizard
 250 MHz reference with PL clock 300 / SYSREF 10, and 245.76 MHz with
 122.88 / 7.68. Shipped: `LMK04828_10.0_250.0_300.0_10.0.txt`,
 `LMK04828_10.0_245.76_122.88_7.68.txt` (both boards),
-`LMX2594_250.0_{2400,2500}.0.txt` (ZCU216), `LMX2594_250.0_5000.0.txt`
+`LMX2594_250.0_{2400,2500}.0.txt` (ZCU216), `LMX2594_250.0_{4800,5000}.0.txt`
 (RFSoC 4x2), `LMX2594_245.76_{1638.4,2457.6}.txt` (both),
 `LMX2594_245.76_4915.2.txt` (RFSoC 4x2). A new converter rate is a new
 `LMX2594_<ref>_<fs>.txt` here (the FPGA build picks its block design from

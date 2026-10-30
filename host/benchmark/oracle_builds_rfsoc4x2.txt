@@ -59,3 +59,31 @@ sc8max    2  2500000000     rfsoc4x2_v49_2ch_qsfp_f2_fs5000   sc8               
 245m76    2  245760000     rfsoc4x2_v49_2ch_qsfp_f2_fs4915p2    sc16,sc12,sc8       no
 245m76    2  204800000     rfsoc4x2_v49_2ch_qsfp_f2_fs4915p2    sc16,sc12,sc8       no
 245m76    2  122880000     rfsoc4x2_v49_2ch_qsfp_f2_fs4915p2    sc16,sc12,sc8       no
+# family fs4800: the 250 MHz clock family at fs 4800 MS/s (same block design,
+# LMX2594_250.0_4800.0.txt), one run-time-rate template per channel count
+# serving every factor the MTS clocking wizard makes exactly (no F16): each
+# row is a rate of that template. 2ch carries sc8 only at 2 x 2400 MS/s.
+fs4800    1  2400000000    rfsoc4x2_v49_1ch_qsfp_f2_fs4800      sc16,sc12,sc8       no
+fs4800    1  1600000000    rfsoc4x2_v49_1ch_qsfp_f2_fs4800      sc16,sc12,sc8       no
+fs4800    1  1200000000    rfsoc4x2_v49_1ch_qsfp_f2_fs4800      sc16,sc12,sc8,fc32  no
+fs4800    1  960000000     rfsoc4x2_v49_1ch_qsfp_f2_fs4800      sc16,sc12,sc8,fc32  no
+fs4800    1  800000000     rfsoc4x2_v49_1ch_qsfp_f2_fs4800      sc16,sc12,sc8,fc32  no
+fs4800    1  600000000     rfsoc4x2_v49_1ch_qsfp_f2_fs4800      sc16,sc12,sc8,fc32  no
+fs4800    1  480000000     rfsoc4x2_v49_1ch_qsfp_f2_fs4800      sc16,sc12,sc8,fc32  no
+fs4800    1  400000000     rfsoc4x2_v49_1ch_qsfp_f2_fs4800      sc16,sc12,sc8,fc32  no
+fs4800    1  300000000     rfsoc4x2_v49_1ch_qsfp_f2_fs4800      sc16,sc12,sc8,fc32  no
+fs4800    1  240000000     rfsoc4x2_v49_1ch_qsfp_f2_fs4800      sc16,sc12,sc8,fc32  no
+fs4800    1  200000000     rfsoc4x2_v49_1ch_qsfp_f2_fs4800      sc16,sc12,sc8,fc32  no
+fs4800    1  120000000     rfsoc4x2_v49_1ch_qsfp_f2_fs4800      sc16,sc12,sc8,fc32  no
+fs4800    2  2400000000    rfsoc4x2_v49_2ch_qsfp_f2_fs4800      sc8                 no
+fs4800    2  1600000000    rfsoc4x2_v49_2ch_qsfp_f2_fs4800      sc12,sc8            no
+fs4800    2  1200000000    rfsoc4x2_v49_2ch_qsfp_f2_fs4800      sc16,sc12,sc8       no
+fs4800    2  960000000     rfsoc4x2_v49_2ch_qsfp_f2_fs4800      sc16,sc12,sc8       no
+fs4800    2  800000000     rfsoc4x2_v49_2ch_qsfp_f2_fs4800      sc16,sc12,sc8       no
+fs4800    2  600000000     rfsoc4x2_v49_2ch_qsfp_f2_fs4800      sc16,sc12,sc8       no
+fs4800    2  480000000     rfsoc4x2_v49_2ch_qsfp_f2_fs4800      sc16,sc12,sc8       no
+fs4800    2  400000000     rfsoc4x2_v49_2ch_qsfp_f2_fs4800      sc16,sc12,sc8       no
+fs4800    2  300000000     rfsoc4x2_v49_2ch_qsfp_f2_fs4800      sc16,sc12,sc8       no
+fs4800    2  240000000     rfsoc4x2_v49_2ch_qsfp_f2_fs4800      sc16,sc12,sc8       no
+fs4800    2  200000000     rfsoc4x2_v49_2ch_qsfp_f2_fs4800      sc16,sc12,sc8       no
+fs4800    2  120000000     rfsoc4x2_v49_2ch_qsfp_f2_fs4800      sc16,sc12,sc8       no

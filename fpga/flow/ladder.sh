@@ -11,10 +11,12 @@
 #   MIN_FREE_GB=12   start the next build only with this much disk free
 #   JOBS=6           Vivado threads per build
 #   SKIP_EXISTING=1  skip a build whose .bit is already in bitstreams/
+#   V49_OUT=<dir>    output directory instead of fpga/build/<board> (the
+#                    Makefile sets it per PYNQ version, flow/versions.sh builddir)
 #
 # Each build's Vivado project is deleted when it exits (the bitstream, .hwh and
 # reports are copied out first; V49_KEEP_PROJ=1 keeps projects). Logs:
-# fpga/build/<board>/logs/<name>.log; a summary at the end. Exit status 1 if
+# <output dir>/logs/<name>.log; a summary at the end. Exit status 1 if
 # any build failed or missed timing.
 set -o pipefail   # (no -u: an empty associative array counts as unset in bash 5.1)
 FPGA=$(cd "$(dirname "$0")/.." && pwd)
@@ -23,7 +25,8 @@ STEP=${2:-bit}
 LIST=$FPGA/boards/$BOARD/builds.txt
 [ -f "$LIST" ] || { echo "no $LIST" >&2; exit 2; }
 MAXPAR=${MAXPAR:-2}; MIN_FREE_GB=${MIN_FREE_GB:-12}; JOBS=${JOBS:-6}
-OUT=$FPGA/build/$BOARD; LOGS=$OUT/logs; mkdir -p "$LOGS"
+OUT=${V49_OUT:-$FPGA/build/$BOARD}; LOGS=$OUT/logs; mkdir -p "$LOGS"; OUT=$(cd "$OUT" && pwd)
+export V49_OUT=$OUT
 
 name_of() { local n=$1 f=$2 fs=$3; echo "${BOARD}_v49_${n}ch_qsfp_f${f}_fs${fs/./p}"; }
 free_gb() { df -BG --output=avail "$OUT" | tail -1 | tr -dc 0-9; }
@@ -39,7 +42,7 @@ while read -r n f fs kind strategy; do
     SEL+=("$n $f $fs ${strategy:-}")
 done < "$LIST"
 [ ${#SEL[@]} -gt 0 ] || { echo "no build of $BOARD matches (KIND=${KIND:-} FS=${FS:-} ONLY=${ONLY:-})" >&2; exit 2; }
-echo "$BOARD: ${#SEL[@]} build(s), STEP=$STEP MAXPAR=$MAXPAR JOBS=$JOBS"
+echo "$BOARD: ${#SEL[@]} build(s), STEP=$STEP MAXPAR=$MAXPAR JOBS=$JOBS${V49_PYNQ:+ PYNQ=$V49_PYNQ} -> $OUT"
 
 declare -A PID
 reap() {

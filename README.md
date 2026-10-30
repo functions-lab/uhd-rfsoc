@@ -14,8 +14,8 @@ retunes or reloads itself to serve it.
 
 | board | channels | converter rate fs (MS/s) | per-channel rate (MS/s) | carrier |
 |---|---|---|---|---|
-| AMD ZCU216 | 1, 2, 4, 8, 16 | 2500 or 2457.6 | 61.44 .. 1250 | 0 .. fs/2 |
-| Real Digital RFSoC 4x2 | 1, 2 | 5000 or 4915.2 | 122.88 .. 2500 | 0 .. fs/2 |
+| AMD ZCU216 | 1, 2, 4, 8, 16 | 2500, 2457.6 or 2400 | 60 .. 1250 | 0 .. fs/2 |
+| Real Digital RFSoC 4x2 | 1, 2 | 5000, 4915.2 or 4800 | 120 .. 2500 | 0 .. fs/2 |
 
 Another RFSoC board can be added: `fpga/README.md` ("Add a board") and a
 `Board` entry in `rfsoc/server/boards.py`.
@@ -26,18 +26,20 @@ Another RFSoC board can be added: `fpga/README.md` ("Add a board") and a
 |---|---|
 | board | one of the above with PYNQ, and a QSFP28 100G cable to the host |
 | host | Linux on x86_64 (AVX-512 used when present) or aarch64, a ConnectX-5/6/7 100G NIC (mlx5), Ubuntu 24.04 packages `libuhd-dev` 4.6, `uhd-host`, `python3-uhd`, `dpdk` / `libdpdk-dev` 23.11, `rdma-core`; optionally `gnuradio` 3.10 |
-| bitstreams | from a [release](https://github.com/WeiCheng14159/uhd-rfsoc/releases), or built with Vivado 2021.1 (`fpga/README.md`) |
+| bitstreams | for the board's PYNQ version (2.7, 3.0 or 3.1): from a [release](https://github.com/WeiCheng14159/uhd-rfsoc/releases), or built with that version's Vivado release (2021.1 for PYNQ 2.7, `fpga/README.md`) |
 
 UHD 4.6.0.0 and GNU Radio 3.10.9.2 are pinned as reference submodules
 (`host/uhd`, `host/gnuradio/gnuradio`); building does not need them.
 
 ## Get started
 
-**1. Bitstreams.** Download the board's `.bit` + `.hwh` files from the
-release, or build them:
+**1. Bitstreams.** Download `uhd-rfsoc-bitstreams-<board>-pynq<version>.zip`
+for the board and its PYNQ image from the release (its `.bit` + `.hwh`
+files), or build them:
 
 ```sh
-cd fpga && make BOARD=zcu216 templates   # or BOARD=rfsoc4x2; -> fpga/build/<board>/bitstreams/
+cd fpga && make BOARD=zcu216 templates   # or BOARD=rfsoc4x2; PYNQ 2.7 -> fpga/build/<board>/bitstreams/
+cd fpga && make BOARD=zcu216 PYNQ=3.0 templates   # PYNQ 3.0 (Vivado 2022.1) -> fpga/build/pynq3.0/<board>/bitstreams/
 ```
 
 **2. The board** (PYNQ, user `xilinx`):
@@ -96,7 +98,7 @@ the bandwidth (`get_rx_bandwidth()` reports it).
 * A rate request is met from below: the highest offered rate at or below it
   (else the lowest). RX and TX always run at the same rate.
 * A rate of the loaded bitstream retunes in place (~1 s); another
-  bitstream's rate (the other clock family) reloads (10-20 s). Streaming
+  bitstream's rate (another fs) reloads (10-20 s). Streaming
   stops either way: set the rate before streaming, as UHD applications do.
 * Rates only a narrower wire format fits on the link are offered when the
   client declares it: device arg `otw=sc8` (or `sc12`) and the matching
@@ -104,21 +106,20 @@ the bandwidth (`get_rx_bandwidth()` reports it).
 * The carrier is the RFDC fine-mixer NCO, per channel and direction,
   anywhere in 0 .. fs/2 of the loaded build.
 
-Each channel count has one run-time-rate build per clock family (a
-template) that serves every factor F of 2 3 4 5 6 8 10 12 16 20 24 40 from
+Each channel count has one run-time-rate build per fs (a template) that serves every factor F of 2 3 4 5 6 8 10 12 16 20 24 40 from
 its top rate down. The rates, in MS/s per channel (wire formats in brackets
 where not every one fits):
 
-| board | N | 250 MHz family (fs 2500 / 5000) | 245.76 MHz family (fs 2457.6 / 4915.2) |
-|---|---|---|---|
-| ZCU216 | 1, 2 | 1250, 833.33, 625, 500, 416.67, 312.5, 250, 208.33, 156.25, 125, 104.17, 62.5 | 1228.8, 819.2, 614.4, 491.52, 409.6, 307.2, 245.76, 204.8, 153.6, 122.88, 102.4, 61.44 |
-| | 4 | 1250 [sc8], 833.33 [sc12 sc8], 625 .. 62.5 | 1228.8 [sc8], 819.2 [sc12 sc8], 614.4 .. 61.44 |
-| | 8 | 625 [sc8], 500, 416.67 [sc12 sc8], 312.5 .. 62.5 | 614.4 [sc8], 491.52, 409.6 [sc12 sc8], 307.2 .. 61.44 |
-| | 16 | 312.5 [sc8], 250, 208.33 [sc12 sc8], 156.25 .. 62.5 | 307.2 [sc8], 245.76, 204.8 [sc12 sc8], 153.6 .. 61.44 |
-| RFSoC 4x2 | 1 | 2500, 1666.67, 1250 .. 125 | 2457.6, 1638.4, 1228.8 .. 122.88 |
-| | 2 | 1250 .. 125; with the extra sc8max build also 2500 [sc8], 1666.67 [sc12 sc8] | 2457.6 [sc8], 1638.4 [sc12 sc8], 1228.8 .. 122.88 |
+| board | N | fs 2500 / 5000 (250 MHz family) | fs 2400 / 4800 (250 MHz family) | fs 2457.6 / 4915.2 (245.76 MHz family) |
+|---|---|---|---|---|
+| ZCU216 | 1, 2 | 1250, 833.33, 625, 500, 416.67, 312.5, 250, 208.33, 156.25, 125, 104.17, 62.5 | 1200, 800, 600, 480, 400, 300, 240, 200, 150, 120, 100, 60 | 1228.8, 819.2, 614.4, 491.52, 409.6, 307.2, 245.76, 204.8, 153.6, 122.88, 102.4, 61.44 |
+| | 4 | 1250 [sc8], 833.33 [sc12 sc8], 625 .. 62.5 | 1200 [sc8], 800 [sc12 sc8], 600 .. 60 | 1228.8 [sc8], 819.2 [sc12 sc8], 614.4 .. 61.44 |
+| | 8 | 625 [sc8], 500, 416.67 [sc12 sc8], 312.5 .. 62.5 | 600 [sc8], 480, 400 [sc12 sc8], 300 .. 60 | 614.4 [sc8], 491.52, 409.6 [sc12 sc8], 307.2 .. 61.44 |
+| | 16 | 312.5 [sc8], 250, 208.33 [sc12 sc8], 156.25 .. 62.5 | 300 [sc8], 240, 200 [sc12 sc8], 150 .. 60 | 307.2 [sc8], 245.76, 204.8 [sc12 sc8], 153.6 .. 61.44 |
+| RFSoC 4x2 | 1 | 2500, 1666.67, 1250 .. 125 | 2400, 1600, 1200 .. 120 | 2457.6, 1638.4, 1228.8 .. 122.88 |
+| | 2 | 1250 .. 125; with the extra sc8max build also 2500 [sc8], 1666.67 [sc12 sc8] | 2400 [sc8], 1600 [sc12 sc8], 1200 .. 120 | 2457.6 [sc8], 1638.4 [sc12 sc8], 1228.8 .. 122.88 |
 
-Only installed bitstreams count: install both families for every rate. The
+Only installed bitstreams count: install every fs for every rate. The
 daemon's `info rate_otw=` lists each rate's formats (Protocol §9, §10 in
 `AGENTS.md`).
 
@@ -139,4 +140,6 @@ Each directory's `README.md` is for users, its `AGENTS.md` for contributors;
 (Ubuntu 24.04, UHD 4.6, DPDK 23.11), checks the SIMD kernels against the
 scalar ones bit for bit, runs the daemon's unit tests, compiles every
 flowgraph and checks the Python and shell sources. A `v*` tag publishes a
-release (`.github/workflows/release.yml`).
+release (`.github/workflows/release.yml`). The bitstreams are not built in
+CI (GitHub's runners have no Vivado): they are built locally, one set per
+board and PYNQ version (`fpga/README.md`).

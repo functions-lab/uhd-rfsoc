@@ -680,7 +680,7 @@ class HwBackend(Backend):
         from rfsoc_lib.rfdc_task import RfdcTask
         import rfsoc_lib.rfdc_config as rfdc_config
         import xrfdc
-        # PYNQ 2.7's xrfdc wrapper has no multi-tile-sync bindings; MTS is
+        # PYNQ's xrfdc wrapper (2.7, 3.0, 3.1) has no multi-tile-sync bindings; MTS is
         # not optional here (_mts_lock), so say so before anything is loaded
         if not all(hasattr(xrfdc.RFdc, m) for m in ("mts_dac", "mts_adc")):
             raise SetupError(

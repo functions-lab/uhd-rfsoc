@@ -23,6 +23,12 @@
 # design: the RTL top that fpga/flow/build.tcl generates instantiates
 # fpga/ip/src/cmac_100g next to it.
 #
+# Vivado release: the design is written for 2021.1 and names 2021.1's IP
+# versions. fpga/flow/build.tcl also builds it with the other releases of
+# fpga/flow/versions.txt (one per PYNQ version): its v49_vlnv maps every
+# xilinx.com:ip VLNV below to that release's version. Sourced without the
+# flow, the VLNVs are used as written and only 2021.1 is accepted.
+#
 # Parameters (Tcl globals, set before sourcing; fpga/flow/build.tcl sets them):
 #   V49_NCH          channel count N: 1 or 2 (required)
 #   V49_FACTOR       RFDC converter factor F, a v49_geometry row of N
@@ -165,7 +171,7 @@ proc create_hier_cell_eth100g { parentCell nameHier {nch 1} {beat_w 128} {bf_pip
                            CONFIG.CHAIN_STAGES [dict get $tb CHAIN_STAGES] \
                            CONFIG.CHAIN_DEPTH  [dict get $tb CHAIN_DEPTH]] $up
 
-  set gpio [create_bd_cell -type ip -vlnv xilinx.com:ip:axi_gpio:2.0 cmac_gpio]
+  set gpio [create_bd_cell -type ip -vlnv [v49_vlnv xilinx.com:ip:axi_gpio:2.0] cmac_gpio]
   set_property -dict [list \
     CONFIG.C_IS_DUAL {1} \
     CONFIG.C_GPIO_WIDTH {32} CONFIG.C_ALL_OUTPUTS {1} CONFIG.C_DOUT_DEFAULT {0x0000F003} \
@@ -173,7 +179,7 @@ proc create_hier_cell_eth100g { parentCell nameHier {nch 1} {beat_w 128} {bf_pip
   ] $gpio
 
   # Measured GT refclk / CMAC user clock (kHz): ch1 refclk, ch2 usr_clk
-  set fgpio [create_bd_cell -type ip -vlnv xilinx.com:ip:axi_gpio:2.0 cmac_freq]
+  set fgpio [create_bd_cell -type ip -vlnv [v49_vlnv xilinx.com:ip:axi_gpio:2.0] cmac_freq]
   set_property -dict [list CONFIG.C_IS_DUAL {1} CONFIG.C_GPIO_WIDTH {32} CONFIG.C_ALL_INPUTS {1} \
     CONFIG.C_GPIO2_WIDTH {32} CONFIG.C_ALL_INPUTS_2 {1}] $fgpio
   connect_bd_intf_net [get_bd_intf_pins S_AXI_FREQ] [get_bd_intf_pins cmac_freq/S_AXI]
@@ -226,9 +232,9 @@ proc create_hier_cell_eth100g { parentCell nameHier {nch 1} {beat_w 128} {bf_pip
     connect_bd_net [get_bd_pins s_axi_aresetn] [get_bd_pins tx_beamformer/s_axi_aresetn]
   }
   # pass-through ports unused: no ADC copy sink, no alternative DAC source
-  set one [create_bd_cell -type ip -vlnv xilinx.com:ip:xlconstant:1.1 adc_tready_one]
+  set one [create_bd_cell -type ip -vlnv [v49_vlnv xilinx.com:ip:xlconstant:1.1] adc_tready_one]
   set_property -dict [list CONFIG.CONST_WIDTH {1} CONFIG.CONST_VAL {1}] $one
-  set zero [create_bd_cell -type ip -vlnv xilinx.com:ip:xlconstant:1.1 dma_tvalid_zero]
+  set zero [create_bd_cell -type ip -vlnv [v49_vlnv xilinx.com:ip:xlconstant:1.1] dma_tvalid_zero]
   set_property -dict [list CONFIG.CONST_WIDTH {1} CONFIG.CONST_VAL {0}] $zero
   connect_bd_net [get_bd_pins adc_tready_one/dout]  [get_bd_pins udp_streamer/m_axis_adc_tready]
   connect_bd_net [get_bd_pins dma_tvalid_zero/dout] [get_bd_pins udp_player/s_axis_dma_tvalid]
@@ -256,9 +262,9 @@ proc create_hier_cell_eth100g { parentCell nameHier {nch 1} {beat_w 128} {bf_pip
   connect_bd_net [get_bd_pins udp_streamer/adc_time] [get_bd_pins udp_player/adc_time]
   connect_bd_net [get_bd_pins cmac_gpio/gpio_io_o] [get_bd_pins cmac_ctl]
   connect_bd_net [get_bd_pins cmac_status] [get_bd_pins cmac_gpio/gpio2_io_i]
-  set aligned [create_bd_cell -type ip -vlnv xilinx.com:ip:xlslice:1.0 cmac_aligned]
+  set aligned [create_bd_cell -type ip -vlnv [v49_vlnv xilinx.com:ip:xlslice:1.0] cmac_aligned]
   set_property -dict [list CONFIG.DIN_WIDTH {32} CONFIG.DIN_FROM {0} CONFIG.DIN_TO {0}] $aligned
-  set txen [create_bd_cell -type ip -vlnv xilinx.com:ip:xlslice:1.0 cmac_txen]
+  set txen [create_bd_cell -type ip -vlnv [v49_vlnv xilinx.com:ip:xlslice:1.0] cmac_txen]
   set_property -dict [list CONFIG.DIN_WIDTH {32} CONFIG.DIN_FROM {27} CONFIG.DIN_TO {27}] $txen
   connect_bd_net [get_bd_pins cmac_status] [get_bd_pins cmac_aligned/Din] [get_bd_pins cmac_txen/Din]
   connect_bd_net [get_bd_pins cmac_aligned/Dout] [get_bd_pins udp_streamer/cmac_rx_aligned]
@@ -615,10 +621,12 @@ set v49_F [dict get [v49_geometry $v49_nch $::V49_FACTOR] F]
 set scripts_vivado_version 2021.1
 set current_vivado_version [version -short]
 
-if { [string first $scripts_vivado_version $current_vivado_version] == -1 } {
+# another release only through fpga/flow/build.tcl, which sets V49_VIVADO
+# (a release of fpga/flow/versions.txt) and maps the IP versions (v49_vlnv)
+if { [string first $scripts_vivado_version $current_vivado_version] == -1 && ![info exists ::V49_VIVADO] } {
    puts ""
    catch {common::send_gid_msg -ssname BD::TCL -id 2041 -severity "ERROR" "This script was generated using Vivado <$scripts_vivado_version> and is being run in <$current_vivado_version> of Vivado. Please run the script in Vivado <$scripts_vivado_version> then open the design in Vivado <$current_vivado_version>. Upgrade the design by running \"Tools => Report => Report IP Status...\", then run write_bd_tcl to create an updated script."}
-   return 1
+   error "rfsoc4x2_uhd_v49_245m76: Vivado $current_vivado_version: build it through fpga/flow/build.tcl (make -C fpga BOARD=<board> PYNQ=<version>)"
 }
 
 ################################################################
@@ -644,6 +652,9 @@ current_bd_design $design_name
 ##################################################################
 # CHECK IPs
 ##################################################################
+# (the VLNVs as the flow's v49_vlnv maps them for the running release;
+# sourced without the flow, as written)
+if {[info commands v49_vlnv] eq ""} { proc v49_vlnv {vlnv} { return $vlnv } }
 set list_check_ips {
 xilinx.com:ip:axi_gpio:2.0
 xilinx.com:ip:smartconnect:1.0
@@ -670,7 +681,7 @@ user.org:uhd:rx_beamformer:1.0
 }
 set list_ips_missing {}
 foreach ip_vlnv $list_check_ips {
-   if { [get_ipdefs -all $ip_vlnv] eq "" } { lappend list_ips_missing $ip_vlnv }
+   if { [get_ipdefs -all [v49_vlnv $ip_vlnv]] eq "" } { lappend list_ips_missing $ip_vlnv }
 }
 if { $list_ips_missing ne "" } {
    error "rfsoc4x2_uhd_v49_245m76: IPs not in the catalog: $list_ips_missing (user.org:uhd:*: run 'make package' in fpga/ip/src/uhd_ip and add fpga/ip/repo/uhd_ip to ip_repo_paths; the I/Q joiners: fpga/ip/repo)"
@@ -732,19 +743,19 @@ proc create_hier_cell_MTS_block { parentCell nameHier } {
   create_bd_pin -dir O -from 0 -to 0 sysref_raw
 
   # Create instance: BUFG_PL_CLK, and set properties
-  set BUFG_PL_CLK [ create_bd_cell -type ip -vlnv xilinx.com:ip:util_ds_buf:2.2 BUFG_PL_CLK ]
+  set BUFG_PL_CLK [ create_bd_cell -type ip -vlnv [v49_vlnv xilinx.com:ip:util_ds_buf:2.2] BUFG_PL_CLK ]
   set_property -dict [ list \
    CONFIG.C_BUF_TYPE {BUFG} \
  ] $BUFG_PL_CLK
 
   # Create instance: IBUFDS_PL_CLK, and set properties
-  set IBUFDS_PL_CLK [ create_bd_cell -type ip -vlnv xilinx.com:ip:util_ds_buf:2.2 IBUFDS_PL_CLK ]
+  set IBUFDS_PL_CLK [ create_bd_cell -type ip -vlnv [v49_vlnv xilinx.com:ip:util_ds_buf:2.2] IBUFDS_PL_CLK ]
   set_property -dict [ list \
    CONFIG.C_BUF_TYPE {IBUFDS} \
  ] $IBUFDS_PL_CLK
 
   # Create instance: IBUFDS_SYSREF, and set properties
-  set IBUFDS_SYSREF [ create_bd_cell -type ip -vlnv xilinx.com:ip:util_ds_buf:2.2 IBUFDS_SYSREF ]
+  set IBUFDS_SYSREF [ create_bd_cell -type ip -vlnv [v49_vlnv xilinx.com:ip:util_ds_buf:2.2] IBUFDS_SYSREF ]
   set_property -dict [ list \
    CONFIG.C_BUF_TYPE {IBUFDS} \
  ] $IBUFDS_SYSREF
@@ -754,7 +765,7 @@ proc create_hier_cell_MTS_block { parentCell nameHier } {
   # at run time over s_axi_lite (register file at 0x200, shared with the
   # clock monitor), so one bitstream serves every factor F of its row. The
   # build is timed at the clk_out1 it is generated with: the highest.
-  set MTS_clk_wiz [ create_bd_cell -type ip -vlnv xilinx.com:ip:clk_wiz:6.0 MTS_clk_wiz ]
+  set MTS_clk_wiz [ create_bd_cell -type ip -vlnv [v49_vlnv xilinx.com:ip:clk_wiz:6.0] MTS_clk_wiz ]
   set_property -dict [ list \
    CONFIG.CLKIN1_JITTER_PS {81.38} \
    CONFIG.CLKOUT1_DRIVES {Buffer} \
@@ -853,7 +864,7 @@ proc create_hier_cell_rfdc { parentCell nameHier nch } {
     # Split the channel-major DAC beat into the two DAC channel beats (widths
     # and remap: v49_converter_streams). Lower half channel 0 -> S20, upper
     # half channel 1 -> S00. Each half is {Q1,I1,Q0,I0}, int16.
-    set axis_broadcaster_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axis_broadcaster:1.1 axis_broadcaster_0 ]
+    set axis_broadcaster_0 [ create_bd_cell -type ip -vlnv [v49_vlnv xilinx.com:ip:axis_broadcaster:1.1] axis_broadcaster_0 ]
     set_property -dict [ list \
      CONFIG.M00_TDATA_REMAP {tdata[63:0]} \
      CONFIG.M01_TDATA_REMAP {tdata[127:64]} \
@@ -869,8 +880,8 @@ proc create_hier_cell_rfdc { parentCell nameHier nch } {
   set jn [get_property NAME $joiner]
 
   # Create instance: axis_register_slice_0 (ADC) and _1 (DAC)
-  create_bd_cell -type ip -vlnv xilinx.com:ip:axis_register_slice:1.1 axis_register_slice_0
-  create_bd_cell -type ip -vlnv xilinx.com:ip:axis_register_slice:1.1 axis_register_slice_1
+  create_bd_cell -type ip -vlnv [v49_vlnv xilinx.com:ip:axis_register_slice:1.1] axis_register_slice_0
+  create_bd_cell -type ip -vlnv [v49_vlnv xilinx.com:ip:axis_register_slice:1.1] axis_register_slice_1
 
   # Create instance: usp_rf_data_converter, and set properties
   # The rfdc is created at the build's geometry (v49_rfdc_creation): fs =
@@ -878,7 +889,7 @@ proc create_hier_cell_rfdc { parentCell nameHier nch } {
   # V49_FACTOR and the Data_Width of S samples/clock on every slice, and the
   # Fabric/Outclk values they imply.
   set v49c [v49_rfdc_creation $nch $::V49_FACTOR]
-  set usp_rf_data_converter [ create_bd_cell -type ip -vlnv xilinx.com:ip:usp_rf_data_converter:2.5 usp_rf_data_converter ]
+  set usp_rf_data_converter [ create_bd_cell -type ip -vlnv [v49_vlnv xilinx.com:ip:usp_rf_data_converter:2.5] usp_rf_data_converter ]
   set_property -dict [ list \
    CONFIG.ADC0_Clock_Dist {0} \
    CONFIG.ADC0_Clock_Source {2} \
@@ -1202,10 +1213,10 @@ proc create_root_design { parentCell nch } {
   create_hier_cell_MTS_block [current_bd_instance .] MTS_block
 
   # Create instance: adc_clk_aresetn, and set properties
-  set adc_clk_aresetn [ create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 adc_clk_aresetn ]
+  set adc_clk_aresetn [ create_bd_cell -type ip -vlnv [v49_vlnv xilinx.com:ip:proc_sys_reset:5.0] adc_clk_aresetn ]
 
   # Create instance: axi_gpio_led, and set properties
-  set axi_gpio_led [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_gpio:2.0 axi_gpio_led ]
+  set axi_gpio_led [ create_bd_cell -type ip -vlnv [v49_vlnv xilinx.com:ip:axi_gpio:2.0] axi_gpio_led ]
   set_property -dict [ list \
    CONFIG.C_ALL_OUTPUTS {1} \
    CONFIG.C_ALL_OUTPUTS_2 {1} \
@@ -1221,32 +1232,32 @@ proc create_root_design { parentCell nch } {
   # M00 rfdc, M01 axi_gpio_led, M02 MTS_clk_wiz, M03 axi_intp, then the
   # eth100g slaves (v49_eth100g_slaves)
   set slaves [v49_eth100g_slaves $nch]
-  set axi_interconnect_pl [ create_bd_cell -type ip -vlnv xilinx.com:ip:smartconnect:1.0 axi_interconnect_pl ]
+  set axi_interconnect_pl [ create_bd_cell -type ip -vlnv [v49_vlnv xilinx.com:ip:smartconnect:1.0] axi_interconnect_pl ]
   set_property -dict [ list \
    CONFIG.NUM_MI [expr {4 + [llength $slaves]}] \
    CONFIG.NUM_SI {1} \
  ] $axi_interconnect_pl
 
   # Create instance: axi_intp, and set properties
-  set axi_intp [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_intc:4.1 axi_intp ]
+  set axi_intp [ create_bd_cell -type ip -vlnv [v49_vlnv xilinx.com:ip:axi_intc:4.1] axi_intp ]
 
   # Create instance: dac_adc_clk_aresetn, and set properties
-  set dac_adc_clk_aresetn [ create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 dac_adc_clk_aresetn ]
+  set dac_adc_clk_aresetn [ create_bd_cell -type ip -vlnv [v49_vlnv xilinx.com:ip:proc_sys_reset:5.0] dac_adc_clk_aresetn ]
 
   # Create instance: intp_concat -- In0 MTS_clk_wiz, In1 rfdc
-  set intp_concat [ create_bd_cell -type ip -vlnv xilinx.com:ip:xlconcat:2.1 intp_concat ]
+  set intp_concat [ create_bd_cell -type ip -vlnv [v49_vlnv xilinx.com:ip:xlconcat:2.1] intp_concat ]
   set_property -dict [ list \
    CONFIG.NUM_PORTS {2} \
  ] $intp_concat
 
   # Create instance: proc_sys_reset_pl, and set properties
-  set proc_sys_reset_pl [ create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 proc_sys_reset_pl ]
+  set proc_sys_reset_pl [ create_bd_cell -type ip -vlnv [v49_vlnv xilinx.com:ip:proc_sys_reset:5.0] proc_sys_reset_pl ]
 
   # Create instance: rfdc
   create_hier_cell_rfdc [current_bd_instance .] rfdc $nch
 
   # Synchronize PL SYSREF independently into the ADC and DAC MTS AXIS domains.
-  set SYSREF_sync_adc [ create_bd_cell -type ip -vlnv xilinx.com:ip:xpm_cdc_gen:1.0 SYSREF_sync_adc ]
+  set SYSREF_sync_adc [ create_bd_cell -type ip -vlnv [v49_vlnv xilinx.com:ip:xpm_cdc_gen:1.0] SYSREF_sync_adc ]
   set_property -dict [ list \
    CONFIG.CDC_TYPE {xpm_cdc_single} \
    CONFIG.DEST_SYNC_FF {2} \
@@ -1254,7 +1265,7 @@ proc create_root_design { parentCell nch } {
    CONFIG.WIDTH {1} \
  ] $SYSREF_sync_adc
 
-  set SYSREF_sync_dac [ create_bd_cell -type ip -vlnv xilinx.com:ip:xpm_cdc_gen:1.0 SYSREF_sync_dac ]
+  set SYSREF_sync_dac [ create_bd_cell -type ip -vlnv [v49_vlnv xilinx.com:ip:xpm_cdc_gen:1.0] SYSREF_sync_dac ]
   set_property -dict [ list \
    CONFIG.CDC_TYPE {xpm_cdc_single} \
    CONFIG.DEST_SYNC_FF {2} \
@@ -1266,7 +1277,7 @@ proc create_root_design { parentCell nch } {
   create_hier_cell_eth100g [current_bd_instance .] eth100g $nch [dict get $g beat_w] [dict get $g bf_pipe]
 
   # Create instance: zynq_ultra_ps_e, and set properties
-  set zynq_ultra_ps_e [ create_bd_cell -type ip -vlnv xilinx.com:ip:zynq_ultra_ps_e:3.3 zynq_ultra_ps_e ]
+  set zynq_ultra_ps_e [ create_bd_cell -type ip -vlnv [v49_vlnv xilinx.com:ip:zynq_ultra_ps_e:3.3] zynq_ultra_ps_e ]
   # The RFSoC 4x2's PS: Real Digital's board preset (DDR4, MIO, peripherals;
   # board files ../../board_files, board part realdigital.org:rfsoc4x2:part0:1.0),
   # then the PL side this design uses: one master port, HPM0_LPD (M_AXI_GP2,

@@ -18,9 +18,13 @@ the board setup for people; this file is the rules of the board side.
   gitignored (top `.gitignore`); never add a board's addresses or files to
   the code.
 - A fresh PYNQ image must come up with `README.md`'s steps alone. The only
-  change made to the image is `setup_board.sh`'s: the MTS bindings of PYNQ
-  2.7's `xrfdc` (`xrfdc_mts_patch.py`, idempotent, originals kept as
-  `*.stock`, tested without a board by `server/tests/test_xrfdc_mts_patch.py`).
+  change made to the image is `setup_board.sh`'s: the MTS bindings of PYNQ's
+  `xrfdc` (`xrfdc_mts_patch.py`, idempotent, originals kept as `*.stock`,
+  tested without a board by `server/tests/test_xrfdc_mts_patch.py`). PYNQ
+  2.7, 3.0 and 3.1 ship the same `xrfdc` wrapper (byte-identical
+  `xrfdc_functions.c`, libxrfdc from the 2020.2 RFDC driver) and the patch
+  applies to each; the venv is `/usr/local/share/pynq-venv` on all three
+  (Python 3.8 on 2.7, 3.10 on 3.x).
   The daemon reports a missing binding as one line naming the script
   (`hw_backend.SetupError`), never as a traceback. Keep it that way for any
   further image dependency.

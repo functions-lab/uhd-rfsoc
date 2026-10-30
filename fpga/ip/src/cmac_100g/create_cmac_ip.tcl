@@ -7,6 +7,9 @@
 #                  X0Y4 X0Y5 (quad 128) + X0Y8 X0Y9 (quad 129), master X0Y4,
 #                  all four on MGTREFCLK1_128 (8A34001 Q11, Y34/Y35).
 #
+# The versions are Vivado 2021.1's; fpga/flow/build.tcl's v49_vlnv maps them to
+# the running release's (fpga/flow/versions.txt).
+#
 # Both are generated for GLOBAL synthesis (generate_synth_checkpoint 0): IP
 # with an out-of-context checkpoint may not sit inside a block-design module
 # reference (filemgmt 56-328), and cmac_100g is one.
@@ -32,7 +35,7 @@ switch -- $CMAC_LANES {
   default { error "create_cmac_ip: CMAC_LANES $CMAC_LANES (zsfp or qsfp128)" }
 }
 
-create_ip -name cmac_usplus -vendor xilinx.com -library ip -version 3.1 -module_name cmac_caui4
+create_ip -vlnv [v49_vlnv xilinx.com:ip:cmac_usplus:3.1] -module_name cmac_caui4
 set_property -dict [list \
   CONFIG.CMAC_CAUI4_MODE {1} CONFIG.NUM_LANES {4x25} \
   CONFIG.GT_GROUP_SELECT {X0Y4~X0Y7} CONFIG.CMAC_CORE_SELECT {CMACE4_X0Y0} \
@@ -44,7 +47,7 @@ set_property -dict [list \
   CONFIG.GT_LOCATION {0} \
 ] [get_ips cmac_caui4]
 
-create_ip -name gtwizard_ultrascale -vendor xilinx.com -library ip -version 1.7 -module_name cmac_caui4_gt
+create_ip -vlnv [v49_vlnv xilinx.com:ip:gtwizard_ultrascale:1.7] -module_name cmac_caui4_gt
 set gt [get_ips cmac_caui4_gt]
 set_property CONFIG.PRESET {GTY-CAUI_4} $gt
 set_property -dict [list \

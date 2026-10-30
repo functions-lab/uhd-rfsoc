@@ -43,6 +43,6 @@ only caller of the bring-up; `README.md` maps the modules).
   would not give the target frequency, and is never run while the 100G
   link is in use (it restarts the GT refclk). The daemon programs it only
   when its status says the chip is unconfigured.
-- Multi-tile sync needs `xrfdc.RFdc.mts_dac` / `mts_adc`; PYNQ 2.7 lacks
-  them (`../setup_board.sh` adds them). `MyMTS` assumes they exist; the
+- Multi-tile sync needs `xrfdc.RFdc.mts_dac` / `mts_adc`; PYNQ 2.7, 3.0
+  and 3.1 lack them (`../setup_board.sh` adds them). `MyMTS` assumes they exist; the
   daemon checks before any hardware is touched.

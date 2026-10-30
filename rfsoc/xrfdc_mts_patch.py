@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Add the multi-tile-sync (MTS) bindings to PYNQ's xrfdc Python wrapper.
 
-PYNQ 2.7's `xrfdc` package (the RFSoC 4x2 image) wraps libxrfdc.so with cffi
-but declares none of the MTS API, so `RFdc` has no `mts_dac_config` /
+PYNQ's `xrfdc` package (the same wrapper in PYNQ 2.7, 3.0 and 3.1, built
+from the 2020.2 RFDC driver in each) wraps libxrfdc.so with cffi but declares
+none of the MTS API, so `RFdc` has no `mts_dac_config` /
 `mts_adc_config` / `mts_dac()` / `mts_adc()`, which rfsoc_lib.mts needs and the
 daemon refuses to run without. The shared library itself already exports
 XRFdc_MultiConverter_Init / XRFdc_MultiConverter_Sync; only two wrapper files
-need the declarations PYNQ 3.x ships:
+need the declarations:
 
   xrfdc_functions.c   the cffi cdef source: the three MTS structs are added
                       before the first function prototype, the two MTS

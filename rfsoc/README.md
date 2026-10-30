@@ -9,16 +9,18 @@ converters up with, and the scripts that set a board up.
 | `server/` | the UHD daemon: loads a bitstream, brings up clocks / RFDC / MTS / the 100G link, serves UHD clients (`server/README.md`) |
 | `rfsoc_lib/` | the board library the daemon imports (RFDC, clocks, MTS, overlay, GT refclk, beamformer weights) and the clock chips' register files (`rfsoc_lib/README.md`) |
 | `setup_board.sh` | one-time board setup, run once on the board (below) |
-| `xrfdc_mts_patch.py` | what `setup_board.sh` runs to add multi-tile sync to PYNQ 2.7's `xrfdc` |
+| `xrfdc_mts_patch.py` | what `setup_board.sh` runs to add multi-tile sync to PYNQ's `xrfdc` |
 | `push_bitstreams.sh` | run on the build machine: copies bitstreams into the board's checkout |
 | `../run_daemon.sh` | start / stop / status / log of the daemon on the board |
 
 ## From a fresh PYNQ image to a serving daemon
 
-You need: a ZCU216 or RFSoC 4x2 running its PYNQ image (2.7 or 3.x) on the
-LAN (ssh as user `xilinx`), the QSFP28 cable to the host PC, and the
-bitstreams (from a [release](https://github.com/WeiCheng14159/uhd-rfsoc/releases)
-or built: `fpga/README.md`).
+You need: a ZCU216 or RFSoC 4x2 running its PYNQ image (2.7, 3.0 or 3.1)
+on the LAN (ssh as user `xilinx`), the QSFP28 cable to the host PC, and the
+bitstreams built for that PYNQ version (a
+[release](https://github.com/WeiCheng14159/uhd-rfsoc/releases)'s
+`uhd-rfsoc-bitstreams-<board>-pynq<version>.zip`, or built:
+`fpga/README.md`).
 
 1. **Clone on the board** (any directory works; this one is what
    `push_bitstreams.sh` and the systemd unit assume):
@@ -32,9 +34,10 @@ or built: `fpga/README.md`).
        sudo rfsoc/setup_board.sh
 
    * adds the multi-tile-sync (MTS) bindings to the PYNQ venv's `xrfdc`
-     Python wrapper where they are missing (the PYNQ 2.7 image of the
-     RFSoC 4x2; a PYNQ 3.x `xrfdc` already has them and is left alone). The
-     daemon locks MTS at every bring-up and refuses to serve without it.
+     Python wrapper where they are missing: PYNQ 2.7, 3.0 and 3.1 ship the
+     same `xrfdc` without them (an `xrfdc` that already has them, patched by
+     some other installer, is left alone). The daemon locks MTS at every
+     bring-up and refuses to serve without it.
      The two patched files are kept as `*.stock` next to the originals, and
      the import is verified;
    * creates `rfsoc/server/uhd_rfsoc.conf` from `uhd_rfsoc.conf.example`

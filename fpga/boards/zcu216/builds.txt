@@ -18,6 +18,11 @@
 4  2  2457.6 template Performance_ExtraTimingOpt
 8  4  2457.6 template Performance_ExtraTimingOpt
 16 8  2457.6 template Performance_ExtraTimingOpt
+1  2  2400   template
+2  2  2400   template
+4  2  2400   template Performance_ExtraTimingOpt
+8  4  2400   template Performance_ExtraTimingOpt
+16 8  2400   template Performance_ExtraTimingOpt
 1  3  2500   ladder
 2  3  2500   ladder
 4  3  2500   ladder

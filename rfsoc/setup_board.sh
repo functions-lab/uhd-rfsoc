@@ -7,10 +7,11 @@
 #   rfsoc/setup_board.sh --check         report what is missing, change nothing
 #
 # Steps:
-#   1. xrfdc MTS bindings: PYNQ 2.7's xrfdc Python wrapper (RFSoC 4x2 image)
-#      lacks the multi-tile-sync API the daemon needs; rfsoc/xrfdc_mts_patch.py
-#      adds it to the venv's copy (originals kept as *.stock) and the import
-#      is verified. Images whose xrfdc already has it (PYNQ 3.x) are left alone.
+#   1. xrfdc MTS bindings: PYNQ's xrfdc Python wrapper (the same in PYNQ 2.7,
+#      3.0 and 3.1) lacks the multi-tile-sync API the daemon needs;
+#      rfsoc/xrfdc_mts_patch.py adds it to the venv's copy (originals kept as
+#      *.stock) and the import is verified. An xrfdc that already has it
+#      (patched by another installer) is left alone.
 #   2. rfsoc/server/uhd_rfsoc.conf from uhd_rfsoc.conf.example, if there is
 #      none (never overwritten): then set data_ip in it.
 #   3. Reports the bitstreams in rfsoc/server/ (rfsoc/push_bitstreams.sh or a

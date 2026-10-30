@@ -30,6 +30,13 @@
 # factor = RFDC converter factor, a v49_geometry row of the design (default:
 # that N's first row, the template); fs = converter rate in MS/s (default:
 # board_fs_default).
+#
+# Vivado release: one that fpga/flow/versions.txt builds a PYNQ version with
+# (the Makefile's PYNQ= picks it and checks it is the one on PATH; it passes
+# V49_VIVADO / V49_PYNQ). The IP versions the designs name are Vivado
+# 2021.1's; v49_vlnv maps them to the running release's (versions.txt `ip`
+# lines). V49_OUT=<dir> replaces fpga/build/<board> as the output (and
+# project) directory.
 
 set flow        [file dirname [file normalize [info script]]]
 set fpga        [file normalize $flow/..]
@@ -43,9 +50,59 @@ set V49_NCH     [lindex $argv 1]
 set step        [expr {$argc > 2 ? [lindex $argv 2] : "bit"}]
 set jobs        [expr {$argc > 3 ? [lindex $argv 3] : 8}]
 set V49_FS      [expr {$argc > 5 && [lindex $argv 5] ne "" ? double([lindex $argv 5]) : $board_fs_default}]
-set outdir      $fpga/build/$board
+set outdir      [expr {[info exists ::env(V49_OUT)] && $::env(V49_OUT) ne "" ? [file normalize $::env(V49_OUT)] : "$fpga/build/$board"}]
 # cmac_100g's GT sites (create_cmac_ip.tcl reads it)
 set CMAC_LANES  $board_cmac_lanes
+
+# the running Vivado release, as fpga/flow/versions.txt knows it, and its IP
+# versions where they differ from the 2021.1 ones the designs name
+proc v49_read_versions {file} {
+  set rel {}; set ipv {}
+  set fh [open $file]; set lines [split [read $fh] "\n"]; close $fh
+  foreach line $lines {
+    set line [string trim [lindex [split $line #] 0]]
+    if {$line eq ""} { continue }
+    switch -- [lindex $line 0] {
+      pynq    { dict lappend rel [lindex $line 2] [lindex $line 1] }
+      ip      { dict set ipv [lindex $line 1] [lindex $line 2] [lindex $line 3] }
+      default { error "v49: $file: unknown record '$line'" }
+    }
+  }
+  return [list $rel $ipv]
+}
+set v49_versions_file [expr {[info exists ::env(V49_VERSIONS_FILE)] && $::env(V49_VERSIONS_FILE) ne "" ? $::env(V49_VERSIONS_FILE) : "$flow/versions.txt"}]
+lassign [v49_read_versions $v49_versions_file] v49_releases v49_ip_versions
+set V49_VIVADO ""
+foreach r [dict keys $v49_releases] {
+  if {[string match "$r*" [version -short]]} { set V49_VIVADO $r }
+}
+if {$V49_VIVADO eq ""} {
+  error "v49: Vivado [version -short] builds for no PYNQ version in $v49_versions_file (releases: [dict keys $v49_releases])"
+}
+if {[info exists ::env(V49_VIVADO)] && $::env(V49_VIVADO) ne "" && $::env(V49_VIVADO) ne $V49_VIVADO} {
+  error "v49: asked for Vivado $::env(V49_VIVADO), running [version -short]"
+}
+set V49_PYNQ [expr {[info exists ::env(V49_PYNQ)] && $::env(V49_PYNQ) ne "" ? $::env(V49_PYNQ) : [join [dict get $v49_releases $V49_VIVADO] /]}]
+puts "V49_VIVADO $V49_VIVADO (PYNQ $V49_PYNQ), outputs in $outdir"
+# xilinx.com:ip:<name>:<version as the designs name it> -> the VLNV this
+# release instantiates; it must be in the catalog as a current (not
+# upgrade-only) version. Other vendors' VLNVs are returned unchanged.
+proc v49_vlnv {vlnv} {
+  lassign [split $vlnv :] vendor lib name ver
+  if {"$vendor:$lib" ne "xilinx.com:ip"} { return $vlnv }
+  if {[dict exists $::v49_ip_versions $::V49_VIVADO $name]} {
+    set new xilinx.com:ip:$name:[dict get $::v49_ip_versions $::V49_VIVADO $name]
+    if {$new ne $vlnv && ![info exists ::v49_vlnv_said($vlnv)]} {
+      set ::v49_vlnv_said($vlnv) 1
+      puts "V49_IP $vlnv -> $new (Vivado $::V49_VIVADO, fpga/flow/versions.txt)"
+    }
+    set vlnv $new
+  }
+  if {[llength [get_ipdefs $vlnv]] == 0} {
+    error "v49: IP $vlnv is not a current version in Vivado [version -short]'s catalog: add 'ip $::V49_VIVADO $name <version>' to fpga/flow/versions.txt"
+  }
+  return $vlnv
+}
 
 # the clock family of fs: the LMX2594 register file that makes it
 proc v49_bd_of_fs {fs xrfclk families} {

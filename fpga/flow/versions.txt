@@ -1,0 +1,35 @@
+# versions.txt -- which Vivado release builds the bitstreams for which PYNQ
+# image, and the Xilinx IP versions each release builds the block designs
+# with. The single mapping: the Makefile (PYNQ=) and flow/build.tcl read it,
+# through flow/versions.sh where not Tcl. One record per line, '#' starts a comment.
+#
+#   pynq <PYNQ version> <Vivado release> [default]
+#       the bitstreams for that PYNQ image are built with that Vivado
+#       release. The default line is what `make` builds without PYNQ=, into
+#       build/<board>/; the others build into build/pynq<version>/<board>/.
+#       Bitstream names are the same for every PYNQ version (Protocol §8).
+#
+#   ip <Vivado release> <IP name> <version>
+#       under that release, xilinx.com:ip:<IP name> is instantiated at
+#       <version> instead of the version the block designs and
+#       fpga/ip/src/cmac_100g/create_cmac_ip.tcl name (Vivado 2021.1's).
+#       An IP whose named version is not in a release's catalog and that has
+#       no line here stops the build with its name (flow/build.tcl v49_vlnv).
+#
+# PYNQ 2.7 is built with Vivado 2021.1, not with PYNQ 2.7's own 2020.2: the
+# boards run PYNQ 2.7 with these builds, and PYNQ's xrfdc (the same in 2.7,
+# 3.0 and 3.1) binds the RFDC IP of neither release by version, so the daemon
+# loads every overlay with ignore_version (fpga/AGENTS.md, "PYNQ versions").
+pynq 2.7 2021.1 default
+pynq 3.0 2022.1
+pynq 3.1 2024.1
+
+# Vivado 2022.1: RFDC 2.6 (2.5 is gone), Zynq UltraScale+ PS 3.4 (3.3 is
+# upgrade-only)
+ip 2022.1 usp_rf_data_converter 2.6
+ip 2022.1 zynq_ultra_ps_e 3.4
+# Vivado 2024.1: the versions PYNQ 3.1's RFSoC 4x2 base overlay (a 2024.1
+# design) instantiates; not yet built here (no 2024.1 install), so a missing
+# IP shows up at the first `STEP=bd`
+ip 2024.1 usp_rf_data_converter 2.6
+ip 2024.1 zynq_ultra_ps_e 3.5
