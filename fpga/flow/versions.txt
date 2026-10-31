@@ -28,8 +28,8 @@ pynq 3.1 2024.1
 # upgrade-only)
 ip 2022.1 usp_rf_data_converter 2.6
 ip 2022.1 zynq_ultra_ps_e 3.4
-# Vivado 2024.1: the versions PYNQ 3.1's RFSoC 4x2 base overlay (a 2024.1
-# design) instantiates; not yet built here (no 2024.1 install), so a missing
-# IP shows up at the first `STEP=bd`
+# Vivado 2024.1: RFDC 2.6, Zynq UltraScale+ PS 3.5 (the versions PYNQ 3.1's
+# RFSoC 4x2 base overlay, a 2024.1 design, instantiates); cmac_usplus 3.1,
+# gtwizard_ultrascale 1.7 and clk_wiz 6.0 are unchanged
 ip 2024.1 usp_rf_data_converter 2.6
 ip 2024.1 zynq_ultra_ps_e 3.5

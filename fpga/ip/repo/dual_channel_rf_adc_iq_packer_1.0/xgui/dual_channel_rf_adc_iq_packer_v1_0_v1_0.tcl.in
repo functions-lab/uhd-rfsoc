@@ -10,7 +10,9 @@ proc update_PARAM_VALUE.C_S_AXIS_TDATA_WIDTH { PARAM_VALUE.C_S_AXIS_TDATA_WIDTH 
 
 proc validate_PARAM_VALUE.C_S_AXIS_TDATA_WIDTH { PARAM_VALUE.C_S_AXIS_TDATA_WIDTH } {
   set value [get_property value ${PARAM_VALUE.C_S_AXIS_TDATA_WIDTH}]
-  return [expr {$value in {32 64 128 256 512}}]
+  # Vivado 2024.1 takes only true / false from a validate proc (not 1 / 0)
+  if {$value in {32 64 128 256 512}} { return true }
+  return false
 }
 
 proc update_MODELPARAM_VALUE.C_S_AXIS_TDATA_WIDTH { MODELPARAM_VALUE.C_S_AXIS_TDATA_WIDTH PARAM_VALUE.C_S_AXIS_TDATA_WIDTH } {
