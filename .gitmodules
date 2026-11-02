@@ -8,5 +8,5 @@
 	shallow = true
 [submodule "bitstreams"]
 	path = bitstreams
-	url = https://github.com/WeiCheng14159/uhd-rfsoc-bitstream.git
+	url = git@github.com:WeiCheng14159/uhd-rfsoc-bitstream.git
 	shallow = true
