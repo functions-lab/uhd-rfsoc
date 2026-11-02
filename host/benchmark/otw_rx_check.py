@@ -141,7 +141,7 @@ for b, t0 in enumerate(t0s):
         else:
             x.tofile(f)
         files.append(f)
-    cmdline = [sys.executable, os.path.join(here, "..", "host", "tools", "check_pattern_file.py"), *files,
+    cmdline = [sys.executable, os.path.join(here, "..", "tools", "check_pattern_file.py"), *files,
                "--type", "float" if a.cpu == "fc32" else "short", "--otw", a.otw,
                "--nsamps", str(m), "--tps", str(tps), "--chans", ",".join(map(str, range(n))),
                "--t0", str(t0)]
