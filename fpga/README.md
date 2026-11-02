@@ -30,11 +30,11 @@ ZCU216's ship with Vivado. Nothing gets installed.
 The bitstreams are built per PYNQ image, each with one Vivado release
 (`flow/versions.txt`, the single mapping; `make versions` prints it):
 
-| PYNQ | Vivado | `make ... PYNQ=` | outputs | release asset |
-|---|---|---|---|---|
-| 2.7 | 2021.1 | (default) | `build/<board>/` | `uhd-rfsoc-bitstreams-<board>-pynq2.7.zip` |
-| 3.0 | 2022.1 | `PYNQ=3.0` | `build/pynq3.0/<board>/` | `uhd-rfsoc-bitstreams-<board>-pynq3.0.zip` |
-| 3.1 | 2024.1 | `PYNQ=3.1` | `build/pynq3.1/<board>/` | `uhd-rfsoc-bitstreams-<board>-pynq3.1.zip` |
+| PYNQ | Vivado | `make ... PYNQ=` | outputs | prebuilt (`bitstreams/` submodule) | release asset |
+|---|---|---|---|---|---|
+| 2.7 | 2021.1 | (default) | `build/<board>/` | `bitstreams/pynq2.7/<board>/` | `uhd-rfsoc-bitstreams-<board>-pynq2.7.zip` |
+| 3.0 | 2022.1 | `PYNQ=3.0` | `build/pynq3.0/<board>/` | `bitstreams/pynq3.0/<board>/` | `uhd-rfsoc-bitstreams-<board>-pynq3.0.zip` |
+| 3.1 | 2024.1 | `PYNQ=3.1` | `build/pynq3.1/<board>/` | `bitstreams/pynq3.1/<board>/` | `uhd-rfsoc-bitstreams-<board>-pynq3.1.zip` |
 
 PYNQ 2.7's own release is 2020.2; its bitstreams are the 2021.1 builds the
 boards run today. The file names inside are the same for every PYNQ
@@ -97,7 +97,13 @@ From the top of the repository, with the board's checkout already set up
 ```sh
 rfsoc/push_bitstreams.sh fpga/build/<board>/bitstreams xilinx@<board-ip>             # PYNQ 2.7 image
 rfsoc/push_bitstreams.sh fpga/build/pynq3.0/<board>/bitstreams xilinx@<board-ip>     # PYNQ 3.0 image
+rfsoc/push_bitstreams.sh bitstreams/pynq3.1/<board> xilinx@<board-ip>                # the prebuilt set
 ```
+
+A new prebuilt set goes into the `bitstreams/` submodule as
+`pynq<v>/<board>/` (only builds that met timing, with their reports, a
+regenerated `manifest.json` and `SHA256SUMS`), then the submodule is bumped
+here.
 
 ## Add a board
 

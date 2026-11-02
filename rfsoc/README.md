@@ -53,8 +53,10 @@ bitstreams built for that PYNQ version (a
    derived from the board's (`data_mac` overrides it).
 
 4. **Put the bitstreams in `rfsoc/server/`** (each `.bit` with its `.hwh`):
-   from the build machine
+   from the PC, the set of the board's PYNQ version from the `bitstreams/`
+   submodule (`git submodule update --init bitstreams`) or your own builds
 
+       rfsoc/push_bitstreams.sh bitstreams/pynq2.7/<board> xilinx@<board-ip>
        rfsoc/push_bitstreams.sh fpga/build/<board>/bitstreams xilinx@<board-ip>
 
    or copy a release's files there by hand. Any subset works; every

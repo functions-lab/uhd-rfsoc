@@ -26,16 +26,25 @@ Another RFSoC board can be added: `fpga/README.md` ("Add a board") and a
 |---|---|
 | board | one of the above with PYNQ, and a QSFP28 100G cable to the host |
 | host | Linux on x86_64 (AVX-512 used when present) or aarch64, a ConnectX-5/6/7 100G NIC (mlx5), Ubuntu 24.04 packages `libuhd-dev` 4.6, `uhd-host`, `python3-uhd`, `dpdk` / `libdpdk-dev` 23.11, `rdma-core`; optionally `gnuradio` 3.10 |
-| bitstreams | for the board's PYNQ version (2.7, 3.0 or 3.1): from a [release](https://github.com/WeiCheng14159/uhd-rfsoc/releases), or built with that version's Vivado release (2021.1 for PYNQ 2.7, `fpga/README.md`) |
+| bitstreams | for the board's PYNQ version (2.7, 3.0 or 3.1): the `bitstreams/` submodule, a [release](https://github.com/WeiCheng14159/uhd-rfsoc/releases), or built with that version's Vivado release (2021.1 for PYNQ 2.7, `fpga/README.md`) |
 
 UHD 4.6.0.0 and GNU Radio 3.10.9.2 are pinned as reference submodules
-(`host/uhd`, `host/gnuradio/gnuradio`); building does not need them.
+(`host/uhd`, `host/gnuradio/gnuradio`); building does not need them. The
+prebuilt bitstreams are the submodule `bitstreams/`
+([uhd-rfsoc-bitstream](https://github.com/WeiCheng14159/uhd-rfsoc-bitstream)).
 
 ## Get started
 
-**1. Bitstreams.** Download `uhd-rfsoc-bitstreams-<board>-pynq<version>.zip`
-for the board and its PYNQ image from the release (its `.bit` + `.hwh`
-files), or build them:
+**1. Bitstreams.** Every set, per PYNQ version and board, is in the
+`bitstreams/` submodule (`bitstreams/pynq<version>/<board>/`, `.bit` +
+`.hwh`; about 180 MB to fetch):
+
+```sh
+git submodule update --init bitstreams
+```
+
+or download `uhd-rfsoc-bitstreams-<board>-pynq<version>.zip` from the
+release, or build them:
 
 ```sh
 cd fpga && make BOARD=zcu216 templates   # or BOARD=rfsoc4x2; PYNQ 2.7 -> fpga/build/<board>/bitstreams/
@@ -51,8 +60,9 @@ sudo rfsoc/setup_board.sh       # once: xrfdc MTS bindings if missing, rfsoc/ser
 # set data_ip (the FPGA's 100G address, on the host port's subnet) in rfsoc/server/uhd_rfsoc.conf
 ```
 
-Copy the bitstreams into `rfsoc/server/` (from the build machine:
-`rfsoc/push_bitstreams.sh fpga/build/<board>/bitstreams xilinx@<board-ip>`),
+Copy the bitstreams into `rfsoc/server/` (from the PC:
+`rfsoc/push_bitstreams.sh bitstreams/pynq<version>/<board> xilinx@<board-ip>`,
+or `fpga/build/<board>/bitstreams` for your own builds),
 then on the board:
 
 ```sh

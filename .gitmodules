@@ -6,3 +6,7 @@
 	path = host/gnuradio/gnuradio
 	url = https://github.com/gnuradio/gnuradio.git
 	shallow = true
+[submodule "bitstreams"]
+	path = bitstreams
+	url = https://github.com/WeiCheng14159/uhd-rfsoc-bitstream.git
+	shallow = true

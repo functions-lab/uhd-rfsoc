@@ -4,8 +4,9 @@
 #   rfsoc/push_bitstreams.sh <bit_dir> <user@board> [remote_checkout]
 #
 #   bit_dir          e.g. fpga/build/zcu216/bitstreams
-#                    (RFSoC 4x2: fpga/build/rfsoc4x2/bitstreams),
-#                    or the bitstreams of a release, unpacked
+#                    (RFSoC 4x2: fpga/build/rfsoc4x2/bitstreams), a
+#                    prebuilt set of the bitstreams/ submodule, e.g.
+#                    bitstreams/pynq2.7/zcu216, or a release, unpacked
 #   user@board       ssh target of the board, e.g. xilinx@<board-ip>
 #   remote_checkout  the board's clone of this repository
 #                    [/home/xilinx/jupyter_notebooks/uhd-rfsoc]
