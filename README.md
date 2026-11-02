@@ -28,19 +28,38 @@ Another RFSoC board can be added: `fpga/README.md` ("Add a board") and a
 | host | Linux on x86_64 (AVX-512 used when present) or aarch64, a ConnectX-5/6/7 100G NIC (mlx5), Ubuntu 24.04 packages `libuhd-dev` 4.6, `uhd-host`, `python3-uhd`, `dpdk` / `libdpdk-dev` 23.11, `rdma-core`; optionally `gnuradio` 3.10 |
 | bitstreams | for the board's PYNQ version (2.7, 3.0 or 3.1): the `bitstreams/` submodule, a [release](https://github.com/WeiCheng14159/uhd-rfsoc/releases), or built with that version's Vivado release (2021.1 for PYNQ 2.7, `fpga/README.md`) |
 
-UHD 4.6.0.0 and GNU Radio 3.10.9.2 are pinned as reference submodules
-(`host/uhd`, `host/gnuradio/gnuradio`); building does not need them. The
-prebuilt bitstreams are the submodule `bitstreams/`
-([uhd-rfsoc-bitstream](https://github.com/WeiCheng14159/uhd-rfsoc-bitstream)).
+### Submodules
+
+| path | what | needed for |
+|---|---|---|
+| `bitstreams/` | the prebuilt bitstreams, [uhd-rfsoc-bitstream](https://github.com/WeiCheng14159/uhd-rfsoc-bitstream), tagged like this repository (`v1.0` here pins its `v1.0`) | installing bitstreams on a board (on the PC) |
+| `host/uhd` | UHD v4.6.0.0 sources, reference only | nothing: building uses the installed UHD |
+| `host/gnuradio/gnuradio` | GNU Radio v3.10.9.2 sources, reference only | nothing |
+
+`bitstreams/` is fetched over SSH (`git@github.com:...`): it needs an SSH
+key registered with GitHub. It comes as a shallow clone of its pinned
+commit; `host/uhd` and `host/gnuradio/gnuradio` come with their full history
+(larger, and nothing needs them).
+
+```sh
+git clone git@github.com:WeiCheng14159/uhd-rfsoc.git && cd uhd-rfsoc
+git submodule update --init bitstreams      # only the bitstreams (~180 MB)
+git submodule update --init                 # or every submodule
+git pull && git submodule update bitstreams     # later: follow a new pin
+```
+
+`git clone --recurse-submodules` fetches all of them at once. The board's
+checkout needs none: bitstreams are copied to it from the PC (step 2).
 
 ## Get started
 
 **1. Bitstreams.** Every set, per PYNQ version and board, is in the
 `bitstreams/` submodule (`bitstreams/pynq<version>/<board>/`, `.bit` +
-`.hwh`; about 180 MB to fetch):
+`.hwh`; "Submodules" above):
 
 ```sh
 git submodule update --init bitstreams
+(cd bitstreams/pynq2.7/zcu216 && sha256sum -c --quiet SHA256SUMS)   # check a set
 ```
 
 or download `uhd-rfsoc-bitstreams-<board>-pynq<version>.zip` from the
