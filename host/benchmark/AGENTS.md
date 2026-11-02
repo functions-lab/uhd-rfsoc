@@ -48,10 +48,13 @@ checks what.
   clean stream is a cold-start loss and does not count; a later loss, or a
   start-up loss the host never recovers from, does. `classify_runs.py` does
   this over a log tree. Report the counts by class, not only PASS/FAIL.
-- At 96 Gb/s each way (97 % of the link) full duplex can be at the host's
-  limit in any wire format (rare mid-run collapses, all host-side);
-  single-direction runs at that rate are clean. Size run counts accordingly:
-  3 runs per case hide a 5-10 % failure rate.
+- Full duplex near the link rate is host-bound: a 6-core / 12-thread host
+  with one DIMM channel reaches its limit at about 80 Gb/s each way, sc8
+  and sc12 before sc16, and sc12 at 92-96 Gb/s never ran clean (the counts
+  are in `../AGENTS.md`, "Where a 6-core host stops"). The losses are
+  host-side; single-direction runs at those rates are clean (16-channel
+  sc12 RX at 96 Gb/s excepted). Size run counts accordingly: 3 runs per
+  case hide a 5-10 % failure rate.
 - Over-the-air tests: keep tones <= -18 dBFS (the TX analog chain compresses
   near -6 dBFS: AM/AM + AM/PM look like beamformer errors). Bracket each case
   with fresh channel measurements (the air drifts); phase offsets are stable

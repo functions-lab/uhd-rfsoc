@@ -105,6 +105,7 @@ installed; two copies of the module in one process is an error).
 
 The module places the application's threads off its DPDK cores by itself and
 one direction at a time runs clean at the link rate with the defaults. Both
-directions at once near the link limit (96 Gb/s each way) need the full-rate
-layout in `AGENTS.md` ("Full-rate duplex"), `tools/isolate_cpus.sh` and the
-`performance` governor.
+directions at once near the link rate need the full-rate layout in
+`AGENTS.md` ("Full-rate duplex"), `tools/isolate_cpus.sh` and the
+`performance` governor; with it a 6-core host reaches its limit at about
+80 Gb/s each way (`AGENTS.md`, "Where a 6-core host stops").

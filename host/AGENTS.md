@@ -219,12 +219,29 @@ so a buffer is reused while it is still in L3 -- see both device args.
 
 * **sc8 at the top rates** (the 4 / 8 / 16-channel templates at 1250 / 625 /
   312.5 MS/s: 5.0 GS/s each way, `otw=sc8`): use cpu sc8 (sc16 on the host
-  doubles the memory traffic) and the duplex layout below. One direction at
-  a time is clean. Full duplex at 96 Gb/s each way is at the limit of a
-  6-core host with one DIMM channel, in any format: expect occasional
-  host-side losses (RX ring 2048 / 4096 frames, deep C-states off and
-  `tx_warmup=0` were tried without making it clean). Such losses are
-  host-side: the FPGA streamer's overflow count stays 0.
+  doubles the memory traffic) and the duplex layout below.
+* **Where a 6-core host stops** (6 cores / 12 threads, one DIMM channel,
+  the duplex layout below; strict 20 s runs of `benchmark/bench_strict.sh`,
+  both boards, every fs). One direction at a time is clean at every top
+  rate, apart from 16-channel sc12 RX at 96 Gb/s (85.7 % of the samples).
+  Full duplex reaches the host's limit at about 80 Gb/s each way, sc8 and
+  sc12 before sc16. Clean runs at 77-80 Gb/s each way: sc16 47 / 54,
+  1-channel fc32 18 / 18, 2-channel fc32 3 / 12, sc8 14 / 33, sc12 13 / 33;
+  sc12 at 92-96 Gb/s (8 and 16 channels) 0 / 18. One or two rate steps down
+  (51-64 Gb/s) every case ran clean except 2-channel fc32 at 500 MS/s
+  (4 / 6) and the RFSoC 4x2's 1ch 2500 MS/s sc12 (2 / 3). In every run that
+  lost data `recv()` was converting 65-92 % of the time and waited for data
+  at most 2.5 % (clean runs can wait as little, so the wait share does not
+  predict a failure): the RX path had no headroom. sc8 and sc12 carry more
+  samples per byte, so at the same Gb/s the host de-interleaves (and
+  unpacks) more of them. In this layout the RX workers share physical cores
+  with the DPDK RX lcore and the TX workers with the TX lcore; a host with
+  enough physical cores that they do not share should go further. RX ring
+  2048 / 4096 frames, deep C-states off and `tx_warmup=0` were tried at
+  96 Gb/s without making it clean. Such losses are host-side: the module's
+  "DPDK RX closed" line counts them as overflow discards (packets the NIC
+  delivered, dropped once the rings were full), and the FPGA streamer's
+  overflow count stays 0.
 * **Python at line rate** (UHD's benchmark_rate.py, 1ch at full rate,
   duplex): keep spb_pkts at 32 and give the RX ring more than the ~30 ms
   that `get_tx_stream()` holds the GIL while the example's RX thread already
@@ -239,7 +256,7 @@ so a buffer is reused while it is still in L3 -- see both device args.
   (fstrim) run on the module's CPUs thousands of times per run and preempt
   each DPDK lcore tens of times; a preemption the buffers do not cover loses
   data in both directions at once.
-* **Full-rate duplex** (RX and TX at once, 96 Gb/s each way). The
+* **Full-rate duplex** (RX and TX at once near the link rate). The
   one-direction defaults overload the cores; split them and shrink every
   in-flight footprint so both directions stay in L3. The CPU numbers below
   are for a 6-core / 12-thread host with one DIMM channel, CPU c and c+6
@@ -272,7 +289,7 @@ so a buffer is reused while it is still in L3 -- see both device args.
 | `host_data_ip` | auto | local IP for the data plane. Default: the source address the kernel routes to `data_ip` (UDP `connect()` + `getsockname()`); pass it when the module logs another interface. |
 | `host_data_mac` | auto | default: `SIOCGIFHWADDR` of the interface that owns `host_data_ip` |
 | `recv_port` | 49810 | RX UDP port base: ports `recv_port + k`, k < nports (one stream for all channels) |
-| `nports` | 2 | RX UDP ports = DPDK RX queues (<= 16), round-robin from the FPGA; queue k is polled by RX lcore k mod (number of RX cores). 2 carried 3.0 GS/s of sc16 (96 Gb/s) on one RX lcore (full-rate duplex, with the full-rate layout). |
+| `nports` | 2 | RX UDP ports = DPDK RX queues (<= 16), round-robin from the FPGA; queue k is polled by RX lcore k mod (number of RX cores). 2 carried 96 Gb/s on one RX lcore (8-channel sc12 RX, one direction, with the full-rate layout). |
 | `spp` | `info spp` (2048) | **slots** per RX packet (= samples at N = 1), multiple of 16 and N, limited by `mtu` |
 | `spb_pkts` | auto | packets per application buffer: `get_max_num_samps()` = spb_pkts x spp / N (RX and TX), 1..64. `auto`: about 250 us of samples at the stream's rate, 1..32 packets (32 from ~262 MS/s of 1ch sc16 up, 7 at 61.44 MS/s, 15 at 122.88 MS/s). A fixed 32 was 1.07 ms at 61.44 MS/s: a split-8 gNB reads RX in blocks of `get_max_num_samps()` and runs TX at most 1 ms ahead of the last RX block, so it underflowed ~68 times/s. At N = 1 a packet is 1.6 us at 1.25 GS/s: the Python bindings make ~50k calls/s, so benchmark_rate.py received 7.7 % at 1 packet per call, 28 % at 4, ~100 % at 32. UHD's rx_samples_to_udp sends each such buffer as one datagram: give it `spb_pkts=` so spb_pkts x spp / N x 8 bytes (fc32) stays under 65507 (3 at N = 1, 7 at N = 2, 15 at N = 4). At N > 1 one packet holds only spp / N samples per channel, so UHD apps that size their buffers by `get_max_num_samps()` would otherwise call `recv()`/`send()` for every fraction of a microsecond |
 | `pps_emulation` | 1 | there is no PPS input (sensor `pps_present` = false). 1: `set_time_next_pps(t)` makes the device time read t at its next whole second (a timed `set_time`, Protocol §3c) and returns at once, `get_time_last_pps()` is the last whole second, and time source `external` is accepted as the emulated PPS (it stays `internal`). 0: those calls throw `no PPS input` |
