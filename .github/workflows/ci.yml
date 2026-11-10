@@ -70,7 +70,10 @@ jobs:
       - name: The daemon parses its arguments without a board
         run: python3 rfsoc/server/uhd_rfsoc_daemon.py --help > /dev/null
       - name: Daemon unit tests
-        run: python3 -m unittest discover -s rfsoc/server/tests
+        run: |
+          # numpy: rfsoc_lib/dsp (the beamformer weights, the §12 DPD model)
+          python3 -c 'import numpy' 2>/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends python3-numpy; }
+          python3 -m unittest discover -s rfsoc/server/tests
       - name: Shell scripts parse
         run: |
           for f in $(git ls-files '*.sh') host/tools/uhd-rfsoc; do bash -n "$f"; done

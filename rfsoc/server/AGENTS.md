@@ -6,10 +6,10 @@ short version for people; this file is the reference for the code.
 
 ## Rules
 - Runs ON THE BOARD (PYNQ venv, root). Every FPGA address of the data plane
-  lives in `eth100g.py`, `tx_beamformer.py`, `rx_beamformer.py` (sources
-  of truth: the RTL headers in `fpga/ip/src/uhd_ip/src`). Blocks are
-  found by name in the overlay's `ip_dict`; the beamformers are never
-  mapped from a fallback address (an AXI access to an unmapped address can
+  lives in `eth100g.py`, `tx_beamformer.py`, `rx_beamformer.py`, `tx_dpd.py`
+  (sources of truth: the RTL headers in `fpga/ip/src/uhd_ip/src`). Blocks are
+  found by name in the overlay's `ip_dict`; the beamformers and the DPD are
+  never mapped from a fallback address (an AXI access to an unmapped address can
   hang the PS).
 - Reuse `../rfsoc_lib` (its rules: `../rfsoc_lib/AGENTS.md`): the RFDC
   comes up only through `RfdcTask` at the factor compiled into the build,
@@ -33,20 +33,21 @@ short version for people; this file is the reference for the code.
 | file | what |
 |---|---|
 | `uhd_rfsoc_daemon.py` | entry point: argument parsing, board detection, backend bring-up, the TCP control server (49710) and UDP discovery server (49700); a missing board setup step (`SetupError`) is one log line, any other bring-up failure a traceback |
-| `protocol.py` | `ControlCore`: the §3 command parser / dispatcher, claim ownership, the §10 `otw=` options and the rate / format vetting before any reload, the §11 commands; transport-free |
-| `backend.py` | the `Backend` interface and everything that needs no hardware: rate selection (`coerce_rate`, `default_rate`), link checks (`link_problem`), the §3b tune plan, the §11 beamformer state, sensor helpers, `find_lib_root` |
+| `protocol.py` | `ControlCore`: the §3 command parser / dispatcher, claim ownership, the §10 `otw=` options and the rate / format vetting before any reload, the §11 and §12 commands; transport-free |
+| `backend.py` | the `Backend` interface and everything that needs no hardware: rate selection (`coerce_rate`, `default_rate`), link checks (`link_problem`), the §3b tune plan, the §11 beamformer state, the §12 DPD state, sensor helpers, `find_lib_root`, `dpd_lib` |
 | `hw_backend.py` | `HwBackend`: the `.hwh` scan (`scan_bitstreams`, `Variant`, `Geometry`), the full bring-up, run-time retune (`_retune_hw`) and reload (`_switch_to`), NCO / DSA / VOP, streaming, sensors |
 | `boards.py` | `Board` (ZCU216, RFSoC 4x2: data only) and `detect_board` |
 | `board_config.py` | `uhd_rfsoc.conf`: search path, parsing, the eth0-derived default MAC |
 | `eth100g.py` | `Eth100G`: udp_streamer, udp_player, CMAC ctl / status GPIO, clock meters |
 | `tx_beamformer.py`, `rx_beamformer.py` | the §11 register files (`eth100g/tx_beamformer` 0x8006_0000, `eth100g/rx_beamformer` 0x8007_0000); `rx_beamformer.beam_payload` is the bit-exact reference of the RX beam |
+| `tx_dpd.py` | the §12 register file (`eth100g/tx_dpd` 0x8008_0000): COMMIT with read-back, bypass, statistics; the model and coefficient words are `../rfsoc_lib/dsp/dpd.py` |
 | `bringup.py` | the 100G link steps (`link_bringup`, shared with `HwBackend`) and a CLI to run them by hand or dump the status |
 | `rx_cmdq.py` | the §4a RX stream-command queue over the streamer's one command slot |
 | `cmd_timer.py` | the §3c timed commands, run by the FPGA timekeeper |
 | `vrt.py` | the §4-7 packet formats, the §5 pattern, the §10 reference conversions; also imported by `host/tools/check_pattern_file.py` |
 | `uhd_rfsoc.conf.example` | template of the board's settings file (the real one is gitignored) |
 | `uhd-rfsoc.service` | systemd unit template; nothing installs it |
-| `tests/` | `test_protocol.py`, `test_boards.py`, `test_xrfdc_mts_patch.py` (no board), `client_check.py` (against a daemon) |
+| `tests/` | `test_protocol.py`, `test_boards.py`, `test_dpd.py` (the DPD model, fit and driver), `test_xrfdc_mts_patch.py` (no board), `client_check.py` (against a daemon) |
 
 ## Bring-up (every load: at start and after a reload)
 
@@ -81,7 +82,8 @@ in the log):
    align is NOT fatal: the daemon serves and reports it (`cmac_aligned`).
    Then FPGA MAC / IP into streamer and player, the player enabled and
    selected as the DAC source (ARP answered from the start), the §10 FMT
-   registers probed, both beamformers put in bypass with unity weights.
+   registers probed, both beamformers put in bypass with unity weights, every
+   DPD channel committed to bypass + identity.
 
 ### Builds and rates (Protocol §8, §9)
 
@@ -179,7 +181,14 @@ can carry in the client's formats is refused before anything is reloaded.
   `fc_interval` = 512 words (1/8 of a smaller buffer);
   `UHD_RFSOC_FC_INTERVAL` overrides it.
 * The claim's release (unclaim or disconnect) stops RX streaming and TX
-  playback, resets both beamformers and the client's formats and `spp`.
+  playback, resets both beamformers, every DPD channel (bypass + identity)
+  and the client's formats and `spp`. A reload or retune also resets the
+  DPD (a set is fitted at one rate): `_restore` commits identity + bypass.
+* `set_dpd_coefs` checks the set (`rfsoc_lib.dsp.dpd.check_q`: 40
+  integers, every rail < 31.0) before any register write and commits it
+  with the channel's mode unchanged; the COMMIT is checked by reading
+  ACTIVE back. The waveform-dependent gate (output peak, saturation) is the
+  host's: the daemon does not know the waveform.
 * `set_bf_angle` / `set_rbf_angle` use `rfsoc_lib/dsp/beamformer.py`
   (the same weights for RX, no conjugate); the kept state and the reset
   rules are Protocol §11.

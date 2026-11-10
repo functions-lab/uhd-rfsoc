@@ -1,4 +1,4 @@
-"""The control protocol (protocol.py, Protocol §2-3, §8, §10, §11) driven
+"""The control protocol (protocol.py, Protocol §2-3, §8, §10, §11, §12) driven
 against a Backend with the hardware stubbed: no board, no pynq
 (python3 -m unittest discover -s rfsoc/server/tests)."""
 import os
@@ -16,7 +16,7 @@ class FakeBackend(Backend):
     """N channels at fs, the Gen3 factors `factors` as installed rates (one
     bitstream per rate, like fixed builds); every §10 format converted."""
 
-    def __init__(self, nch=1, factors=(2, 4, 8, 16), fs=2.5e9):
+    def __init__(self, nch=1, factors=(2, 4, 8, 16), fs=2.5e9, dpd=True):
         self._lock = threading.RLock()
         self.num_channels = nch
         self.adc_rate = self.dac_rate = fs
@@ -33,6 +33,8 @@ class FakeBackend(Backend):
         self.tx_setup = None
         self.cmds = []
         self.bf_writes = []
+        self._has_dpd = dpd
+        self.dpd_writes = []
 
     # rates (§8)
     def available_rates(self):
@@ -117,6 +119,25 @@ class FakeBackend(Backend):
     def _rbf_write(self, enable, weights, shift):
         self.bf_writes.append(("rx", enable, list(weights), shift))
 
+    # TX DPD (§12): every build from it on
+    @property
+    def has_dpd(self):
+        return self._has_dpd
+
+    dpd_fail = False
+
+    def _dpd_write(self, ch, enable, coefs):
+        if self.dpd_fail:
+            raise RuntimeError("tx_dpd ch%d: COMMIT not applied within 0.5 s" % ch)
+        self.dpd_writes.append((ch, enable, [int(v) for v in coefs.reshape(-1)]))
+
+    def _dpd_write_enable(self, ch, enable):
+        self.dpd_writes.append((ch, enable, None))
+
+    def _dpd_hw_stats(self, ch):
+        return {"sat_out": 3, "sat_gain": 1, "peak_in": 20000, "peak_out": 21000,
+                "bypass": 0, "reset": 0, "commits": 2}
+
     # sensors / clocks / stats
     def list_sensors(self):
         return ["pps_present", "mts_locked"]
@@ -159,7 +180,7 @@ class ProtocolBasics(unittest.TestCase):
         self.assertEqual(d["tick_rates"], d["rx_rates"])
         self.assertEqual(d["channel_counts"], "1")
         self.assertEqual(d["otw_formats"], "sc16,sc8,sc12,fc32")
-        self.assertEqual((d["bf"], d["rbf"]), ("0", "0"))
+        self.assertEqual((d["bf"], d["rbf"], d["dpd"]), ("0", "0", "1"))
         disc = c.discovery_reply("192.0.2.9")
         self.assertTrue(disc.startswith("UHD-RFSOC-DISC type=rfsoc;product=zcu216;serial=FAKE-1;"))
         self.assertIn(";addr=192.0.2.9;data_ip=192.0.2.2;claimed=0;fpga=fake_v49_1ch_qsfp;version=1", disc)
@@ -283,6 +304,70 @@ class TuneAndStream(unittest.TestCase):
         s2 = Session("test:2", "192.0.2.1")
         c.handle_line(s2, "claim")
         self.assertEqual(kv(c.handle_line(s2, "get_bf"))["enable"], "0")
+
+    def test_dpd(self):
+        ident = [1 << 21] + [0] * 39
+        be, c, s = core(2)
+        self.assertEqual(c.handle_line(s, "get_dpd 0"), "ERR not claimed")
+        c.handle_line(s, "claim")
+        d = kv(c.handle_line(s, "get_dpd 1"))
+        self.assertEqual(d["enable"], "0")
+        self.assertEqual(d["coefs"], ",".join(map(str, ident)))
+        self.assertEqual(float(d["gain_bound"]), 1.0)
+        self.assertTrue(c.handle_line(s, "get_dpd 2").startswith("ERR channel 2 out of range"))
+        # a set with a 3rd-order term: committed with the mode unchanged (bypass)
+        coefs = list(ident)
+        coefs[2] = -(1 << 19)                  # a_01 = -0.25 (real)
+        coefs[3] = 1 << 18                     # a_01 imaginary 0.125
+        self.assertEqual(c.handle_line(s, "set_dpd_coefs 1 " + " ".join(map(str, coefs))), "OK")
+        self.assertEqual(be.dpd_writes[-1], (1, False, coefs))
+        self.assertEqual(c.handle_line(s, "set_dpd_enable 1 1"), "OK 1")
+        self.assertEqual(be.dpd_writes[-1], (1, True, None))
+        d = kv(c.handle_line(s, "get_dpd 1"))
+        self.assertEqual((d["enable"], d["coefs"]), ("1", ",".join(map(str, coefs))))
+        self.assertEqual(kv(c.handle_line(s, "get_dpd 0"))["enable"], "0")   # per channel
+        # the next commit keeps the mode
+        c.handle_line(s, "set_dpd_coefs 1 " + " ".join(map(str, ident)))
+        self.assertEqual(be.dpd_writes[-1], (1, True, ident))
+        # refused: a rail >= 31.0 (Q6.21), the wrong count, out of 27 bits
+        big = list(ident)
+        big[5] = 31 << 21
+        self.assertTrue(c.handle_line(s, "set_dpd_coefs 1 " + " ".join(map(str, big)))
+                        .startswith("ERR a coefficient rail is >= 31.0"))
+        self.assertTrue(c.handle_line(s, "set_dpd_coefs 1 1 2 3").startswith("ERR usage: set_dpd_coefs"))
+        big[5] = 1 << 26
+        self.assertTrue(c.handle_line(s, "set_dpd_coefs 1 " + " ".join(map(str, big)))
+                        .startswith("ERR coefficient 67108864 out of range"))
+        # a COMMIT that does not apply (converter clock stopped): applied=0
+        # until a later write succeeds
+        be.dpd_fail = True
+        self.assertTrue(c.handle_line(s, "set_dpd_coefs 0 " + " ".join(map(str, coefs)))
+                        .startswith("ERR TX DPD: tx_dpd ch0: COMMIT not applied"))
+        self.assertEqual(kv(c.handle_line(s, "get_dpd 0"))["applied"], "0")
+        be.dpd_fail = False
+        c.handle_line(s, "reset_dpd 0")
+        self.assertEqual(kv(c.handle_line(s, "get_dpd 0"))["applied"], "1")
+        self.assertEqual(c.handle_line(s, "get_dpd_stats 1"),
+                         "OK sat_out=3;sat_gain=1;peak_in=20000;peak_out=21000;bypass=0;reset=0")
+        self.assertEqual(c.handle_line(s, "clear_dpd_stats 1"), "OK")
+        self.assertEqual(c.handle_line(s, "reset_dpd 1"), "OK")
+        self.assertEqual(be.dpd_writes[-1], (1, False, ident))
+        c.handle_line(s, "set_dpd_enable 0 1")
+        # released: every channel back to bypass + identity
+        c.disconnect(s)
+        self.assertEqual(be.dpd_writes[-2:], [(0, False, ident), (1, False, ident)])
+        s2 = Session("test:2", "192.0.2.1")
+        c.handle_line(s2, "claim")
+        self.assertEqual(kv(c.handle_line(s2, "get_dpd 0"))["enable"], "0")
+
+    def test_no_dpd(self):
+        be, c, s = core(1, dpd=False)          # a build from before tx_dpd
+        c.handle_line(s, "claim")
+        self.assertEqual(kv(c.handle_line(s, "info"))["dpd"], "0")
+        self.assertEqual(c.handle_line(s, "get_dpd 0"),
+                         "ERR no TX DPD in fake_v49_1ch_qsfp (eth100g/tx_dpd: a build from before it)")
+        c.disconnect(s)                        # the release reset touches nothing
+        self.assertEqual(be.dpd_writes, [])
 
     def test_sensors(self):
         be, c, s = core()

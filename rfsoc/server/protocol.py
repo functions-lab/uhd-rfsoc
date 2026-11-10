@@ -194,6 +194,12 @@ class ControlCore:
             "set_rbf_angle": (self._set_rbf_angle, True),
             "set_rbf_weights": (self._set_rbf_weights, True),
             "set_rbf_shift": (self._set_rbf_shift, True),
+            "get_dpd": (self._get_dpd, True),
+            "set_dpd_enable": (self._set_dpd_enable, True),
+            "set_dpd_coefs": (self._set_dpd_coefs, True),
+            "reset_dpd": (self._reset_dpd, True),
+            "get_dpd_stats": (self._get_dpd_stats, True),
+            "clear_dpd_stats": (self._clear_dpd_stats, True),
         }
 
     # -- entry points -------------------------------------------------------------
@@ -250,6 +256,10 @@ class ControlCore:
             self.be.bf_reset()      # the next client starts from plain N-ch TX / RX
         except Exception:
             log.exception("resetting the beamformers on release")
+        try:
+            self.be.dpd_reset()     # ... and with the TX DPD in bypass, identity
+        except Exception:
+            log.exception("resetting the TX DPD on release")
         self.owner = None
         self._rx_setup = self._tx_setup = False
         self._rx_otw = self._tx_otw = self._otw_pref = "sc16"
@@ -323,7 +333,8 @@ class ControlCore:
               ("rx_otw_formats", ",".join(self.otw_formats("rx"))),
               ("tx_otw_formats", ",".join(self.otw_formats("tx"))),
               ("bf", 1 if self.be.has_bf else 0),
-              ("rbf", 1 if self.be.has_rbf else 0)]
+              ("rbf", 1 if self.be.has_rbf else 0),
+              ("dpd", 1 if self.be.has_dpd else 0)]
         return "OK " + self._kv(f)
 
     # -- OTW formats (§10) --------------------------------------------------------
@@ -822,6 +833,48 @@ class ControlCore:
     def _stats(self, s, a):
         self._nargs(a, 0, "stats")
         return "OK " + self._kv(sorted(self.be.stats().items()))
+
+    # -- TX DPD (§12) ---------------------------------------------------------------
+    # Per channel; the set is 20 complex Q6.21 coefficients as 40 integers
+    # re0 im0 .. re19 im19 (rfsoc_lib/dsp/dpd.py: a_mj at 4m+j, b_mj at 16+2m+j-1).
+    def _get_dpd(self, s, a):
+        self._nargs(a, 1, "get_dpd <ch>")
+        st = self.be.dpd_get(self._ch(a, 0, "tx"))
+        return "OK " + self._kv([
+            ("enable", int(st["enable"])),
+            ("coefs", ",".join(str(int(v)) for v in st["coefs"].reshape(-1))),
+            ("gain_bound", fmt_float(st["gain_bound"])),
+            ("applied", int(st["applied"]))])
+
+    def _set_dpd_enable(self, s, a):
+        self._nargs(a, 2, "set_dpd_enable <ch> <0|1>")
+        ch = self._ch(a, 0, "tx")
+        return "OK %d" % int(self.be.dpd_set_enable(ch, _int(a[1], "enable", 0, 1) == 1))
+
+    def _set_dpd_coefs(self, s, a):
+        if len(a) != 41:
+            raise ProtocolError("usage: set_dpd_coefs <ch> <re0> <im0> ... <re19> <im19> "
+                                "(40 integers, Q6.21)")
+        ch = self._ch(a, 0, "tx")
+        lim = (1 << 26) - 1
+        self.be.dpd_set_coefs(ch, [_int(x, "coefficient", -lim - 1, lim) for x in a[1:]])
+        return "OK"
+
+    def _reset_dpd(self, s, a):
+        self._nargs(a, 1, "reset_dpd <ch>")
+        self.be.dpd_reset(self._ch(a, 0, "tx"))
+        return "OK"
+
+    def _get_dpd_stats(self, s, a):
+        self._nargs(a, 1, "get_dpd_stats <ch>")
+        st = self.be.dpd_stats(self._ch(a, 0, "tx"))
+        return "OK " + self._kv([(k, int(st[k])) for k in
+                                 ("sat_out", "sat_gain", "peak_in", "peak_out", "bypass", "reset")])
+
+    def _clear_dpd_stats(self, s, a):
+        self._nargs(a, 1, "clear_dpd_stats <ch>")
+        self.be.dpd_clear_stats(self._ch(a, 0, "tx"))
+        return "OK"
 
 
 def _one_line(msg: str) -> str:

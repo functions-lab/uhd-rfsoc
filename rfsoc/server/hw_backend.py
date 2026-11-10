@@ -57,12 +57,13 @@ from typing import Dict, List, Optional, Tuple
 
 from backend import (Backend, BackendError, default_fc_interval, DSA_MAX_DB,
                      DSA_STEP_DB, TICK_STEP, bool_sensor,
-                     coerce_nco, default_rate, find_lib_root, gain_for_vop_ua,
+                     coerce_nco, default_rate, dpd_lib, find_lib_root, gain_for_vop_ua,
                      link_problem,
                      nyquist_plan, read_sysmon_temp, vop_ua_for_gain)
 from boards import Board, board_of_bitstream, get_board
 from rx_beamformer import RxBeamformer, default_shift
 from tx_beamformer import TxBeamformer
+from tx_dpd import TxDpd
 import vrt
 
 log = logging.getLogger("uhd_rfsoc.hw")
@@ -868,8 +869,20 @@ class HwBackend(Backend):
             self.rbf = None
         if self.rbf is not None:
             self.rbf.apply(False, [(32767, 0)] * nch, default_shift(nch))
+        # §12: the TX DPD (bypass + identity on every channel; never carried
+        # across a reload or retune)
+        try:
+            self.dpd = TxDpd.from_ip_dict(self.ol.ip_dict, nch)
+        except RuntimeError as e:      # wrong ID / TOPO: serve without it
+            log.error("tx_dpd unusable, DPD disabled: %s", e)
+            self.dpd = None
+        self._dpd_state = {}
+        if self.dpd is not None:
+            for c in range(nch):
+                self.dpd.commit(c, dpd_lib().identity_q(), False)
         pr(f"[e] TX beamformer: {'present (bypass)' if self.bf is not None else 'none'}; "
            f"RX beamformer: {'present (bypass)' if self.rbf is not None else 'none'}; "
+           f"TX DPD: {'present (bypass, %d samples/clock)' % self.dpd.ssr if self.dpd is not None else 'none'}; "
            f"TX buffer {self.tx_buf_words} words, FC every {self.fc_interval}")
         self._rx_gain = [self._read_dsa_gain(ch) for ch in range(self.num_rx)]
         self._tx_gain = [self._read_vop_gain(ch) for ch in range(self.num_tx)]
@@ -918,6 +931,24 @@ class HwBackend(Backend):
     @property
     def has_rbf(self) -> bool:
         return getattr(self, "rbf", None) is not None
+
+    @property
+    def has_dpd(self) -> bool:
+        return getattr(self, "dpd", None) is not None
+
+    def _dpd_write(self, ch, enable, coefs):
+        if self.dpd is not None:
+            self.dpd.commit(ch, coefs, enable)
+
+    def _dpd_write_enable(self, ch, enable):
+        if self.dpd is not None:
+            self.dpd.set_enable(ch, enable)
+
+    def _dpd_hw_stats(self, ch):
+        return self.dpd.stats(ch)
+
+    def _dpd_hw_clear(self, ch):
+        self.dpd.clear_stats(ch)
 
     def _bf_write(self, enable, weights):
         with self._lock:
@@ -968,7 +999,7 @@ class HwBackend(Backend):
                         why = (f"{msg}; retune back failed ({e2}); reloading "
                                f"{old.name} failed too: {e3}")
                         self.eth = self.my = _Unusable(why)
-                        self.bf = self.rbf = None
+                        self.bf = self.rbf = self.dpd = None
                         raise BackendError(why)
                 raise BackendError(f"{msg}; F={old.factor} restored ({old.rate:.17g} S/s)")
             self._restore(state)
@@ -1116,7 +1147,7 @@ class HwBackend(Backend):
                     log.exception("bring-up of %s failed too", old.name)
                     why = f"{msg}; reloading {old.name} failed too: {e2}"
                     self.eth = self.my = _Unusable(why)
-                    self.bf = self.rbf = None   # no AXI access into an unknown PL
+                    self.bf = self.rbf = self.dpd = None   # no AXI access into an unknown PL
                     raise BackendError(why)
                 raise BackendError(f"{msg}; {old.name} restored ({old.nch} ch "
                                    f"at {old.rate:.17g} S/s)")
@@ -1156,7 +1187,7 @@ class HwBackend(Backend):
 
     def _reload(self, v: Variant, state: dict) -> None:
         # drop the old overlay's drivers before PYNQ reprograms the PL
-        self.eth = self.my = self.rfdc_t = self.ol = self.bf = self.rbf = None
+        self.eth = self.my = self.rfdc_t = self.ol = self.bf = self.rbf = self.dpd = None
         rx_freqs = [self._rx_freq_mem.get(c, self._default_rx_freq) for c in range(v.nch)]
         tx_freqs = [self._tx_freq_mem.get(c, self._default_tx_freq) for c in range(v.nch)]
         base = v if v.factor == v.built_factor else v.at_factor(v.built_factor)
@@ -1205,6 +1236,10 @@ class HwBackend(Backend):
                    f"{'angle %g deg' % st['angle'] if st['angle'] is not None else 'weights'} "
                    f"{self._bfk_weights(kind)}"
                    + (f", shift {self._rbf_shift()}" if kind == "rx" else ""))
+        if self.has_dpd:
+            self.dpd_reset()
+            pr("[r] TX DPD: bypass + identity on every channel (a set is fitted at one "
+               "rate: not carried across a rate change)")
 
     # -- tiles / blocks ----------------------------------------------------------
     def _adc_block(self, ch):

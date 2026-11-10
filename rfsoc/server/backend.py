@@ -133,6 +133,24 @@ def _rfsoc_beamformer_class():
     return Beamformer
 
 
+def dpd_lib():
+    """rfsoc_lib.dsp.dpd from this repository: the §12 model, coefficient
+    words and checks (numpy only, no pynq)."""
+    try:
+        from rfsoc_lib.dsp import dpd
+        return dpd
+    except ImportError:
+        pass
+    root = find_lib_root(os.path.dirname(os.path.abspath(__file__)))
+    if not root:
+        raise BackendError("cannot find rfsoc_lib (rfsoc_lib/dsp/dpd.py) above "
+                           "the daemon's directory")
+    if root not in sys.path:
+        sys.path.insert(0, root)
+    from rfsoc_lib.dsp import dpd
+    return dpd
+
+
 def steering_weights(nch: int, angle_deg: float, carrier_freq: float,
                      element_spacing: float) -> List[Tuple[int, int]]:
     """Protocol §11: Q1.15 weights (re, im) of a ULA steered to
@@ -724,6 +742,111 @@ class Backend(ABC):
         self._rbf_write(st["enable"], self._bfk_weights("rx"), shift)
         st["shift"] = (self.num_channels, shift)
         return shift
+
+    # -- TX DPD (Protocol §12, eth100g/tx_dpd) ------------------------------
+    # The daemon keeps, per channel, whether the DPD path is on and the Q6.21
+    # set (None = identity). NOT carried across a reload or retune (the taps
+    # are samples of the old rate: every channel goes back to bypass +
+    # identity) and reset so when the claim is released.
+    @property
+    def has_dpd(self) -> bool:
+        return False
+
+    def _dpd_states(self) -> dict:
+        st = getattr(self, "_dpd_state", None)
+        if st is None:
+            st = {}
+            self._dpd_state = st
+        return st
+
+    def _dpd_hw(self, st: dict, fn, *args) -> None:
+        """A hardware write of the channel state `st`; if it fails (a COMMIT
+        not applied: the converter clock stopped) the datapath may hold
+        another set: `applied` is False until a later write succeeds."""
+        try:
+            fn(*args)
+        except Exception as e:
+            st["applied"] = False
+            raise BackendError(f"TX DPD: {e}")
+        st["applied"] = True
+
+    def _dpd_need(self, ch: int) -> dict:
+        if not self.has_dpd:
+            raise BackendError(f"no TX DPD in {self.fpga_name} (eth100g/tx_dpd: a build "
+                               f"from before it)")
+        ch = int(ch)
+        if not 0 <= ch < self.num_tx:
+            raise BackendError(f"channel {ch} not in 0..{self.num_tx - 1}")
+        return self._dpd_states().setdefault(ch, {"enable": False, "coefs": None, "applied": True})
+
+    def _dpd_coefs(self, ch: int):
+        c = self._dpd_states().get(int(ch), {}).get("coefs")
+        return dpd_lib().identity_q() if c is None else c
+
+    def _dpd_write(self, ch: int, enable: bool, coefs) -> None:
+        """The set and the mode into the datapath on one beat (HwBackend:
+        SHADOW + COMMIT)."""
+
+    def _dpd_write_enable(self, ch: int, enable: bool) -> None:
+        """The mode only (HwBackend: CTRL.BYPASS)."""
+
+    def _dpd_hw_stats(self, ch: int) -> dict:
+        return {"sat_out": 0, "sat_gain": 0, "peak_in": 0, "peak_out": 0,
+                "bypass": 1, "reset": 0, "commits": 0}
+
+    def _dpd_hw_clear(self, ch: int) -> None:
+        """Clear the channel's statistics."""
+
+    def dpd_get(self, ch: int) -> dict:
+        st = self._dpd_need(ch)
+        c = self._dpd_coefs(ch)
+        return {"enable": bool(st["enable"]), "coefs": c,
+                "gain_bound": dpd_lib().gain_bound(c), "applied": bool(st.get("applied", True))}
+
+    def dpd_set_enable(self, ch: int, on: bool) -> bool:
+        st = self._dpd_need(ch)
+        self._dpd_hw(st, self._dpd_write_enable, int(ch), bool(on))
+        st["enable"] = bool(on)
+        return st["enable"]
+
+    def dpd_set_coefs(self, ch: int, coefs) -> None:
+        """A Q6.21 set (40 integers re0 im0 .. re19 im19) into channel ch,
+        the mode unchanged. Refused if a rail is >= 31.0."""
+        st = self._dpd_need(ch)
+        try:
+            c = dpd_lib().check_q(coefs)
+        except ValueError as e:
+            raise BackendError(str(e))
+        self._dpd_hw(st, self._dpd_write, int(ch), st["enable"], c)
+        st["coefs"] = c
+
+    def dpd_reset(self, ch: Optional[int] = None) -> None:
+        """Bypass + identity: one channel, or every channel (ch None; also
+        after a reload / retune and when the claim is released)."""
+        if ch is not None:
+            self._dpd_need(ch)
+            chans = [int(ch)]
+        else:
+            chans = list(range(self.num_tx)) if self.has_dpd else []
+            self._dpd_state = {}
+        err = None
+        for c in chans:
+            st = {"enable": False, "coefs": None, "applied": True}
+            self._dpd_states()[c] = st
+            try:
+                self._dpd_hw(st, self._dpd_write, c, False, dpd_lib().identity_q())
+            except BackendError as e:      # the other channels still get reset
+                err = err or e
+        if err is not None:
+            raise err
+
+    def dpd_stats(self, ch: int) -> dict:
+        self._dpd_need(ch)
+        return self._dpd_hw_stats(int(ch))
+
+    def dpd_clear_stats(self, ch: int) -> None:
+        self._dpd_need(ch)
+        self._dpd_hw_clear(int(ch))
 
     # -- sensors / clocks / stats --------------------------------------------
     @abstractmethod
