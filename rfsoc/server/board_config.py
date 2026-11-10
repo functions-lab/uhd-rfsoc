@@ -32,7 +32,8 @@ from typing import Dict, List, Optional, Tuple
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CONF_NAME = "uhd_rfsoc.conf"
-KEYS = ("data_ip", "data_mac", "name")
+KEYS = ("data_ip", "data_mac", "name", "clock_source")
+CLOCK_SOURCES = ("internal", "external")
 _MAC_RE = re.compile(r"^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
 
 
@@ -64,6 +65,8 @@ def parse(text: str, where: str = "<config>") -> Dict[str, str]:
         cfg["data_ip"] = check_ip(cfg["data_ip"], f"{where}: data_ip")
     if "data_mac" in cfg:
         cfg["data_mac"] = check_mac(cfg["data_mac"], f"{where}: data_mac")
+    if "clock_source" in cfg:
+        cfg["clock_source"] = check_clock_source(cfg["clock_source"], f"{where}: clock_source")
     return cfg
 
 
@@ -78,6 +81,26 @@ def load(path: Optional[str] = None) -> Tuple[Dict[str, str], Optional[str]]:
         if path:
             raise ConfigError(f"{p}: no such file")
     return {}, None
+
+
+def check_clock_source(s: str, what: str = "clock source") -> str:
+    s = s.strip().lower()
+    if s not in CLOCK_SOURCES:
+        raise ConfigError(f"{what}: {s!r} is not one of {', '.join(CLOCK_SOURCES)}")
+    return s
+
+
+def clock_source(arg: Optional[str] = None, config: Optional[str] = None) -> Tuple[str, str]:
+    """The LMK04828's reference: command line over config file, default
+    "external" (the reference input, e.g. a GPSDO's 10 MHz; the LMK04828
+    falls back to the board's own oscillator by itself when there is none);
+    "internal" = the oscillator only. -> (source, where it came from)."""
+    if arg:
+        return check_clock_source(arg, "--clock-source"), "--clock-source"
+    cfg, where = load(config)
+    if cfg.get("clock_source"):
+        return cfg["clock_source"], str(where)
+    return "external", "default"
 
 
 def check_ip(s: str, what: str = "IP") -> str:

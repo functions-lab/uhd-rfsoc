@@ -67,7 +67,11 @@ class LMX2594ClkConfig(ExternalClkConfig):
     pass
 
 
-_LMK_RE = re.compile(r"LMK04828_([0-9.]+)_([0-9.]+)_([0-9.]+)_([0-9.]+)\.txt")
+# "_ext": the same plan with the LMK04828 in automatic input selection (CLKin_SEL_MODE 4): PLL1 takes the board's
+# reference input (CLKin0, e.g. a GPSDO's 10 MHz) and falls back to the board's own oscillator (CLKin1) when that
+# is lost. Without the suffix: CLKin1 only. clock_plan(source="external") picks the "_ext" file.
+_LMK_RE = re.compile(r"LMK04828_([0-9.]+)_([0-9.]+)_([0-9.]+)_([0-9.]+?)(_ext)?\.txt")
+CLOCK_SOURCES = ("internal", "external")
 _LMX_RE = re.compile(r"LMX2594_([0-9.]+)_([0-9.]+)\.txt")
 
 
@@ -75,7 +79,7 @@ def _same(a, b):
     return abs(float(a) - float(b)) < 1e-6
 
 
-def clock_plan(config_dir, lmx_out, pl_clk, lmk_in=10.0):
+def clock_plan(config_dir, lmx_out, pl_clk, lmk_in=10.0, source="internal"):
     """The clock plan that gives a build its clocks, from the TICS register
     files in `config_dir` (rfsoc_lib/xrfclk/<board>/):
 
@@ -90,14 +94,23 @@ def clock_plan(config_dir, lmx_out, pl_clk, lmk_in=10.0):
     as numbers ("250.0" = 250). -> (LMK04828ClkConfig, LMX2594ClkConfig) with
     their files set; FileNotFoundError when no LMK file has this PL clock
     with an LMX file for lmx_out from its reference, ValueError when more
-    than one pair does."""
+    than one pair does.
+
+    `source`: "internal" (the board's own oscillator only) or "external"
+    (the reference input, e.g. a GPSDO's 10 MHz, with the oscillator as the
+    LMK04828's automatic fallback): the file with the "_ext" suffix, same
+    frequencies."""
+    if source not in CLOCK_SOURCES:
+        raise ValueError(f"clock source {source!r}: " + " or ".join(CLOCK_SOURCES))
     names = sorted(os.listdir(config_dir))
     plans = []
     for fk in names:
         mk = _LMK_RE.fullmatch(fk)
         if not mk:
             continue
-        fin, ref, pl, sysref = (float(v) for v in mk.groups())
+        fin, ref, pl, sysref = (float(v) for v in mk.groups()[:4])
+        if bool(mk.group(5)) != (source == "external"):
+            continue
         if not (_same(fin, lmk_in) and _same(pl, pl_clk)):
             continue
         for fx in names:
@@ -111,8 +124,8 @@ def clock_plan(config_dir, lmx_out, pl_clk, lmk_in=10.0):
     if not plans:
         raise FileNotFoundError(
             f"no clock plan in {config_dir} for PL clock {pl_clk:g} MHz and "
-            f"converter clock {float(lmx_out):g} MHz: needs LMK04828_{lmk_in:g}_<ref>_"
-            f"{pl_clk:g}_<sysref>.txt and LMX2594_<ref>_{float(lmx_out):g}.txt; there are "
+            f"converter clock {float(lmx_out):g} MHz ({source} reference): needs LMK04828_{lmk_in:g}_<ref>_"
+            f"{pl_clk:g}_<sysref>{'_ext' if source == 'external' else ''}.txt and LMX2594_<ref>_{float(lmx_out):g}.txt; there are "
             f"{', '.join(n for n in names if _LMK_RE.fullmatch(n) or _LMX_RE.fullmatch(n))}")
     if len(plans) > 1:
         raise ValueError(f"PL clock {pl_clk:g} MHz, converter clock {float(lmx_out):g} MHz: "

@@ -593,7 +593,7 @@ class HwBackend(Backend):
                  timeout: float = 5.0, printer=None,
                  variants: Optional[List[Variant]] = None,
                  nco_phase_reset: str = "all", rx_chain_grace_s: float = 0.001,
-                 board: Optional[Board] = None):
+                 board: Optional[Board] = None, clock_source: str = "external"):
         # the board: given, else the one the bitstream's name belongs to
         self.board = board or board_of_bitstream(bitstream) or get_board(None)
         self.product = self.board.prefix          # discovery product= (zcu216 / rfsoc4x2)
@@ -604,7 +604,12 @@ class HwBackend(Backend):
         self._lock = threading.RLock()
         self._pr = printer or (lambda m: (print(m, flush=True), log.info("%s", m)))
         self.data_ip, self.data_mac = data_ip, data_mac
-        self._clock_source = "internal"
+        # the LMK04828's reference, fixed for the daemon's life (board setting clock_source, uhd_rfsoc.conf): every
+        # bring-up programs that source's register file (rfsoc_lib.clocks.clock_plan(source=))
+        if clock_source not in ("internal", "external"):
+            raise ValueError(f"clock_source {clock_source!r}: internal|external")
+        self._board_clock_source = clock_source     # what bring-up programs
+        self._clock_source = clock_source           # what the client last asked for (get_clock_source)
         self._time_source = "internal"
         self._allow_unlocked = allow_unlocked
         self._refclk = refclk
@@ -784,7 +789,8 @@ class HwBackend(Backend):
         try:
             # MTS is run below, not inside the task: it must end LOCKED
             self.rfdc_t = self._RfdcTask(self.ol, debug_mode=False, board=self.board.name,
-                                         masked_tiles=self.board.masked_tiles)
+                                         masked_tiles=self.board.masked_tiles,
+                                         clock_source=self._board_clock_source)
             for task in [self.rfdc_t]:
                 task.start()
                 task.join()
@@ -1721,11 +1727,18 @@ class HwBackend(Backend):
             return bool_sensor(False, "present", "absent")
         raise BackendError(f"unknown sensor {name}")
 
+    def clock_sources(self):
+        # The board's setting (clock_source in uhd_rfsoc.conf) is applied at every bring-up; a UHD client cannot
+        # change it (that is reprogramming the LMK04828 and a full bring-up). 'external' is the reference input with
+        # the board's oscillator as the LMK04828's automatic fallback, so a client asking for either is served;
+        # 'internal' is the oscillator only and 'external' is then refused.
+        return ["external", "internal"] if self._board_clock_source == "external" else ["internal"]
+
     def set_clock_source(self, src):
-        # 'external' needs an LMK04828 register file that selects CLKin0 (CLK104
-        # REF IN) instead of the TCXO; none exists in rfsoc_lib/xrfclk/ZCU216.
         if src not in self.clock_sources():
-            raise BackendError(f"unsupported clock source {src}")
+            raise BackendError(f"clock source {src}: this board runs from its own oscillator only "
+                               "(clock_source = internal in uhd_rfsoc.conf); set clock_source = external "
+                               "there and restart the daemon")
         self._clock_source = src
 
     def get_clock_source(self):

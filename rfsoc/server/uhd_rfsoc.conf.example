@@ -17,9 +17,16 @@
 #             administered MAC derived from the board's eth0 MAC.
 #   name      discovery name (UHD device arg name=). Optional, default the
 #             board's: zcu216 or rfsoc4x2.
+#   clock_source  the reference of the board's LMK04828, applied at every
+#             bring-up. external (default): the reference input (the 10 MHz
+#             of a GPSDO shared by several boards: CLK104 REF IN on a ZCU216,
+#             the reference SMA on an RFSoC 4x2); the LMK04828 falls back to
+#             the board's own oscillator by itself when there is no
+#             reference. internal: the board's oscillator only.
 #
-# Command-line --data-ip / --data-mac / --name override these.
+# Command-line --data-ip / --data-mac / --name / --clock-source override these.
 
 data_ip  = <fpga-data-ip>
 # data_mac = <fpga-data-mac>
 # name     = <device-name>
+# clock_source = internal

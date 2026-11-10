@@ -147,8 +147,18 @@ can carry in the client's formats is refused before anything is reloaded.
   writing; fixed 0 if the DSA is unreadable. TX gain = 20 log10(VOP uA /
   40500) in [-25.1, 0] only on a build with `C_DAC_VOP_Mode = 1`
   (the RFSoC 4x2's), otherwise range `0 0 0`.
-* `set_clock_source external` is refused: no LMK04828 register file selects
-  CLKin0 (the CLK104's REF IN) yet.
+* Clock source: the board setting `clock_source` (`uhd_rfsoc.conf`, or
+  `--clock-source`; `board_config.clock_source`) picks the LMK04828 register
+  file of every bring-up (`rfsoc_lib.clocks.clock_plan(source=)`):
+  `external` (default) the `_ext` file, i.e. the reference input (CLKin0:
+  CLK104 REF IN, the RFSoC 4x2's reference SMA; a GPSDO's 10 MHz) with the
+  board's oscillator (CLKin1) as the LMK04828's own fallback
+  (CLKin_SEL_MODE 4); `internal` the plain file, CLKin1 only.
+  `set_clock_source` cannot switch it (that is a reprogram and a full
+  bring-up): with `external` both names are accepted, with `internal`
+  `external` is refused. The LMK04828 is write-only here, so which input
+  PLL1 is on cannot be read back: two boards on one reference show a
+  tone offset of ~0 Hz between them.
 * `stream_setup` refuses while streaming; `spp` (slots) is floored to whole
   64-byte words of the format and a multiple of N, at most 8192 payload
   bytes; `num_done` / `num_more` counts (slots) are rounded up to that

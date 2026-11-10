@@ -52,6 +52,14 @@ bitstreams built for that PYNQ version (a
    the board's LAN address is whatever DHCP gives it, the FPGA's MAC is
    derived from the board's (`data_mac` overrides it).
 
+   **Reference clock** (optional): by default the board takes a 10 MHz
+   reference from its reference input (CLK104 REF IN on a ZCU216, the
+   reference SMA on an RFSoC 4x2), e.g. a GPSDO shared by several boards,
+   and falls back to its own oscillator when nothing is connected.
+   `clock_source = internal` in `uhd_rfsoc.conf` uses the board's oscillator
+   only. Boards that must agree in frequency (a gNB and a UE radio) need
+   the shared reference.
+
 4. **Put the bitstreams in `rfsoc/server/`** (each `.bit` with its `.hwh`):
    from the PC, the set of the board's PYNQ version from the `bitstreams/`
    submodule (`git submodule update --init bitstreams`) or your own builds
