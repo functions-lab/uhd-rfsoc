@@ -43,7 +43,7 @@
 # IP re-ordering the 32-bit slots to/from the sample-major wire order:
 #
 #   rfdc/M_ADC_AXIS -> rx_beamformer -> adc_c2s (DIR 0) -> udp_streamer
-#   udp_player      -> dac_s2c (DIR 1) -> tx_beamformer -> rfdc/S_DAC_AXIS
+#   udp_player      -> dac_s2c (DIR 1) -> tx_beamformer -> tx_dpd -> rfdc/S_DAC_AXIS
 #
 # Both beamformers (Protocol §11; IP user.org:uhd:
 # {tx,rx}_beamformer:1.0, sources ip_design/uhd_ip/src) work on the
@@ -78,6 +78,8 @@
 #                                        (expect 156250 and 322266 once the 8A34001 runs)
 #   0x8006_0000  eth100g/tx_beamformer  N >= 2 only: TX beamformer (Protocol §11)
 #   0x8007_0000  eth100g/rx_beamformer  N >= 2 only: RX beamformer (Protocol §11)
+#   0x8008_0000  eth100g/tx_dpd         TX DPD, every build, the last block before
+#                                        the DACs (N = 1: udp_player -> tx_dpd; Protocol §12)
 # The CMAC and its split-quad GT wizard cannot live in the block design:
 # neither cmac_usplus nor gtwizard_ultrascale may sit inside a module
 # reference (filemgmt 56-181), and the GT sites the board needs are outside
@@ -134,6 +136,7 @@ proc create_hier_cell_eth100g { parentCell nameHier {nch 1} {beat_w 128} {bf_pip
   create_bd_intf_pin -mode Slave  -vlnv xilinx.com:interface:aximm_rtl:1.0 S_AXI_STREAMER
   create_bd_intf_pin -mode Slave  -vlnv xilinx.com:interface:aximm_rtl:1.0 S_AXI_PLAYER
   create_bd_intf_pin -mode Slave  -vlnv xilinx.com:interface:aximm_rtl:1.0 S_AXI_GPIO
+  create_bd_intf_pin -mode Slave  -vlnv xilinx.com:interface:aximm_rtl:1.0 S_AXI_DPD
   create_bd_pin -dir I -type clk adc_clk
   create_bd_pin -dir I -type rst adc_aresetn
   create_bd_pin -dir I -type clk s_axi_aclk
@@ -183,9 +186,21 @@ proc create_hier_cell_eth100g { parentCell nameHier {nch 1} {beat_w 128} {bf_pip
   # beat width of the combined converter stream (Protocol §9)
   set_property CONFIG.S_WIDTH $beat_w [get_bd_cells udp_streamer]
   set_property CONFIG.M_WIDTH $beat_w [get_bd_cells udp_player]
+  # TX DPD (Protocol §12; IP user.org:uhd:tx_dpd:1.0): every build, the last
+  # block before the DACs (after the TX beamformer: one predistorter per
+  # DAC / PA), channel-major beat, bypass + identity at reset.
+  set dpd [create_bd_cell -type ip -vlnv user.org:uhd:tx_dpd:1.0 tx_dpd]
+  set_property -dict [list CONFIG.N_CH $nch CONFIG.BEAT_W $beat_w] $dpd
+  connect_bd_intf_net [get_bd_intf_pins tx_dpd/m_axis]  [get_bd_intf_pins M_AXIS_DAC]
+  connect_bd_intf_net [get_bd_intf_pins S_AXI_DPD]      [get_bd_intf_pins tx_dpd/s_axi]
+  connect_bd_net [get_bd_pins adc_clk]       [get_bd_pins tx_dpd/aclk]
+  connect_bd_net [get_bd_pins adc_aresetn]   [get_bd_pins tx_dpd/aresetn]
+  connect_bd_net [get_bd_pins s_axi_aclk]    [get_bd_pins tx_dpd/s_axi_aclk]
+  connect_bd_net [get_bd_pins s_axi_aresetn] [get_bd_pins tx_dpd/s_axi_aresetn]
+
   if {$nch == 1} {
     connect_bd_intf_net [get_bd_intf_pins S_AXIS_ADC] [get_bd_intf_pins udp_streamer/s_axis]
-    connect_bd_intf_net [get_bd_intf_pins udp_player/m_axis_dac] [get_bd_intf_pins M_AXIS_DAC]
+    connect_bd_intf_net [get_bd_intf_pins udp_player/m_axis_dac] [get_bd_intf_pins tx_dpd/s_axis]
   } else {
     # channel-major (rfdc combiner/broadcaster) <-> sample-major
     # (udp_streamer / udp_player, the wire order)
@@ -214,7 +229,7 @@ proc create_hier_cell_eth100g { parentCell nameHier {nch 1} {beat_w 128} {bf_pip
     set bf [create_bd_cell -type ip -vlnv user.org:uhd:tx_beamformer:1.0 tx_beamformer]
     set_property -dict [list CONFIG.N_CH $nch CONFIG.BEAT_W $beat_w CONFIG.PIPE $bf_pipe] $bf
     connect_bd_intf_net [get_bd_intf_pins dac_s2c/m_axis]        [get_bd_intf_pins tx_beamformer/s_axis]
-    connect_bd_intf_net [get_bd_intf_pins tx_beamformer/m_axis]  [get_bd_intf_pins M_AXIS_DAC]
+    connect_bd_intf_net [get_bd_intf_pins tx_beamformer/m_axis]  [get_bd_intf_pins tx_dpd/s_axis]
     connect_bd_intf_net [get_bd_intf_pins S_AXI_BF]              [get_bd_intf_pins tx_beamformer/s_axi]
     connect_bd_net [get_bd_pins adc_clk]       [get_bd_pins tx_beamformer/aclk]
     connect_bd_net [get_bd_pins adc_aresetn]   [get_bd_pins tx_beamformer/aresetn]
@@ -271,6 +286,7 @@ proc create_hier_cell_eth100g { parentCell nameHier {nch 1} {beat_w 128} {bf_pip
 proc v49_eth100g_slaves {nch} {
   set s {S_AXI_STREAMER S_AXI_PLAYER S_AXI_GPIO S_AXI_FREQ}
   if {$nch > 1} { lappend s S_AXI_BF S_AXI_RBF }
+  lappend s S_AXI_DPD
   return $s
 }
 
@@ -553,7 +569,7 @@ proc verify_rate_variant {F {nch 1}} {
     }
     # (eth100g/M_AXIS_DAC is the hierarchy pin: compare with its inside net)
     foreach {a z bt} {eth100g/dac_s2c/m_axis eth100g/tx_beamformer/s_axis upper
-                      eth100g/tx_beamformer/m_axis eth100g/M_AXIS_DAC lower} {
+                      eth100g/tx_beamformer/m_axis eth100g/tx_dpd/s_axis upper} {
       set na [get_bd_intf_nets -quiet -of_objects [get_bd_intf_pins $a]]
       set nz [get_bd_intf_nets -quiet -boundary_type $bt -of_objects [get_bd_intf_pins $z]]
       if {$na eq "" || $na ne $nz} { error "v49: $a is not wired to $z ('$na' '$nz')" }
@@ -584,6 +600,23 @@ proc verify_rate_variant {F {nch 1}} {
       if {$nb * 8 != $bits} { error "v49: $pin is [expr {$nb*8}] bits, expected $bits" }
     }
   }
+  # TX DPD: every build, sized to the row, the last block before the DACs:
+  # udp_player (N = 1) or tx_beamformer (N >= 2) -> tx_dpd -> eth100g/M_AXIS_DAC
+  set dpd [get_bd_cells -quiet eth100g/tx_dpd]
+  if {$dpd eq ""} { error "v49: eth100g/tx_dpd is missing" }
+  foreach {k v} [list N_CH $nch BEAT_W $beat_w] {
+    if {[get_property CONFIG.$k $dpd] != $v} { error "v49: $dpd $k is [get_property CONFIG.$k $dpd], expected $v" }
+  }
+  set dsrc [expr {$nch == 1 ? "eth100g/udp_player/m_axis_dac" : "eth100g/tx_beamformer/m_axis"}]
+  foreach {a z bt} [list $dsrc eth100g/tx_dpd/s_axis upper eth100g/tx_dpd/m_axis eth100g/M_AXIS_DAC lower] {
+    set na [get_bd_intf_nets -quiet -of_objects [get_bd_intf_pins $a]]
+    set nz [get_bd_intf_nets -quiet -boundary_type $bt -of_objects [get_bd_intf_pins $z]]
+    if {$na eq "" || $na ne $nz} { error "v49: $a is not wired to $z ('$na' '$nz')" }
+  }
+  foreach pin {eth100g/tx_dpd/s_axis eth100g/tx_dpd/m_axis} {
+    set nb [get_property CONFIG.TDATA_NUM_BYTES [get_bd_intf_pins $pin]]
+    if {$nb * 8 != $beat_w} { error "v49: $pin is [expr {$nb*8}] bits, expected $beat_w" }
+  }
   # converter streams straight into / out of eth100g
   foreach {a z} {rfdc/M_ADC_AXIS eth100g/S_AXIS_ADC rfdc/S_DAC_AXIS eth100g/M_AXIS_DAC} {
     set na [get_bd_intf_nets -quiet -of_objects [get_bd_intf_pins $a]]
@@ -602,6 +635,9 @@ proc verify_rate_variant {F {nch 1}} {
       dict set amap [string trimleft $bseg /] $off
     }
   }
+  set dseg [get_bd_addr_segs eth100g/tx_dpd/s_axi/*]
+  if {[llength $dseg] != 1} { error "v49: tx_dpd has [llength $dseg] address blocks" }
+  dict set amap [string trimleft $dseg /] 0x80080000
   set segs [get_bd_addr_segs -of_objects [get_bd_addr_spaces zynq_ultra_ps_e/Data]]
   set seen {}
   foreach seg $segs {
@@ -725,6 +761,7 @@ user.org:uhd:axis_pkt_arb:1.0
 user.org:uhd:ch_interleave:1.0
 user.org:uhd:tx_beamformer:1.0
 user.org:uhd:rx_beamformer:1.0
+user.org:uhd:tx_dpd:1.0
 }
 set list_ips_missing {}
 foreach ip_vlnv $list_check_ips {
@@ -3077,6 +3114,7 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
     assign_bd_address -offset 0x80060000 -range 0x00010000 -target_address_space $ps [get_bd_addr_segs eth100g/tx_beamformer/s_axi/*] -force
     assign_bd_address -offset 0x80070000 -range 0x00010000 -target_address_space $ps [get_bd_addr_segs eth100g/rx_beamformer/s_axi/*] -force
   }
+  assign_bd_address -offset 0x80080000 -range 0x00010000 -target_address_space $ps [get_bd_addr_segs eth100g/tx_dpd/s_axi/*] -force
 
   current_bd_instance $oldCurInst
 }

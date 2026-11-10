@@ -44,7 +44,7 @@ Rules and map of the FPGA side. `README.md` has the commands; each board's
   board directory's name.
 - The PS address map is fixed (daemon and `rfsoc_lib` depend on it):
   MTS_clk_wiz 0x8020_0000, axi_gpio_led 0x8023_0000, axi_intc 0x8024_0000,
-  RFDC 0x8028_0000, eth100g 0x8002_0000 .. 0x8007_0000 (Protocol §11,
+  RFDC 0x8028_0000, eth100g 0x8002_0000 .. 0x8008_0000 (Protocol §11, §12,
   `rfsoc/server/eth100g.py`). `verify_rate_variant` checks it.
 - Build only through the Makefile (the Vivado release of `PYNQ=`, checked;
   `build.tcl` refuses a release `flow/versions.txt` does not name). Only
