@@ -26,7 +26,7 @@ import random
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, *[".."] * 4))
+REPO = os.path.abspath(os.path.join(HERE, *[".."] * 5))
 sys.path.insert(0, os.path.join(REPO, "rfsoc"))   # rfsoc_lib (the daemon's library)
 
 NSETS = 8
