@@ -701,6 +701,30 @@ directions (no conjugate). The daemon resets both to bypass when the claim is
 released (device destruction). `tools/rfsoc_bf.py` is the complete Python
 example (`tools/README.md`).
 
+### TX DPD (Protocol §12)
+
+On a build with the DPD (checked at `make()`: `info dpd=1`; every build from
+it on, any N) the module adds, per converter channel c (physical, not the
+subdev-spec channel), under `/mboards/0/tx_dpd/<c>`:
+
+| node | type | daemon command |
+|---|---|---|
+| `enable` | bool | `set_dpd_enable <c>` / `get_dpd <c>` |
+| `coefs` | `std::vector<std::complex<double>>`, 20 | `set_dpd_coefs <c>` (quantised `round(x * 2^21)`, Q6.21; the daemon refuses a rail >= 31) / `get_dpd <c>` |
+| `coefs_q21` | `std::string` "re0,im0,...,re19,im19", Q6.21 integers, read / write (Python's tree bindings have no vector access) | the same |
+| `gain_bound` | double (read-only) | `get_dpd <c>` |
+| `stats` | `std::string` "sat_out=..;sat_gain=..;peak_in=..;peak_out=..;bypass=..;reset=.." (read-only) | `get_dpd_stats <c>` |
+| `clear_stats`, `reset` | bool, write `true` | `clear_dpd_stats <c>`, `reset_dpd <c>` (bypass + identity) |
+
+Every read goes to the daemon. A set is committed atomically, while
+streaming; the daemon resets every channel to bypass + identity after a rate
+change and when the claim is released. The model, the coefficient layout and
+the fit are `rfsoc/rfsoc_lib/dsp/dpd.py`; `tools/rfsoc_dpd.py` is the
+complete Python example (check the hardware against the model, fit a set).
+On a build without the DPD the nodes are absent; a node used after a reload
+to such a build raises `uhd::not_implemented_error` ("... has no TX DPD ...
+info dpd=0").
+
 ## Tests
 
 ### Without a board

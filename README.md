@@ -152,6 +152,23 @@ Only installed bitstreams count: install every fs for every rate. The
 daemon's `info rate_otw=` lists each rate's formats (Protocol §9, §10 in
 `AGENTS.md`).
 
+## TX digital predistortion
+
+Every build has a digital predistorter in front of each DAC (Protocol §12):
+a memory polynomial with cross terms (20 complex coefficients per channel),
+in bypass until a client gives it a set, switched atomically while
+streaming, 32 converter-clock cycles of latency whether on or off. A set is
+fitted to one rate, carrier and PA: a rate change puts every channel back in
+bypass. From UHD it is the property tree `/mboards/0/tx_dpd/<c>/` (`enable`,
+`coefs`, `stats`, ...; `host/AGENTS.md`); `host/tools/rfsoc_dpd.py` checks
+the hardware against its model on a TX -> RX loop (`--check`, a cable is
+enough) and fits a set to a PA (`--fit N`):
+
+```sh
+uhd-rfsoc python3 tools/rfsoc_dpd.py --args type=rfsoc,addr=<board-ip> --rate 62.5e6 --freq 1e9 --check
+uhd-rfsoc python3 tools/rfsoc_dpd.py --args type=rfsoc,addr=<board-ip> --rate 62.5e6 --freq 1e9 --fit 4 --keep
+```
+
 ## Layout
 
 | directory | what | runs on |

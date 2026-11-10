@@ -590,6 +590,7 @@ void dev_state::apply_info(const uhd::device_addr_t& info)
     beat_slots_info = size_t(std::max(0LL, parse_ll(info.get("beat_slots", "0"), "info beat_slots")));
     bf              = info.get("bf", "0") == "1";
     rbf             = info.get("rbf", "0") == "1";
+    dpd             = info.get("dpd", "0") == "1";
     default_spp     = size_t(parse_ll(info.get("spp", std::to_string(kDefaultSpp)), "spp"));
     mtu             = size_t(parse_ll(info.get("mtu", "9000"), "mtu"));
     // §10: per direction if the daemon says so, else the common list, else sc16

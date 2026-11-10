@@ -172,6 +172,9 @@ struct dev_state
     //! §11: the loaded build has the RX beamformer (info rbf=1; a daemon or
     //! bitstream from before it: no key / rbf=0)
     std::atomic<bool> rbf{false};
+    //! §12: the loaded build has the TX DPD (info dpd=1; a daemon or
+    //! bitstream from before it: no key / dpd=0)
+    std::atomic<bool> dpd{false};
     //! the stream format declared with set_rx_rate (§3 otw=): device arg
     //! otw=, then the format of the latest streamer; empty = say nothing
     void set_cur_otw(const std::string& f);
@@ -180,7 +183,7 @@ struct dev_state
     //! direction (info rx_otw_formats= / tx_otw_formats=, else otw_formats=);
     //! a daemon without the keys offers only sc16
     std::vector<std::string> otw_offered(bool rx);
-    //! take tick_rate, beat_slots, spp, mtu, the otw lists, bf and rbf from `info`
+    //! take tick_rate, beat_slots, spp, mtu, the otw lists, bf, rbf and dpd from `info`
     void apply_info(const uhd::device_addr_t& info);
     //! re-read `info` (after the daemon reloaded the FPGA)
     void refresh_info();

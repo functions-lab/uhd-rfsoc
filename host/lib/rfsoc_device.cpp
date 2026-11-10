@@ -295,6 +295,87 @@ private:
     bool _staged_valid = false;
 };
 
+// ---------------------------------------------------------------------------
+// §12 TX DPD: the daemon commands behind /mboards/0/tx_dpd/<c>/*, one per
+// converter channel c. A set is 20 complex coefficients, Q6.21 on the wire
+// (40 integers re0 im0 .. re19 im19, rfsoc_lib/dsp/dpd.py: a_mj at 4m+j,
+// b_mj at 16+2m+j-1); the daemon refuses a rail >= 31.0.
+// ---------------------------------------------------------------------------
+class dpd_ctl
+{
+public:
+    static constexpr size_t kNcoef = 20;
+    static constexpr double kScale = double(1 << 21); // Q6.21
+    struct state
+    {
+        bool enable = false;
+        std::vector<long long> q; // 40: re0, im0, ..
+        double gain_bound = 0.0;
+    };
+    dpd_ctl(std::shared_ptr<dev_state> st, size_t ch) : _st(std::move(st)), _ch(std::to_string(ch)) {}
+    void need() const
+    {
+        if (not _st->dpd.load())
+            throw uhd::not_implemented_error("rfsoc: the loaded build has no TX DPD (Protocol §12: "
+                                             "eth100g/tx_dpd; info dpd=0)");
+    }
+    //! `get_dpd <c>`: OK enable=..;coefs=re0,im0,..;gain_bound=..
+    state get()
+    {
+        need();
+        const device_addr_t kv = parse_kv(_st->ctrl->call("get_dpd " + _ch));
+        state s;
+        s.enable = kv.get("enable", "0") == "1";
+        for (const auto& t : split(kv.get("coefs", ""), ',', false))
+            s.q.push_back(parse_ll(t, "get_dpd coefs"));
+        s.gain_bound = parse_double(kv.get("gain_bound", "0"), "get_dpd gain_bound");
+        return s;
+    }
+    bool set_enable(bool e)
+    {
+        need();
+        const auto r = _st->ctrl->call_tokens("set_dpd_enable " + _ch + (e ? " 1" : " 0"));
+        return r.empty() ? e : r[0] == "1";
+    }
+    void set_q(const std::vector<long long>& q)
+    {
+        need();
+        if (q.size() != 2 * kNcoef)
+            throw uhd::value_error("rfsoc: a TX DPD set is " + std::to_string(2 * kNcoef)
+                                   + " Q6.21 integers (re0 im0 .. re19 im19), got " + std::to_string(q.size()));
+        std::string req = "set_dpd_coefs " + _ch;
+        for (const auto v : q)
+            req += " " + std::to_string(v);
+        _st->ctrl->call(req);
+    }
+    void reset()
+    {
+        need();
+        _st->ctrl->call("reset_dpd " + _ch);
+    }
+    std::string stats()
+    {
+        need();
+        return _st->ctrl->call("get_dpd_stats " + _ch);
+    }
+    void clear_stats()
+    {
+        need();
+        _st->ctrl->call("clear_dpd_stats " + _ch);
+    }
+    //! complex<double> -> Q6.21: round(x * 2^21) (the daemon checks the range)
+    static long long q21(double x)
+    {
+        if (x != x)
+            return 0;
+        return std::llround(std::max(-64.0, std::min(64.0, x)) * kScale);
+    }
+
+private:
+    std::shared_ptr<dev_state> _st;
+    const std::string _ch;
+};
+
 //! The whole user register space: 0..31 the TX beamformer, 64..95 the RX one.
 //! multi_usrp::set_user_register lands in poke; get_user_settings_iface(chan)
 //! (below) reads it back through peek.
@@ -374,6 +455,8 @@ private:
     void _build_bf();
     //! the beamformer nodes of `c` under `b` (TX: also under the alias)
     void _build_bf_nodes(const fs_path& b, std::shared_ptr<bf_ctl> c);
+    //! §12: /mboards/0/tx_dpd/<c>/* for every converter channel c
+    void _build_dpd();
 
     std::shared_ptr<dev_state> _st;
     std::shared_ptr<bf_ctl> _bf, _rbf;
@@ -901,6 +984,7 @@ void rfsoc_device::_build_tree(const device_addr_t& info)
             .set(usrp::subdev_spec_t(spec));
     }
     _build_bf();
+    _build_dpd();
 }
 
 std::string rfsoc_device::_at()
@@ -1403,6 +1487,70 @@ void rfsoc_device::_build_bf_nodes(const fs_path& b, std::shared_ptr<bf_ctl> bf)
         _tree->create<int>(b / "shift")
             .set_coercer([bf](int sh) { return bf->set_shift(sh); })
             .set_publisher([bf] { return bf->get().shift; });
+}
+
+void rfsoc_device::_build_dpd()
+{
+    // only on a build that has it (tools test tree.exists(.../0/enable))
+    if (not _st->dpd)
+        return;
+    for (size_t ch = 0; ch < _st->num_tx; ch++) {
+        const fs_path b = fs_path("/mboards/0/tx_dpd") / std::to_string(ch);
+        auto d          = std::make_shared<dpd_ctl>(_st, ch);
+        _tree->create<bool>(b / "enable")
+            .set_coercer([d](bool e) { return d->set_enable(e); })
+            .set_publisher([d] { return d->get().enable; });
+        using cvec = std::vector<std::complex<double>>;
+        _tree->create<cvec>(b / "coefs")
+            .set_coercer([d](const cvec& c) {
+                std::vector<long long> q;
+                for (const auto& x : c) {
+                    q.push_back(dpd_ctl::q21(x.real()));
+                    q.push_back(dpd_ctl::q21(x.imag()));
+                }
+                d->set_q(q);
+                cvec out;
+                for (size_t i = 0; i + 1 < q.size(); i += 2)
+                    out.emplace_back(q[i] / dpd_ctl::kScale, q[i + 1] / dpd_ctl::kScale);
+                return out;
+            })
+            .set_publisher([d] {
+                const auto q = d->get().q;
+                cvec out;
+                for (size_t i = 0; i + 1 < q.size(); i += 2)
+                    out.emplace_back(q[i] / dpd_ctl::kScale, q[i + 1] / dpd_ctl::kScale);
+                return out;
+            });
+        // the same set as text "re0,im0,..,re19,im19" in Q6.21 integers (the
+        // get_dpd format), writable: the UHD Python bindings handle only
+        // bool/int/double/string tree nodes
+        _tree->create<std::string>(b / "coefs_q21")
+            .set_coercer([d](const std::string& txt) {
+                std::vector<long long> q;
+                for (const auto& t : split(txt, ',', false))
+                    q.push_back(parse_ll(t, "tx_dpd coefs_q21"));
+                d->set_q(q);
+                return txt;
+            })
+            .set_publisher([d] {
+                std::string out;
+                for (const auto v : d->get().q)
+                    out += (out.empty() ? "" : ",") + std::to_string(v);
+                return out;
+            });
+        _tree->create<double>(b / "gain_bound").set_publisher([d] { return d->get().gain_bound; });
+        // get_dpd_stats: "sat_out=..;sat_gain=..;peak_in=..;peak_out=..;bypass=..;reset=.."
+        _tree->create<std::string>(b / "stats").set_publisher([d] { return d->stats(); });
+        _tree->create<bool>(b / "clear_stats").add_coerced_subscriber([d](bool v) {
+            if (v)
+                d->clear_stats();
+        });
+        // true: bypass + the identity set
+        _tree->create<bool>(b / "reset").add_coerced_subscriber([d](bool v) {
+            if (v)
+                d->reset();
+        });
+    }
 }
 
 // ---------------------------------------------------------------------------
