@@ -1,5 +1,5 @@
 # uhd_ip -- the UHD / 100GbE data-plane cores (udp_streamer, udp_player,
-# axis_pkt_arb, ch_interleave, tx_beamformer, rx_beamformer): sources,
+# axis_pkt_arb, ch_interleave, tx_beamformer, rx_beamformer, tx_dpd): sources,
 # testbenches and IP packaging.
 #
 #   src/            the RTL (Verilog-2001, XPM macros); register maps in the headers
@@ -14,9 +14,9 @@
 VIVADO_ROOT ?= $(or $(patsubst %/bin/vivado,%,$(realpath $(shell command -v vivado 2>/dev/null))),/tools/Xilinx/Vivado/2021.1)
 VIVADO      := $(VIVADO_ROOT)/bin/vivado
 
-.PHONY: all sim sim-streamer sim-player sim-fmt sim-max sim-wide sim-interleave sim-bf sim-rbf sim-arb package ooc clean
+.PHONY: all sim sim-streamer sim-player sim-fmt sim-max sim-wide sim-interleave sim-bf sim-rbf sim-dpd sim-arb package ooc clean
 
-all: sim sim-fmt sim-max sim-wide sim-interleave sim-bf sim-rbf sim-arb
+all: sim sim-fmt sim-max sim-wide sim-interleave sim-bf sim-rbf sim-dpd sim-arb
 
 # sc16 regression: S_WIDTH/M_WIDTH 128/256/512 x TICK_STEP 1/2
 sim: sim-streamer sim-player
@@ -62,21 +62,28 @@ sim-bf:
 sim-rbf:
 	VIVADO_ROOT=$(VIVADO_ROOT) sim/run_sim_rbf.sh
 
+# TX DPD (Protocol §12), every v49 (N_CH, BEAT_W) geometry, two clock ratios
+sim-dpd:
+	VIVADO_ROOT=$(VIVADO_ROOT) sim/run_sim_dpd.sh
+
 package:
 	$(VIVADO) -mode batch -nojournal -nolog -notrace -source package_ip.tcl
 
 # the deployed converter geometries (128, 256 and 512-bit beats), all at the
 # templates' 312.5 MHz converter clock; the player with the 2 MiB
-# (32768-word) TX buffer; tx_clk 322.27 MHz
+# (32768-word) TX buffer; tx_clk 322.27 MHz; tx_dpd at every (N_CH, BEAT_W)
+# of the v49 builds (core:width:MHz[:N_CH])
 OOC_CFGS := udp_streamer:128:312.5 udp_streamer:256:312.5 udp_streamer:512:312.5 \
-            udp_player:128:312.5 udp_player:256:312.5 udp_player:512:312.5
+            udp_player:128:312.5 udp_player:256:312.5 udp_player:512:312.5 \
+            tx_dpd:128:312.5:1 tx_dpd:256:312.5:2 tx_dpd:512:312.5:4 tx_dpd:512:312.5:8 \
+            tx_dpd:512:312.5:16 tx_dpd:256:312.5:1 tx_dpd:512:312.5:2
 ooc:
 	mkdir -p ooc
 	cd ooc && for c in $(OOC_CFGS); do \
 	  set -- $$(echo $$c | tr : ' '); \
-	  $(VIVADO) -mode batch -nojournal -log ooc_$$1_$$2.log -source ../ooc_timing.tcl \
-	    -tclargs $$1 $$2 $$3 ooc_$$1_$$2 $$([ $$1 = udp_player ] && echo TX_BUF_WORDS=32768) \
-	    > /dev/null & \
+	  $(VIVADO) -mode batch -nojournal -log ooc_$$1_$$2$${4:+_$$4}.log -source ../ooc_timing.tcl \
+	    -tclargs $$1 $$2 $$3 ooc_$$1_$$2$${4:+_$$4} $$([ $$1 = udp_player ] && echo TX_BUF_WORDS=32768) \
+	    $${4:+N_CH=$$4} > /dev/null & \
 	done; wait; grep -h OOC_RESULT ooc_*.log
 
 clean:

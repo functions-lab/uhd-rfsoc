@@ -7,7 +7,8 @@
 #
 # Every core is packaged straight from src/<core>.v (Verilog-2001, XPM macros;
 # tx_beamformer also carries the beamformer_1.0 datapath it instantiates,
-# src/beamformer_v1_0.sv and src/beamformer_channel.sv) as user.org:uhd:<core>:1.0; its HDL is copied into the IP
+# src/beamformer_v1_0.sv and src/beamformer_channel.sv, tx_dpd its datapath
+# src/dpd_*.sv) as user.org:uhd:<core>:1.0; its HDL is copied into the IP
 # (<repo>/<core>_1.0/src), so the repo is self-contained. The bus interfaces
 # are inferred from the X_INTERFACE_INFO attributes and port names, and this
 # script refuses to save a core whose interfaces, parameters or AXI-Lite
@@ -44,11 +45,16 @@ set cores [dict create \
     "RX beamformer on the channel-major ADC beat: channel 0 = sat16(round(sum over c of x_c w_c >> (15+SHIFT))), channels 1..N-1 unchanged, or bit-exact bypass; atomic weight/shift LOAD. Register map in the HDL header; Protocol §11." \
     {s_axis m_axis s_axi aclk s_axi_aclk aresetn s_axi_aresetn} \
     {N_CH BEAT_W}] \
+  tx_dpd [list \
+    "TX digital predistortion on the channel-major DAC beat, the last block before the DACs: per channel the MPL-4x4 memory polynomial with lag terms (20 complex Q6.21 coefficients), fixed 32-cycle latency, or bit-exact bypass; atomic COMMIT. Register map in the HDL header; Protocol §12." \
+    {s_axis m_axis s_axi aclk s_axi_aclk aresetn s_axi_aresetn} \
+    {N_CH BEAT_W}] \
 ]
 # extra HDL a core instantiates (copied into the IP with its own source)
 set extra [dict create \
   tx_beamformer [list $here/src/beamformer_v1_0.sv \
-                      $here/src/beamformer_channel.sv]]
+                      $here/src/beamformer_channel.sv] \
+  tx_dpd [lsort [glob $here/src/dpd_*.sv]]]
 
 file mkdir $repo
 set tmp [file normalize $here/.pkg_tmp]

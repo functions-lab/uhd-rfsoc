@@ -18,6 +18,7 @@ directory (the clock register files are found relative to it).
 | `mts.py` | `MyMTS`: multi-tile synchronisation of the DAC and ADC tiles (`xrfdc`'s `mts_dac` / `mts_adc`), with the MTS clocking wizard checked |
 | `gt_refclk.py` | the ZCU216's 8A34001 (U409): read its status, program the 100G GT reference clock (156.25 MHz) from a register file; also a CLI (`python3 gt_refclk.py --status`) |
 | `dsp/beamformer.py` | `Beamformer`: Q1.15 steering weights of a uniform linear array (Protocol §11); pure numpy |
+| `dsp/dpd.py` | the TX DPD (Protocol §12): the bit-exact model of `tx_dpd` (`dpd_fx`), coefficient words and checks, the safety gate, the indirect-learning fit and its metrics; pure numpy, the one reference of the sims, the daemon and `host/tools/rfsoc_dpd.py` |
 | `dsp/phase_search.py` | pairwise phase search for array calibration (`host/benchmark/phase_cal.py`); pure numpy |
 | `xrfclk/<board>/` | the clock chips' register files (TICS Pro exports), one directory per board (`Board.name`: `ZCU216`, `RFSoC4x2`) |
 

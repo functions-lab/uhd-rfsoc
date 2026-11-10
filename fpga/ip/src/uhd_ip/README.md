@@ -14,15 +14,16 @@ import.
 | `ch_interleave` | channel-major <-> sample-major (wire) slot order of a multi-channel beat (§9) |
 | `tx_beamformer` | TX ch0 x w[c] to every DAC, or bypass (§11; datapath `beamformer_v1_0.sv`, `beamformer_channel.sv`) |
 | `rx_beamformer` | RX ch0 = sum of x[c] w[c], channels 1..N-1 raw, or bypass (§11) |
+| `tx_dpd` | TX digital predistortion per DAC, the last block before the DACs: MPL-4x4 memory polynomial, 20 complex coefficients per channel, atomic COMMIT, or bypass (§12; datapath `dpd_*.sv`) |
 
 ```sh
-make sim sim-fmt sim-max sim-wide sim-interleave sim-bf sim-rbf sim-arb   # xsim regressions (`make all`)
-make package                                                           # -> ../../repo/uhd_ip
-make ooc                                                               # out-of-context timing of streamer / player
+make sim sim-fmt sim-max sim-wide sim-interleave sim-bf sim-rbf sim-arb sim-dpd   # xsim regressions (`make all`)
+make package                                                                   # -> ../../repo/uhd_ip
+make ooc                                                                       # out-of-context timing of streamer / player / tx_dpd
 ```
 
 Every regression replays the simulation against an exact Python model
-(`sim/check_*.py`, `sim/otw_ref.py`): PASS means bit-exact. Needs Vivado
+(`sim/check_*.py`, `sim/otw_ref.py`; the DPD's is `rfsoc/rfsoc_lib/dsp/dpd.py`): PASS means bit-exact. Needs Vivado
 2021.1 (`vivado` on PATH, or `VIVADO_ROOT=<install dir>`). Register maps are
 in each source's header; the wire contract is the Protocol in the top
 `AGENTS.md`; rules for changing the cores are in `AGENTS.md` here.
