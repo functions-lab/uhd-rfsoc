@@ -69,6 +69,8 @@ jobs:
         run: python3 -m compileall -q -x '/(uhd|gnuradio/gnuradio)/' rfsoc host
       - name: The daemon parses its arguments without a board
         run: python3 rfsoc/server/uhd_rfsoc_daemon.py --help > /dev/null
+      - name: Python packages the daemon imports (PYNQ ships them)
+        run: sudo apt-get install -y --no-install-recommends python3-numpy
       - name: Daemon unit tests
         run: python3 -m unittest discover -s rfsoc/server/tests
       - name: Shell scripts parse

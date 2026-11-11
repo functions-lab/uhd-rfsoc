@@ -16,9 +16,10 @@ XRFCLK = os.path.join(os.path.dirname(os.path.dirname(HERE)), "rfsoc_lib", "xrfc
 
 def regs(path):
     out = {}
-    for line in open(path):
-        v = int(line.split("\t")[-1], 16)
-        out[(v >> 8) & 0x1FFF] = v & 0xFF
+    with open(path) as f:
+        for line in f:
+            v = int(line.split("\t")[-1], 16)
+            out[(v >> 8) & 0x1FFF] = v & 0xFF
     return out
 
 
