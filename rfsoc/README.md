@@ -84,7 +84,10 @@ rfsoc/push_bitstreams.sh bitstreams/pynq2.7/zcu216 xilinx@<board-ip>           #
 rfsoc/push_bitstreams.sh fpga/build/<board>/bitstreams xilinx@<board-ip>       # your builds
 ```
 
-`get_bitstreams.sh` needs an SSH key registered with GitHub.
+`rfsoc/get_bitstreams.sh -n xilinx@<board-ip>` is a dry run: it prints the
+board type, the PYNQ version and the set, and copies nothing. A board or
+PYNQ version without a prebuilt set is refused with the list of the sets
+that exist; build that one yourself (`fpga/README.md`).
 
 Or copy a release's files there by hand, each `.bit` with its `.hwh`. Any
 subset works: every installed build's rates are offered to UHD (top

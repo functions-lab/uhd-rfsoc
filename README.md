@@ -2,9 +2,16 @@
 
 [![CI](https://github.com/WeiCheng14159/uhd-rfsoc/actions/workflows/ci.yml/badge.svg)](https://github.com/WeiCheng14159/uhd-rfsoc/actions/workflows/ci.yml)
 
-**uhd-rfsoc turns an AMD RFSoC board into a UHD device over 100 GbE.** Stock
-UHD 4.6 applications, GNU Radio flowgraphs and 5G RAN stacks drive the board
-as they drive a USRP: up to 16 channels, up to 2.5 GS/s per channel.
+**Unleash the full capability of your RFSoC with uhd-rfsoc.**
+
+**TL;DR:** uhd-rfsoc is an RFSoC driver for UHD, so you can use your board
+as a standard UHD device. Every ecosystem built around UHD (GNU Radio,
+OCUDU, Duranta and more) works out of the box.
+
+Supported boards, each with multiple sample-rate and channel-count options:
+
+- **AMD ZCU216** (16T16R)
+- **Real Digital RFSoC 4x2** (2T4R)
 
 <!-- Demo video placeholder. Replace the block below with the video: drag
      the .mp4 into the GitHub editor, or link a thumbnail to it. -->
@@ -224,8 +231,8 @@ version. Three ways to get it:
 - `rfsoc/get_bitstreams.sh`, as in the quick start. It fetches only that
   set of the `bitstreams/` submodule, into
   `bitstreams/pynq<version>/<board>/`, and checks its `SHA256SUMS`.
-  `rfsoc/get_bitstreams.sh zcu216 2.7` fetches a set without a board. It
-  needs an SSH key registered with GitHub;
+  `rfsoc/get_bitstreams.sh zcu216 2.7` fetches a set without a board, and
+  `-n` only reports what it would do. It needs no GitHub account;
 - `uhd-rfsoc-bitstreams-<board>-pynq<version>.zip` from a
   [release](https://github.com/WeiCheng14159/uhd-rfsoc/releases);
 - your own build: `cd fpga && make BOARD=zcu216 templates`
