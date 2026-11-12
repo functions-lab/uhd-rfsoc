@@ -10,37 +10,64 @@ OCUDU, Duranta and more) works out of the box.
 
 Supported boards, each with multiple sample-rate and channel-count options:
 
-- [**AMD ZCU216**](https://www.amd.com/en/products/adaptive-socs-and-fpgas/evaluation-boards/zcu216.html) (16T16R)
-- [**Real Digital RFSoC 4x2**](https://www.realdigital.org/hardware/rfsoc-4x2) (2T4R)
-
+- [**Xilinx RFSoC ZCU216**](https://www.amd.com/en/products/adaptive-socs-and-fpgas/evaluation-boards/zcu216.html) (16T16R)
+- [**Real Digital RFSoC4x2**](https://www.realdigital.org/hardware/rfsoc-4x2) (2T4R)
+- **Other Xilinx RFSoC boards**: Work in progress
 <!-- Demo video placeholder. Replace the block below with the video: drag
      the .mp4 into the GitHub editor, or link a thumbnail to it. -->
-> **Demo video: coming soon.** The UHD command line against a board:
+> **Demo video.**
 
 ```sh
 uhd_find_devices --args type=rfsoc
-uhd-rfsoc uhd_usrp_probe --args type=rfsoc,channels=4
-uhd-rfsoc benchmark_rate --args type=rfsoc --rx_rate 1.25e9 --tx_rate 1.25e9
+uhd_usrp_probe --args type=rfsoc,channels=4
+benchmark_rate --args type=rfsoc --rx_rate 1.25e9 --tx_rate 1.25e9
 ```
 
 ## Quick start
 
-**[QUICK_START.md](QUICK_START.md)** takes a fresh board and host to the
-GNU Radio demo in four steps: clone, set up the board, set up the host, run.
+**[QUICK_START.md](QUICK_START.md)** helps you jump start a RFSoC board with fresh PYNQ image and run a GNU Radio demo.
+
+## Sampling rate options
+
+The data rate on the 100 GbE link is the channel count times the
+per-channel I/Q sample rate times the size of one sample on the wire:
+
+$$R = N \cdot f_s \cdot b_{\text{otw}} \;\le\; 99\ \text{Gb/s}$$
+
+| symbol | meaning |
+|---|---|
+| $N$ | channel count |
+| $f_s$ | per-channel I/Q sample rate, which is also the bandwidth |
+| $b_{\text{otw}}$ | bits per I/Q sample of the over-the-wire (OTW) format: 32 for sc16, 24 for sc12, 16 for sc8 |
+| 99 Gb/s | what 100 GbE carries after packet headers |
+
+Example with $N = 4$ on a ZCU216:
+
+| $f_s$ (MS/s) | sc16 | sc12 | sc8 | formats that fit |
+|---|---|---|---|---|
+| 625 | 80 Gb/s | 60 Gb/s | 40 Gb/s | sc16, sc12, sc8 |
+| 833.33 | 107 Gb/s, too much | 80 Gb/s | 53 Gb/s | sc12, sc8 |
+| 1250 | 160 Gb/s, too much | 120 Gb/s, too much | 80 Gb/s | sc8 only |
+
+Choose the channel count with the device argument `channels=N` and the
+sample rate with the application's usual rate option:
 
 ```sh
-git clone https://github.com/functions-lab/uhd-rfsoc.git && cd uhd-rfsoc
+# 4 channels at 625 MS/s each, sc16 (the default format)
+uhd-rfsoc benchmark_rate --args type=rfsoc,channels=4 --channels 0,1,2,3 --rx_rate 625e6 --tx_rate 625e6
+# 4 channels at 1250 MS/s each: only sc8 fits, so ask for it
+uhd-rfsoc benchmark_rate --args type=rfsoc,channels=4,otw=sc8 --channels 0,1,2,3 --rx_rate 1.25e9 --rx_otw sc8 --rx_cpu sc8
 ```
 
-## Sample rate (bandwidth) and carrier
+A request is met from below: you get the highest supported rate at or below
+the one you ask for.
 
-The per-channel I/Q sample rate f_s is the bandwidth. It is the RFDC rate
-f_RFDC divided by an integer factor, and UHD chooses it at run time
-(`set_rx_rate`, `--rate`). Each row is one bitstream.
+How to read the table:
 
 - **Bold** rates are the LTE / 5G NR rates.
-- Rates marked ° fit the 100 GbE link only in sc12 or sc8; rates marked •
-  fit only in sc8. All others fit in sc16 too.
+- A rate tagged <sub>sc12</sub> is too fast for sc16 on that channel count:
+  it needs sc12 or sc8. A rate tagged <sub>sc8</sub> needs sc8. Untagged
+  rates fit in every format.
 - The carrier is set per channel anywhere in the range, without an external
   front end.
 
@@ -48,61 +75,49 @@ f_RFDC divided by an integer factor, and UHD chooses it at run time
 |---|---|---|---|---|---|
 | **ZCU216** | 2.5 | 0 .. 1250 | 1 | 1250 / 1250 / 1250 | 62.5, 104.17, 125, 156.25, 208.33, 250, 312.5, 416.67, 500, 625, 833.33, 1250 |
 | | | | 2 | 1250 / 1250 / 1250 | 62.5, 104.17, 125, 156.25, 208.33, 250, 312.5, 416.67, 500, 625, 833.33, 1250 |
-| | | | 4 | 625 / 833.33 / 1250 | 62.5, 104.17, 125, 156.25, 208.33, 250, 312.5, 416.67, 500, 625, 833.33 °, 1250 • |
-| | | | 8 | 312.5 / 500 / 625 | 62.5, 104.17, 125, 156.25, 208.33, 250, 312.5, 416.67 °, 500 °, 625 • |
-| | | | 16 | 156.25 / 250 / 312.5 | 62.5, 104.17, 125, 156.25, 208.33 °, 250 °, 312.5 • |
+| | | | 4 | 625 / 833.33 / 1250 | 62.5, 104.17, 125, 156.25, 208.33, 250, 312.5, 416.67, 500, 625, 833.33 <sub>sc12</sub>, 1250 <sub>sc8</sub> |
+| | | | 8 | 312.5 / 500 / 625 | 62.5, 104.17, 125, 156.25, 208.33, 250, 312.5, 416.67 <sub>sc12</sub>, 500 <sub>sc12</sub>, 625 <sub>sc8</sub> |
+| | | | 16 | 156.25 / 250 / 312.5 | 62.5, 104.17, 125, 156.25, 208.33 <sub>sc12</sub>, 250 <sub>sc12</sub>, 312.5 <sub>sc8</sub> |
 | | 2.4576 | 0 .. 1228.8 | 1 | 1228.8 / 1228.8 / 1228.8 | **61.44**, 102.4, **122.88**, 153.6, 204.8, **245.76**, 307.2, 409.6, **491.52**, 614.4, 819.2, 1228.8 |
 | | | | 2 | 1228.8 / 1228.8 / 1228.8 | **61.44**, 102.4, **122.88**, 153.6, 204.8, **245.76**, 307.2, 409.6, **491.52**, 614.4, 819.2, 1228.8 |
-| | | | 4 | 614.4 / 819.2 / 1228.8 | **61.44**, 102.4, **122.88**, 153.6, 204.8, **245.76**, 307.2, 409.6, **491.52**, 614.4, 819.2 °, 1228.8 • |
-| | | | 8 | 307.2 / 491.52 / 614.4 | **61.44**, 102.4, **122.88**, 153.6, 204.8, **245.76**, 307.2, 409.6 °, **491.52** °, 614.4 • |
-| | | | 16 | 153.6 / 245.76 / 307.2 | **61.44**, 102.4, **122.88**, 153.6, 204.8 °, **245.76** °, 307.2 • |
+| | | | 4 | 614.4 / 819.2 / 1228.8 | **61.44**, 102.4, **122.88**, 153.6, 204.8, **245.76**, 307.2, 409.6, **491.52**, 614.4, 819.2 <sub>sc12</sub>, 1228.8 <sub>sc8</sub> |
+| | | | 8 | 307.2 / 491.52 / 614.4 | **61.44**, 102.4, **122.88**, 153.6, 204.8, **245.76**, 307.2, 409.6 <sub>sc12</sub>, **491.52** <sub>sc12</sub>, 614.4 <sub>sc8</sub> |
+| | | | 16 | 153.6 / 245.76 / 307.2 | **61.44**, 102.4, **122.88**, 153.6, 204.8 <sub>sc12</sub>, **245.76** <sub>sc12</sub>, 307.2 <sub>sc8</sub> |
 | | 2.4 | 0 .. 1200 | 1 | 1200 / 1200 / 1200 | 60, 100, 120, 150, 200, 240, 300, 400, 480, 600, 800, 1200 |
 | | | | 2 | 1200 / 1200 / 1200 | 60, 100, 120, 150, 200, 240, 300, 400, 480, 600, 800, 1200 |
-| | | | 4 | 600 / 800 / 1200 | 60, 100, 120, 150, 200, 240, 300, 400, 480, 600, 800 °, 1200 • |
-| | | | 8 | 300 / 480 / 600 | 60, 100, 120, 150, 200, 240, 300, 400 °, 480 °, 600 • |
-| | | | 16 | 150 / 240 / 300 | 60, 100, 120, 150, 200 °, 240 °, 300 • |
+| | | | 4 | 600 / 800 / 1200 | 60, 100, 120, 150, 200, 240, 300, 400, 480, 600, 800 <sub>sc12</sub>, 1200 <sub>sc8</sub> |
+| | | | 8 | 300 / 480 / 600 | 60, 100, 120, 150, 200, 240, 300, 400 <sub>sc12</sub>, 480 <sub>sc12</sub>, 600 <sub>sc8</sub> |
+| | | | 16 | 150 / 240 / 300 | 60, 100, 120, 150, 200 <sub>sc12</sub>, 240 <sub>sc12</sub>, 300 <sub>sc8</sub> |
 | **RFSoC 4x2** | 5.0 | 0 .. 2500 | 1 | 2500 / 2500 / 2500 | 125, 208.33, 250, 312.5, 416.67, 500, 625, 833.33, 1000, 1250, 1666.67, 2500 |
-| | | | 2 | 1250 / 1666.67 / 2500 | 125, 208.33, 250, 312.5, 416.67, 500, 625, 833.33, 1000, 1250, 1666.67 °, 2500 • |
+| | | | 2 | 1250 / 1666.67 / 2500 | 125, 208.33, 250, 312.5, 416.67, 500, 625, 833.33, 1000, 1250, 1666.67 <sub>sc12</sub>, 2500 <sub>sc8</sub> |
 | | 4.9152 | 0 .. 2457.6 | 1 | 2457.6 / 2457.6 / 2457.6 | **122.88**, 204.8, **245.76**, 307.2, 409.6, **491.52**, 614.4, 819.2, 983.04, 1228.8, 1638.4, 2457.6 |
-| | | | 2 | 1228.8 / 1638.4 / 2457.6 | **122.88**, 204.8, **245.76**, 307.2, 409.6, **491.52**, 614.4, 819.2, 983.04, 1228.8, 1638.4 °, 2457.6 • |
+| | | | 2 | 1228.8 / 1638.4 / 2457.6 | **122.88**, 204.8, **245.76**, 307.2, 409.6, **491.52**, 614.4, 819.2, 983.04, 1228.8, 1638.4 <sub>sc12</sub>, 2457.6 <sub>sc8</sub> |
 | | 4.8 | 0 .. 2400 | 1 | 2400 / 2400 / 2400 | 120, 200, 240, 300, 400, 480, 600, 800, 960, 1200, 1600, 2400 |
-| | | | 2 | 1200 / 1600 / 2400 | 120, 200, 240, 300, 400, 480, 600, 800, 960, 1200, 1600 °, 2400 • |
+| | | | 2 | 1200 / 1600 / 2400 | 120, 200, 240, 300, 400, 480, 600, 800, 960, 1200, 1600 <sub>sc12</sub>, 2400 <sub>sc8</sub> |
 
-Good to know:
+Note:
 
-- **A request is met from below:** you get the highest offered rate at or
-  below it. RX and TX share one rate.
-- **A ° or • rate must be asked for:** device argument `otw=sc8` or
-  `otw=sc12`, plus the application's own wire-format option. Otherwise the
-  fastest sc16 rate is served.
-- **A rate change stops streaming** for ~1 s within one f_RFDC, 10-20 s
-  across them. Set the rate before streaming, as UHD applications do.
-- **Only installed bitstreams are offered.**
-
-The rules behind the table: Protocol §8 to §10 in `AGENTS.md`.
+- **The OTW format is sc16 by default.** Pass the device argument `otw=sc8`
+  or `otw=sc12` to ask for another one. Without it, a request for a tagged
+  rate is served at the fastest sc16 rate instead.
 
 ## GNU Radio demo
 
-The 4-channel flowgraph on a ZCU216, each DAC cabled to its ADC: 625 MS/s
-per channel in sc16, a 10 MHz tone on a 950 MHz carrier.
+The 4-channel GNU Radio flowgraph with uhd-rfsoc, each DAC cabled to its ADC: 625 MS/s
+per channel in sc16 type, a 10 MHz tone on a 950 MHz carrier.
 
-| flowgraph | spectrum of RX 0-3 | RX 0-3, TX phases 90° apart |
+| GNU Radio flowgraph | Spectrum of RX 0-3 | RX 0-3 with TX shifted 90° apart |
 |:---:|:---:|:---:|
 | ![The 4-channel flowgraph](docs/img/gnuradio_flowgraph.png) | ![Spectrum of the four RX channels](docs/img/gnuradio_spectrum.png) | ![Time plots of the four RX channels](docs/img/gnuradio_phase.png) |
 
-- **Standard blocks only:** UHD USRP Sink and Source, Qt GUI sinks.
-- **Full rate, in bursts:** every 0.5 s one timed TX burst and one RX
-  capture on all channels, contiguous and time-aligned.
-- **Spectrum:** the tone at 960 MHz, more than 60 dB above the displayed
-  noise floor on every channel.
-- **Live control:** one phase and one amplitude slider per TX channel. The
-  right image shows successive channels set 90° apart.
-
-Options and headless runs: `host/gnuradio/README.md`.
+- **Standard UHD blocks only:** UHD USRP Sink and Source, Qt GUI sinks.
+- **Spectrum:** Clean tone at expected frequency band.
+- **Phaser control:** one phase per TX and RX channel
 
 ## 5G NR with OCUDU and Duranta
 
-Two open-source 5G RAN stacks, OCUDU and Duranta, run unmodified as Split 8
+Two open-source 5G RAN stacks, [OCUDU](https://ocudu.org) and
+[Duranta](https://lfnetworking.org/projects/duranta/), run unmodified as Split 8
 gNBs with an RFSoC board as their radio.
 
 ![The eight tested gNB-UE pairs](docs/img/5g_setup.png)
@@ -113,77 +128,3 @@ gNBs with an RFSoC board as their radio.
 - **Pairs 5-8, over the air:** a commodity phone on a 100 MHz TDD cell in
   band n78 at 3609.99 MHz, the second Nyquist zone of the RFSoC 4x2.
 - **Hosts:** an x86 workstation, or an Arm-based NVIDIA DGX Spark.
-- **GPSDO:** boards that face a phone or another RFSoC board lock to a
-  10 MHz GPS-disciplined reference.
-
-Throughput is measured with iperf3 for srsUE and a speed-test app for the
-phones. RTT is the ping round-trip time.
-
-| pair | gNB host | gNB radio | UE | DL / UL (Mb/s) | RTT (ms) |
-|:---:|---|---|---|:---:|:---:|
-| | **OCUDU, over cable** | | | | |
-| 1 | x86 | RFSoC 4x2 | srsUE + X310 | 46.0 / 74.4 | 31.8 |
-| 2 | x86 | ZCU216 | srsUE + X310 | 57.9 / 71.7 | 31.3 |
-| 3 | x86 | X310 | srsUE + ZCU216 | 56.0 / 74.0 | 31.2 |
-| 4 | DGX Spark | ZCU216 | srsUE + RFSoC 4x2 | 57.9 / 73.9 | 30.9 |
-| | **OCUDU, over the air** | | | | |
-| 5 | x86 | RFSoC 4x2 | OnePlus 8T | 149.1 / 78.3 | 31.15 |
-| 6 | x86 | RFSoC 4x2 | Galaxy A42 5G | 114.2 / 154.2 | 29.01 |
-| 7 | DGX Spark | RFSoC 4x2 | OnePlus 8T | 177.4 / 177.6 | 31.47 |
-| 8 | DGX Spark | RFSoC 4x2 | Galaxy A42 5G | 181.1 / 122.1 | 29.82 |
-| | **Duranta, over the air** | | | | |
-| 5 | x86 | RFSoC 4x2 | OnePlus 8T | 243.4 / 71.2 | 21.82 |
-| 6 | x86 | RFSoC 4x2 | Galaxy A42 5G | 305.2 / 124.4 | 20.30 |
-| 7 | DGX Spark | RFSoC 4x2 | OnePlus 8T | 192.7 / 93.3 | 20.60 |
-| 8 | DGX Spark | RFSoC 4x2 | Galaxy A42 5G | 216.1 / 124.0 | 20.29 |
-
-## More
-
-**How it fits together**
-
-```
- host PC                                              RFSoC board
- ┌──────────────────────┐   1 GbE LAN: control    ┌───────────────────────┐
- │ UHD application      │ ──────────────────────► │ daemon (PYNQ)         │
- │ libuhd_rfsoc.so      │   100 GbE: samples      │ FPGA: RF converters,  │
- │ ConnectX 100G NIC    │ ◄─────────────────────► │ packetizer, 100G MAC  │
- └──────────────────────┘                         └───────────────────────┘
-```
-
-| directory | what | read |
-|---|---|---|
-| `fpga/` | the bitstream build flow and the custom IP (Vivado) | `fpga/README.md`, also "Add a board" |
-| `rfsoc/` | the board daemon and its library (PYNQ) | `rfsoc/README.md` |
-| `host/` | the UHD module, tools, hardware tests, flowgraphs | `host/README.md` |
-| `AGENTS.md` | project rules and the wire protocol, for contributors | |
-
-**Bitstreams.** A board needs one set: the one for its type and PYNQ
-version. Three ways to get it:
-
-- `rfsoc/get_bitstreams.sh`, as in [QUICK_START.md](QUICK_START.md). It fetches only that
-  set of the `bitstreams/` submodule
-  ([uhd-rfsoc-bitstream](https://github.com/functions-lab/uhd-rfsoc-bitstream)), into
-  `bitstreams/pynq<version>/<board>/`, and checks its `SHA256SUMS`.
-  `rfsoc/get_bitstreams.sh zcu216 2.7` fetches a set without a board, and
-  `-n` only reports what it would do. It needs no GitHub account;
-- `uhd-rfsoc-bitstreams-<board>-pynq<version>.zip` from a
-  [release](https://github.com/functions-lab/uhd-rfsoc/releases);
-- your own build: `cd fpga && make BOARD=zcu216 templates`
-  (`fpga/README.md`).
-
-**Submodules.** You need to initialise none. `bitstreams/` holds every
-prebuilt set (six sets, ~2 GB checked out); `get_bitstreams.sh` fetches one
-of them, and after a `git pull` that moves the pin, run it again.
-`host/uhd` and `host/gnuradio/gnuradio` are reference sources of the
-releases the code targets; nothing builds from them.
-
-**Reference clock.** A board takes a 10 MHz reference (a GPSDO) on its
-reference input when one is connected, and its own oscillator otherwise
-(`rfsoc/README.md`).
-
-**Older names.** `type=zcu216` and `type=rfsoc4x2` from before the rename
-still work. Every device argument: "Device arguments" in `host/AGENTS.md`.
-
-**CI** builds the host module on x86_64 and aarch64, checks the SIMD kernels
-bit for bit, runs the daemon's unit tests and compiles every flowgraph.
-Bitstreams are built locally with Vivado, never in CI.

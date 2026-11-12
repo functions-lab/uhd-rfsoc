@@ -76,7 +76,7 @@ uhd-rfsoc tx_waveforms --args type=rfsoc,channels=2 --rate 625e6 --freq 950e6 --
 |---|---|
 | `addr=<board-ip>` | which board; without it, the one discovery finds |
 | `channels=N` | the channel count (default 1); a new N reloads the bitstream (~16 s) |
-| `otw=sc8` / `sc12` | a narrower wire format, for the ° and • rates of the [rate table](README.md#sample-rate-bandwidth-and-carrier) |
+| `otw=sc8` / `sc12` | a narrower wire format, for the rates tagged sc12 or sc8 in the [rate table](README.md#sampling-rate-options) |
 
 Troubleshooting: `rfsoc/README.md` for the board, `host/README.md` for the
 host.

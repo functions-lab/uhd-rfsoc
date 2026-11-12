@@ -108,8 +108,8 @@ Good to know:
   ZCU216; 1 or 2 on an RFSoC 4x2. A new N reloads it (~16 s).
 - **Rate:** `set_rx_rate` / `--rate` picks the sample rate (= bandwidth)
   from the installed builds' rates, met from below. The board retunes (~1 s)
-  or reloads (seconds). The rates: `../README.md`, "Sample rate (bandwidth)
-  and carrier".
+  or reloads (seconds). The rates: `../README.md`, "Sampling rate
+  options".
 - **Top rates in sc8 or sc12:** the rates that only a narrow wire format
   fits need the device argument `otw=sc8` (or `otw=sc12`) and the matching
   `--wirefmt` / `--otw`. Without it they are served at the fastest sc16

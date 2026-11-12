@@ -91,7 +91,7 @@ that exist; build that one yourself (`fpga/README.md`).
 
 Or copy a release's files there by hand, each `.bit` with its `.hwh`. Any
 subset works: every installed build's rates are offered to UHD (top
-`README.md`, "Sample rate (bandwidth) and carrier").
+`README.md`, "Sampling rate options").
 
 ### 5. Start the daemon
 
