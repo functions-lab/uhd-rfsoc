@@ -23,6 +23,10 @@ uhd_usrp_probe --args type=rfsoc,channels=4
 benchmark_rate --args type=rfsoc --rx_rate 1.25e9 --tx_rate 1.25e9
 ```
 
+## Architecture
+
+![uhd-rfsoc architecture: the RFSoC board (PS daemon, FPGA fabric) and the host PC (UHD device module), joined by a 1 GbE control link and a 100 GbE data link](docs/img/overview.png)
+
 ## Quick start
 
 **[QUICK_START.md](QUICK_START.md)** helps you jump start a RFSoC board with fresh PYNQ image and run a GNU Radio demo with uhd-rfsoc.
@@ -60,9 +64,7 @@ uhd-rfsoc benchmark_rate --args type=rfsoc,channels=4,otw=sc8 --channels 0,1,2,3
 Available sampling rate options:
 
 - **Bold** rates are the LTE / 5G NR rates.
-- ${\color{orange}\textsf{Orange}}$ rates are too fast for sc16 on that
-  channel count: they need sc12 or sc8.
-- ${\color{red}\textsf{Red}}$ rates need sc8.
+- ${\color{orange}\textsf{Orange}}$ rates are only available for sc12 or sc8. ${\color{red}\textsf{Red}}$ rates are only available for sc8.
 - Uncoloured rates fit in every format.
 
 | board | f_RFDC (GS/s) | carrier (MHz) | channels | max f_s in sc16 / sc12 / sc8 (MS/s) | supported f_s per channel (MS/s) |
@@ -92,13 +94,12 @@ Available sampling rate options:
 Note:
 
 - **The OTW format is sc16 by default.** Pass the device argument `otw=sc8`
-  or `otw=sc12` to ask for another one. Without it, a request for a coloured
-  rate is served at the fastest sc16 rate instead.
+  or `otw=sc12` to ask for the type you want.
 
 ## GNU Radio demo
 
 The 4-channel GNU Radio flowgraph with uhd-rfsoc, each DAC cabled to its ADC: 625 MS/s
-per channel in sc16 type, a 10 MHz tone on a 950 MHz carrier.
+per channel in sc16 type, a 10 MHz tone on a carrier frequency.
 
 | GNU Radio flowgraph | Spectrum of RX 0-3 | RX 0-3 with TX shifted 90° apart |
 |:---:|:---:|:---:|
