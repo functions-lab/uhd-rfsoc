@@ -25,14 +25,13 @@ You need:
 - **Host:** Ubuntu 24.04 (x86_64 or aarch64) with a ConnectX-5, -6 or -7
   100G NIC. UHD 4.6, DPDK 23.11 and GNU Radio 3.10 are its stock packages.
 
-### 1. Clone, with the prebuilt bitstreams (on the PC)
+### 1. Clone (on the PC)
 
 ```sh
 git clone git@github.com:WeiCheng14159/uhd-rfsoc.git && cd uhd-rfsoc
-git submodule update --init bitstreams      # ~180 MB, fetched over SSH
 ```
 
-No SSH key, or your own builds: see "Bitstreams" in [More](#more).
+No submodule is needed: step 2 fetches only the bitstreams of your board.
 
 ### 2. Set up the board (on the board, user `xilinx`)
 
@@ -43,12 +42,13 @@ sudo rfsoc/setup_board.sh                   # once
 ```
 
 Set `data_ip` in `rfsoc/server/uhd_rfsoc.conf`: the FPGA's 100G address, on
-the subnet of the host's 100G port. Then copy the bitstreams from the PC and
-start the daemon:
+the subnet of the host's 100G port. Then install the bitstreams from the PC
+and start the daemon:
 
 ```sh
-# on the PC
-rfsoc/push_bitstreams.sh bitstreams/pynq<version>/<board> xilinx@<board-ip>
+# on the PC: asks the board for its type and PYNQ version, downloads that
+# one set (15-55 MB) and copies it to the board
+rfsoc/get_bitstreams.sh xilinx@<board-ip>
 # on the board
 ./run_daemon.sh                             # returns once it serves (~20 s)
 ```
@@ -218,23 +218,24 @@ phones. RTT is the ping round-trip time.
 | `host/` | the UHD module, tools, hardware tests, flowgraphs | `host/README.md` |
 | `AGENTS.md` | project rules and the wire protocol, for contributors | |
 
-**Bitstreams.** Three ways to get the set for your board and PYNQ version:
+**Bitstreams.** A board needs one set: the one for its type and PYNQ
+version. Three ways to get it:
 
-- the `bitstreams/` submodule, as in the quick start
-  (`bitstreams/pynq<version>/<board>/`, with a `SHA256SUMS` to check);
+- `rfsoc/get_bitstreams.sh`, as in the quick start. It fetches only that
+  set of the `bitstreams/` submodule, into
+  `bitstreams/pynq<version>/<board>/`, and checks its `SHA256SUMS`.
+  `rfsoc/get_bitstreams.sh zcu216 2.7` fetches a set without a board. It
+  needs an SSH key registered with GitHub;
 - `uhd-rfsoc-bitstreams-<board>-pynq<version>.zip` from a
   [release](https://github.com/WeiCheng14159/uhd-rfsoc/releases);
 - your own build: `cd fpga && make BOARD=zcu216 templates`
   (`fpga/README.md`).
 
-**Submodules.** `bitstreams/` is the only one you need. `host/uhd` and
-`host/gnuradio/gnuradio` are reference sources of the releases the code
-targets; nothing builds from them.
-
-```sh
-git submodule update --init bitstreams          # only the bitstreams
-git pull && git submodule update bitstreams     # later: follow a new pin
-```
+**Submodules.** You need to initialise none. `bitstreams/` holds every
+prebuilt set (six sets, ~2 GB checked out); `get_bitstreams.sh` fetches one
+of them, and after a `git pull` that moves the pin, run it again.
+`host/uhd` and `host/gnuradio/gnuradio` are reference sources of the
+releases the code targets; nothing builds from them.
 
 **Reference clock.** A board takes a 10 MHz reference (a GPSDO) on its
 reference input when one is connected, and its own oscillator otherwise
