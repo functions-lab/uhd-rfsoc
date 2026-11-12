@@ -33,9 +33,9 @@ benchmark_rate --args type=rfsoc --rx_rate 1.25e9 --tx_rate 1.25e9
 
 ## Sampling rate options
 
-The data rate on the 100 GbE link (connecting your radio and host machine) is the channel count times the per-channel I/Q sample rate times the size of one sample on the wire:
+The data rate $(R)$ on the 100 GbE link (connecting your radio and host machine) is the channel count $(N)$ times the per-channel I/Q sample rate $(f_s)$ times the size of one sample on the wire $(b_{\text{otw}})$:
 
-$$R = N \cdot f_s \cdot b_{\text{otw}} \;\le\; 99\ \text{Gb/s}$$
+$$R = N \cdot f_s \cdot b_{\text{otw}} \;\le\;100\ \text{Gb/s}$$
 
 | symbol | meaning |
 |---|---|
@@ -56,9 +56,9 @@ sample rate with `--tx_rate` and `--rx_rate`:
 
 ```sh
 # 4 channels at 625 MS/s each, sc16 (the default format)
-uhd-rfsoc benchmark_rate --args type=rfsoc,channels=4 --channels 0,1,2,3 --rx_rate 625e6 --tx_rate 625e6
-# 4 channels at 1250 MS/s each: only sc8 fits, so ask for it
-uhd-rfsoc benchmark_rate --args type=rfsoc,channels=4,otw=sc8 --channels 0,1,2,3 --rx_rate 1.25e9 --rx_otw sc8 --rx_cpu sc8
+benchmark_rate --args type=rfsoc,channels=4 --channels 0,1,2,3 --rx_rate 625e6 --tx_rate 625e6
+# 4 channels at 1250 MS/s each: only sc8 fits
+benchmark_rate --args type=rfsoc,channels=4,otw=sc8 --channels 0,1,2,3 --rx_rate 1.25e9
 ```
 
 Available sampling rate options:
