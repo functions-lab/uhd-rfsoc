@@ -79,7 +79,7 @@ for bit in "$SRV"/*_v49_*ch_qsfp*.bit; do
     if [ -f "${bit%.bit}.hwh" ]; then echo "    $(basename "$bit")"; n=$((n + 1)); else echo "    $(basename "$bit"): no .hwh next to it (skipped by the daemon)"; fi
 done
 if [ "$n" = 0 ]; then
-    echo "    none: copy a build's .bit + .hwh here (from the build machine: rfsoc/push_bitstreams.sh <bit_dir> <user>@<this board>; or a release's files)"; rc=1
+    echo "    none: install them from the PC: rfsoc/get_bitstreams.sh <user>@<this board> (prebuilt) or rfsoc/push_bitstreams.sh <bit_dir> <user>@<this board> (your builds)"; rc=1
 fi
 
 if [ "$rc" = 0 ]; then

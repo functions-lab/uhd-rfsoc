@@ -8,6 +8,7 @@ What runs on the RFSoC board (a ZCU216 or an RFSoC 4x2 with its PYNQ image).
 | `rfsoc_lib/` | the library the daemon brings the converters up with, and the clock chips' register files (`rfsoc_lib/README.md`) |
 | `setup_board.sh` | one-time board setup, run on the board |
 | `xrfdc_mts_patch.py` | used by `setup_board.sh`: adds multi-tile sync to PYNQ's `xrfdc` |
+| `get_bitstreams.sh` | run on the PC: fetches the one prebuilt bitstream set a board needs, and can copy it to the board |
 | `push_bitstreams.sh` | run on the PC: copies bitstreams into the board's checkout |
 | `../run_daemon.sh` | start / stop / status / log of the daemon, run on the board |
 
@@ -67,13 +68,23 @@ oscillator only.
 
 ### 4. Put the bitstreams in `rfsoc/server/`
 
-From the PC, push the prebuilt set of the board's PYNQ version
-(`git submodule update --init bitstreams` fetches them), or your own builds:
+From the PC, one command installs the prebuilt set. It asks the board for
+its type and PYNQ version, downloads only that set (15-55 MB, not every
+set) and copies it over:
 
 ```sh
-rfsoc/push_bitstreams.sh bitstreams/pynq2.7/<board> xilinx@<board-ip>          # prebuilt
+rfsoc/get_bitstreams.sh xilinx@<board-ip>
+```
+
+The same in two steps, or with your own builds:
+
+```sh
+rfsoc/get_bitstreams.sh zcu216 2.7                                             # fetch one set: <board> <pynq-version>
+rfsoc/push_bitstreams.sh bitstreams/pynq2.7/zcu216 xilinx@<board-ip>           # copy it to the board
 rfsoc/push_bitstreams.sh fpga/build/<board>/bitstreams xilinx@<board-ip>       # your builds
 ```
+
+`get_bitstreams.sh` needs an SSH key registered with GitHub.
 
 Or copy a release's files there by hand, each `.bit` with its `.hwh`. Any
 subset works: every installed build's rates are offered to UHD (top
