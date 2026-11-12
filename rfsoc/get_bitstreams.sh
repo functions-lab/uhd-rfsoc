@@ -10,8 +10,8 @@
 # bitstreams/pynq<version>/<board>/, six sets and ~2 GB in all. A board uses
 # one. This fetches only that set (ZCU216 ~500 MB of files, RFSoC 4x2 ~200 MB;
 # less over the network) at the commit this repository pins, and checks it
-# against its SHA256SUMS. Needs git >= 2.25 and no account: the set comes
-# over https, or, if that is refused, over the submodule's own (SSH) URL.
+# against its SHA256SUMS. Needs git >= 2.25 and no account: the bitstream
+# repository is public and fetched over https.
 #
 #   <board> <pynq-version>   board: zcu216, rfsoc4x2; version: 2.7, 3.0, 3.1.
 #                            Fetch that set; install it with
@@ -89,8 +89,8 @@ elif [[ $(git -C "$SUB" config --type=bool core.sparseCheckout 2>/dev/null || ec
     FULL=1                                           # git submodule update --init: every set
 fi
 
-# The repository is public: fetch over https, which needs no key. Only if
-# https does not answer, use the submodule's URL as it is (SSH).
+# The repository is public: fetch over https, which needs no key. If the
+# submodule URL is an SSH one, its https form is tried first.
 if [[ $FULL -eq 0 ]]; then
     HTTPS=$(sed -E 's|^git@([^:]+):|https://\1/|; s|^ssh://git@|https://|' <<<"$URL")
     if [[ $HTTPS == https://* ]] && GIT_TERMINAL_PROMPT=0 git ls-remote "$HTTPS" HEAD > /dev/null 2>&1; then

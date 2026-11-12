@@ -20,13 +20,13 @@ You need:
   user `xilinx`);
 - the QSFP28 cable to the host PC;
 - the bitstreams for that PYNQ version: the `bitstreams/` submodule, a
-  [release](https://github.com/WeiCheng14159/uhd-rfsoc/releases), or your
+  [release](https://github.com/functions-lab/uhd-rfsoc/releases), or your
   own builds (`fpga/README.md`).
 
 ### 1. Clone on the board
 
 ```sh
-git clone https://github.com/WeiCheng14159/uhd-rfsoc.git ~/jupyter_notebooks/uhd-rfsoc
+git clone https://github.com/functions-lab/uhd-rfsoc.git ~/jupyter_notebooks/uhd-rfsoc
 cd ~/jupyter_notebooks/uhd-rfsoc
 ```
 

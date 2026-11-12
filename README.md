@@ -1,6 +1,6 @@
 # uhd-rfsoc
 
-[![CI](https://github.com/WeiCheng14159/uhd-rfsoc/actions/workflows/ci.yml/badge.svg)](https://github.com/WeiCheng14159/uhd-rfsoc/actions/workflows/ci.yml)
+[![CI](https://github.com/functions-lab/uhd-rfsoc/actions/workflows/ci.yml/badge.svg)](https://github.com/functions-lab/uhd-rfsoc/actions/workflows/ci.yml)
 
 **Unleash the full capability of your RFSoC with uhd-rfsoc.**
 
@@ -10,8 +10,8 @@ OCUDU, Duranta and more) works out of the box.
 
 Supported boards, each with multiple sample-rate and channel-count options:
 
-- **AMD ZCU216** (16T16R)
-- **Real Digital RFSoC 4x2** (2T4R)
+- [**AMD ZCU216**](https://www.amd.com/en/products/adaptive-socs-and-fpgas/evaluation-boards/zcu216.html) (16T16R)
+- [**Real Digital RFSoC 4x2**](https://www.realdigital.org/hardware/rfsoc-4x2) (2T4R)
 
 <!-- Demo video placeholder. Replace the block below with the video: drag
      the .mp4 into the GitHub editor, or link a thumbnail to it. -->
@@ -27,15 +27,17 @@ uhd-rfsoc benchmark_rate --args type=rfsoc --rx_rate 1.25e9 --tx_rate 1.25e9
 
 You need:
 
-- **Board:** a ZCU216 or RFSoC 4x2 running PYNQ 2.7, 3.0 or 3.1, on the LAN,
+- **Board:** a [ZCU216](https://www.amd.com/en/products/adaptive-socs-and-fpgas/evaluation-boards/zcu216.html)
+  or [RFSoC 4x2](https://www.realdigital.org/hardware/rfsoc-4x2) running PYNQ 2.7, 3.0 or 3.1, on the LAN,
   with a QSFP28 100G cable to the host.
-- **Host:** Ubuntu 24.04 (x86_64 or aarch64) with a ConnectX-5, -6 or -7
-  100G NIC. UHD 4.6, DPDK 23.11 and GNU Radio 3.10 are its stock packages.
+- **Host:** Linux (x86_64 or aarch64) with a ConnectX-5, -6 or -7
+  100G NIC. We tested with UHD 4.6, DPDK 23.11 and GNU Radio 3.10 but it is 
+  possible that other versions will still work.
 
 ### 1. Clone (on the PC)
 
 ```sh
-git clone git@github.com:WeiCheng14159/uhd-rfsoc.git && cd uhd-rfsoc
+git clone https://github.com/functions-lab/uhd-rfsoc.git && cd uhd-rfsoc
 ```
 
 No submodule is needed: step 2 fetches only the bitstreams of your board.
@@ -43,7 +45,7 @@ No submodule is needed: step 2 fetches only the bitstreams of your board.
 ### 2. Set up the board (on the board, user `xilinx`)
 
 ```sh
-git clone https://github.com/WeiCheng14159/uhd-rfsoc.git ~/jupyter_notebooks/uhd-rfsoc
+git clone https://github.com/functions-lab/uhd-rfsoc.git ~/jupyter_notebooks/uhd-rfsoc
 cd ~/jupyter_notebooks/uhd-rfsoc
 sudo rfsoc/setup_board.sh                   # once
 ```
@@ -229,12 +231,13 @@ phones. RTT is the ping round-trip time.
 version. Three ways to get it:
 
 - `rfsoc/get_bitstreams.sh`, as in the quick start. It fetches only that
-  set of the `bitstreams/` submodule, into
+  set of the `bitstreams/` submodule
+  ([uhd-rfsoc-bitstream](https://github.com/functions-lab/uhd-rfsoc-bitstream)), into
   `bitstreams/pynq<version>/<board>/`, and checks its `SHA256SUMS`.
   `rfsoc/get_bitstreams.sh zcu216 2.7` fetches a set without a board, and
   `-n` only reports what it would do. It needs no GitHub account;
 - `uhd-rfsoc-bitstreams-<board>-pynq<version>.zip` from a
-  [release](https://github.com/WeiCheng14159/uhd-rfsoc/releases);
+  [release](https://github.com/functions-lab/uhd-rfsoc/releases);
 - your own build: `cd fpga && make BOARD=zcu216 templates`
   (`fpga/README.md`).
 
