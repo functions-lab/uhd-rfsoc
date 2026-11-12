@@ -13,3 +13,6 @@ __pycache__/
 rfsoc/server/*.bit
 rfsoc/server/*.hwh
 rfsoc/server/uhd_rfsoc.conf
+
+# editor settings (machine-local paths)
+.vscode/
