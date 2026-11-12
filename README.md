@@ -123,3 +123,10 @@ gNBs with an RFSoC board as their radio.
 - **Pairs 5-8, over the air:** a commodity phone on a 100 MHz TDD cell in
   band n78 at 3609.99 MHz, the second Nyquist zone of the RFSoC 4x2.
 - **Hosts:** an x86 workstation, or an Arm-based NVIDIA DGX Spark.
+
+## License
+
+uhd-rfsoc is licensed under the GNU General Public License v3.0 or later
+(GPL-3.0-or-later, the license of UHD and GNU Radio): see [LICENSE](LICENSE).
+Files that carry their own notice, such as the RFSoC 4x2 board files under
+`fpga/boards/rfsoc4x2/board_files/`, keep it.
