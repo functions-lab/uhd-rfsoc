@@ -19,9 +19,11 @@ You need:
 - a ZCU216 or RFSoC 4x2 running PYNQ 2.7, 3.0 or 3.1, on the LAN (ssh as
   user `xilinx`);
 - the QSFP28 cable to the host PC;
-- the bitstreams for that PYNQ version: the `bitstreams/` submodule, a
-  [release](https://github.com/functions-lab/uhd-rfsoc/releases), or your
-  own builds (`fpga/README.md`).
+- the bitstreams for that PYNQ version. Every prebuilt set comes from
+  [uhd-rfsoc-bitstream](https://github.com/functions-lab/uhd-rfsoc-bitstream): step 4 fetches the right
+  one, or download its zip from that repository's
+  [releases](https://github.com/functions-lab/uhd-rfsoc-bitstream/releases). Your own builds work
+  too (`fpga/README.md`).
 
 ### 1. Clone on the board
 

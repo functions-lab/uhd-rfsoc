@@ -49,7 +49,9 @@ Rules and map of the FPGA side. `README.md` has the commands; each board's
 - Build only through the Makefile (the Vivado release of `PYNQ=`, checked;
   `build.tcl` refuses a release `flow/versions.txt` does not name). Only
   the bitstream is kept (`V49_KEEP_PROJ=1` keeps the project). Bitstreams
-  are never committed: they are built locally and published as release assets.
+  are never committed here: they are built locally and published in the
+  uhd-rfsoc-bitstream repository (the `bitstreams/` submodule) and its
+  releases.
 - The designs and `create_cmac_ip.tcl` name Vivado 2021.1's IP versions and
   stay so; every `xilinx.com:ip` VLNV goes through `v49_vlnv` (defined by
   `build.tcl`; identity when a design is sourced on its own), which

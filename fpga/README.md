@@ -40,9 +40,10 @@ Each PYNQ image needs bitstreams built with one Vivado release
 | 3.0 | 2022.1 | `PYNQ=3.0` | `build/pynq3.0/<board>/` | `bitstreams/pynq3.0/<board>/` |
 | 3.1 | 2024.1 | `PYNQ=3.1` | `build/pynq3.1/<board>/` | `bitstreams/pynq3.1/<board>/` |
 
-The prebuilt sets are in the `bitstreams/` submodule at the top of the
-repository, and attached to each release as
-`uhd-rfsoc-bitstreams-<board>-pynq<version>.zip`.
+The prebuilt sets all come from
+[uhd-rfsoc-bitstream](https://github.com/functions-lab/uhd-rfsoc-bitstream), the `bitstreams/`
+submodule at the top of the repository. Each of its releases also has one
+zip per set, `uhd-rfsoc-bitstreams-<board>-pynq<version>.zip`.
 
 The file names are the same for every PYNQ version, so keep each version's
 builds in their own directory and install the set that matches the board's

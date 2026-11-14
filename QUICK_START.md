@@ -19,7 +19,10 @@ git clone https://github.com/functions-lab/uhd-rfsoc.git && cd uhd-rfsoc
 ```
 
 No submodule is needed: step 2 fetches only the bitstreams of your board.
-Other ways to get them: "Bitstreams" in [README.md](README.md#more).
+They all come from
+[uhd-rfsoc-bitstream](https://github.com/functions-lab/uhd-rfsoc-bitstream),
+which also offers one zip per board and PYNQ version in its
+[releases](https://github.com/functions-lab/uhd-rfsoc-bitstream/releases).
 
 ## 2. Set up the board (on the board, user `xilinx`)
 

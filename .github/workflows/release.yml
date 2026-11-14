@@ -1,7 +1,7 @@
 # Release: on a v* tag, run CI, then publish a GitHub release with the host
-# module built for Ubuntu 24.04 (x86_64, aarch64). The bitstreams are built
-# with Vivado outside CI and attached to the release afterwards
-# (README.md, "Bitstreams").
+# module built for Ubuntu 24.04 (x86_64, aarch64). No bitstreams here: they
+# are built with Vivado outside CI and published in the uhd-rfsoc-bitstream
+# repository (the bitstreams/ submodule) and its releases.
 name: Release
 
 on:
