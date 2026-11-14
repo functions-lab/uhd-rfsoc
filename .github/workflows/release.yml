@@ -28,6 +28,11 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           name: uhd-rfsoc ${{ github.ref_name }}
+          body: |
+            Host module for Ubuntu 24.04, x86_64 and aarch64 (`uhd-rfsoc-host-*.tar.gz`, `SHA256SUMS`).
+
+            Prebuilt bitstreams for this version, one zip per board and PYNQ version:
+            https://github.com/functions-lab/uhd-rfsoc-bitstream/releases/tag/${{ github.ref_name }}
           generate_release_notes: true
           prerelease: ${{ startsWith(github.ref_name, 'v0.') }}
           files: |
