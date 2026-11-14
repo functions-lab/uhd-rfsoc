@@ -16,3 +16,6 @@ rfsoc/server/uhd_rfsoc.conf
 
 # editor settings (machine-local paths)
 .vscode/
+
+# the top-level agent / contributor notes: kept locally, not published
+/AGENTS.md
