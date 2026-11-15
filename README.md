@@ -13,14 +13,22 @@ Supported boards, each with multiple sample-rate and channel-count options:
 - [**Xilinx RFSoC ZCU216**](https://www.amd.com/en/products/adaptive-socs-and-fpgas/evaluation-boards/zcu216.html) (16T16R)
 - [**Real Digital RFSoC4x2**](https://www.realdigital.org/hardware/rfsoc-4x2) (2T4R)
 - **Other Xilinx RFSoC boards**: Work in progress
-<!-- Demo video placeholder. Replace the block below with the video: drag
-     the .mp4 into the GitHub editor, or link a thumbnail to it. -->
-> **Demo video.**
+
+The demo runs standard UHD tools against a ZCU216:
+
+![uhd-rfsoc demo on a ZCU216](docs/img/uhd-rfsoc-demo.gif)
+
+1. **Discover** the board with `uhd_find_devices`.
+2. **Probe** it as a 4-channel UHD device with `uhd_usrp_probe`.
+3. **Stream** 4 TX and 4 RX channels at 625 MS/s each in sc16 (80 Gb/s each
+   way) for 10 s with `benchmark_rate` with no drops, overruns or underruns.
 
 ```sh
 uhd_find_devices --args type=rfsoc
-uhd_usrp_probe --args type=rfsoc,channels=4
-benchmark_rate --args type=rfsoc --rx_rate 1.25e9 --tx_rate 1.25e9
+sudo uhd_usrp_probe --args type=rfsoc,addr=192.168.0.164,channels=4
+benchmark_rate --args type=rfsoc,addr=192.168.0.164,nports=4,channels=4 \
+    --channels 0,1,2,3 --rx_rate 625e6 --tx_rate 625e6 \
+    --rx_otw sc16 --tx_otw sc16 --rx_cpu sc16 --tx_cpu sc16 --duration 10
 ```
 
 ## Architecture
