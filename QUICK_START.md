@@ -7,10 +7,54 @@ You need:
 
 - **Board:** a [ZCU216](https://www.amd.com/en/products/adaptive-socs-and-fpgas/evaluation-boards/zcu216.html)
   or [RFSoC 4x2](https://www.realdigital.org/hardware/rfsoc-4x2) running PYNQ 2.7, 3.0 or 3.1, on the LAN,
-  with a QSFP28 100G cable to the host.
+  with a QSFP28 100G cable to the host. No PYNQ on it yet:
+  [flash the SD card](#before-you-start-pynq-on-the-sd-card) first.
 - **Host:** Linux (x86_64 or aarch64) with a ConnectX-5, -6 or -7
   100G NIC. We tested with UHD 4.6, DPDK 23.11 and GNU Radio 3.10 but it is 
   possible that other versions will still work.
+
+## Before you start: PYNQ on the SD card
+
+Skip this if your board already boots PYNQ 2.7, 3.0 or 3.1. PYNQ is
+delivered as an SD card image; the PYNQ websites have the images and the
+full instructions, summarised here.
+
+**1. Download the image of your board**, in PYNQ 2.7, 3.0 or 3.1:
+
+| board | where the image is |
+|---|---|
+| RFSoC 4x2 | the [PYNQ board images page](https://www.pynq.io/boards.html) |
+| ZCU216 | PYNQ publishes no image for it: the RFSoC-PYNQ page [Other RFSoC boards](https://www.rfsoc-pynq.io/boards.html) links the community image and the instructions to build one |
+
+**2. Write it to a microSD card** (16 GB or more) with
+[balenaEtcher](https://etcher.balena.io/), which runs on Windows, macOS and
+Linux:
+
+1. Unzip the download to get the `.img` file.
+2. Insert the card and open balenaEtcher.
+3. **Flash from file**: choose the `.img`.
+4. **Select target**: choose the card.
+5. **Flash!**, and wait until the write and its validation finish.
+
+PYNQ's own instructions are in
+[Writing an SD Card Image](https://pynq.readthedocs.io/en/latest/appendix/sdcard.html).
+
+**3. Boot the board from the card.** Insert the card, set the boot mode
+switch to SD, connect the board's Ethernet port to your LAN and power it on.
+The RFSoC 4x2's
+[getting started guide](https://www.rfsoc-pynq.io/rfsoc_4x2_getting_started.html)
+shows the switch and the boot sequence (about a minute); for the ZCU216 the
+switch setting is in the board's user guide.
+
+**4. Log in.** The board takes its address from DHCP. The RFSoC 4x2 shows
+it on its display; for a ZCU216, look it up in your router's client list or
+on the USB serial console (115200 baud, `ip addr`). The user is `xilinx`,
+password `xilinx`:
+
+```sh
+ssh-copy-id xilinx@<board-ip>               # once: step 2 copies the bitstreams over ssh without a password
+ssh xilinx@<board-ip>
+```
 
 ## 1. Clone (on the PC)
 
