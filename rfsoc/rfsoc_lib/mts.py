@@ -9,9 +9,13 @@ class MyMTS:
     the MTS clocking wizard (overlay MTS_block/MTS_clk_wiz) checked locked."""
 
     def __init__(self, rfdc_ip, overlay, tiles=0b1111, ref_tile=1,
-                 after_clkwiz_reset=None, after_dac_reset=None):
+                 after_clkwiz_reset=None, after_dac_reset=None,
+                 adc_tiles=None, adc_ref_tile=None, fifo_both=True):
         """tiles: the DAC and ADC tiles to synchronise (bit t = tile t);
-        ref_tile: their reference tile. after_clkwiz_reset / after_dac_reset:
+        ref_tile: their reference tile. adc_tiles / adc_ref_tile: the ADC's
+        when they differ from the DAC's (None: the same). fifo_both: reset
+        the ADC FIFOs with SetupFIFOBoth (Gen3: the fabric and observation
+        FIFOs); False on a Gen1 RFDC (ZCU111), which has SetupFIFO only. after_clkwiz_reset / after_dac_reset:
         called in init_tile_sync right after the MTS clocking-wizard reset and
         after the DAC tile resets. Both resets restore the BUILD setting (MMCM
         frequency, DAC interpolation); a run-time rate change puts its own
@@ -23,9 +27,12 @@ class MyMTS:
         self.CLOCKWIZARD_LOCK_ADDRESS = 0x0004
         self.CLOCKWIZARD_RESET_ADDRESS = 0x0000
         self.CLOCKWIZARD_RESET_TOKEN = 0x000A
-        self.ACTIVE_DAC_TILES = self.ACTIVE_ADC_TILES = tiles
-        self.DAC_REF_TILE = self.ADC_REF_TILE = ref_tile
+        self.ACTIVE_DAC_TILES = tiles
+        self.ACTIVE_ADC_TILES = tiles if adc_tiles is None else adc_tiles
+        self.DAC_REF_TILE = ref_tile
+        self.ADC_REF_TILE = ref_tile if adc_ref_tile is None else adc_ref_tile
         self.mts_latency_min = 16
+        self.fifo_both = fifo_both
 
     def init(self):
         """Reset the tile-sync engines, check the MTS clock tree, sync the tiles."""
@@ -110,7 +117,10 @@ class MyMTS:
             bitvector = self.ACTIVE_ADC_TILES
             for n in range(4):
                 if (bitvector & 0x1):
-                    self.rfdc.adc_tiles[n].SetupFIFOBoth(toggleValue)
+                    if self.fifo_both:
+                        self.rfdc.adc_tiles[n].SetupFIFOBoth(toggleValue)
+                    else:
+                        self.rfdc.adc_tiles[n].SetupFIFO(toggleValue)
                 bitvector = bitvector >> 1
 
     def verify_clock_tree(self):

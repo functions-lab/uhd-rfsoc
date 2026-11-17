@@ -11,7 +11,8 @@ geometry compiled into the loaded bitstream). The keys:
     DACNCO, ADCNCO          MHz (ADC NCO <= 0: real -> I/Q convention)
     DACNyquistZone, ADCNyquistZone, InvSincFIR
     RefClock*Min / *Max     the converters' clock limits (ZCU216_MIN_MAX_CONFIG,
-                            RFSOC4X2_MIN_MAX_CONFIG)
+                            RFSOC4X2_MIN_MAX_CONFIG (also the ZCU208's),
+                            ZCU111_MIN_MAX_CONFIG)
 """
 import re
 
@@ -57,6 +58,12 @@ ZCU216_MIN_MAX_CONFIG = {
 # RFSoC 4x2 (ZU48DR): dual-tile RF-ADCs sample at up to 5 GS/s, so a bypassed
 # ADC tile takes up to 5000 MHz (the quad-tile ZU49DR's limit is 2500)
 RFSOC4X2_MIN_MAX_CONFIG = dict(ZCU216_MIN_MAX_CONFIG, RefClockNoPLLAdcMax=5000.0)
+
+# ZCU111 (ZU28DR, Gen1): dual RF-ADC tiles to 4.096 GS/s, quad RF-DAC tiles to
+# 6.554 GS/s with the tile PLL bypassed (DS926, ZU2xDR converter tables)
+ZCU111_MIN_MAX_CONFIG = dict(ZCU216_MIN_MAX_CONFIG,
+                             RefClockNoPLLAdcMin=1000.0, RefClockNoPLLAdcMax=4096.0,
+                             RefClockNoPLLDacMin=500.0, RefClockNoPLLDacMax=6554.0)
 
 # placeholders until the daemon writes the loaded build's geometry
 DEFAULT_CONFIG = {

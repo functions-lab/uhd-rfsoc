@@ -117,7 +117,15 @@ class Geometry:
         self.dac_pll = {t: self._bool(f"C_DAC{t}_PLL_Enable") for t in dac_tiles}
         self.adc_fabric = {t: self._float(f"C_ADC{t}_Fabric_Freq") for t in adc_tiles}
         self.dac_fabric = {t: self._float(f"C_DAC{t}_Fabric_Freq") for t in dac_tiles}
-        self.vop_mode = self.p.get("C_DAC_VOP_Mode", "0") in ("1", "true")
+        # the RFDC generation (C_IP_Type: 0 Gen1, 1 Gen2, 2 Gen3; absent:
+        # an older .hwh, Gen3). DAC VOP is Gen3 only: a Gen1 IP reports
+        # C_DAC_VOP_Mode 1 but has no SetDACVOP (ZCU111)
+        try:
+            self.ip_type = int(float(self._raw("C_IP_Type")))
+        except KeyError:
+            self.ip_type = 2
+        self.vop_mode = (self.p.get("C_DAC_VOP_Mode", "0") in ("1", "true")
+                         and self.ip_type >= 2)
 
     def _raw(self, k):
         if k in self.p:
@@ -216,8 +224,9 @@ HWH_CORES = ("udp_streamer", "udp_player", "tx_beamformer", "rx_beamformer")
 # the converter clock's clocking wizard: with USE_DYN_RECONFIG the build
 # serves a run-time rate change (§8, Variant.run_factors)
 MTS_CW = "MTS_clk_wiz"
-# Gen3 RF-ADC decimation / RF-DAC interpolation factors (XRFdc_Set*Factor)
-GEN3_FACTORS = (1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 40)
+# Gen3 RF-ADC decimation / RF-DAC interpolation factors (XRFdc_Set*Factor);
+# a board's own set is Board.factors
+from boards import GEN3_FACTORS  # noqa: E402,F401
 # the lowest converter AXIS clock a run-time factor may need (the ladder's
 # lowest is 15.36 MHz: 1/2/4ch F40 at 2457.6 MS/s)
 FABRIC_MIN_MHZ = 10.0
@@ -430,13 +439,14 @@ class Variant:
 
     def run_factors(self) -> List[int]:
         """The factors this bitstream serves: its own, and on a retunable one
-        every Gen3 factor above it whose converter clock fs/F/spc the MMCM
-        makes exactly (rfsoc_lib.clk_wiz.mmcm_exact) and is >= FABRIC_MIN_MHZ."""
+        every factor of the board (Board.factors) above it whose converter
+        clock fs/F/spc the MMCM makes exactly (rfsoc_lib.clk_wiz.mmcm_exact)
+        and is >= FABRIC_MIN_MHZ."""
         if not self.retunable:
             return [self.factor]
         cw = clk_wiz_lib()
         out = []
-        for f in GEN3_FACTORS:
+        for f in self.board.factors:
             if f < self.built_factor:
                 continue
             fab = self.adc_rate / f / self.spc / 1e6
@@ -608,6 +618,11 @@ class HwBackend(Backend):
         # bring-up programs that source's register file (rfsoc_lib.clocks.clock_plan(source=))
         if clock_source not in ("internal", "external"):
             raise ValueError(f"clock_source {clock_source!r}: internal|external")
+        if clock_source == "external" and not self.board.external_ref:
+            log.warning("%s: no external-reference clock plan (rfsoc_lib/xrfclk/%s/ has no "
+                        "_ext register file); using the board's own oscillator",
+                        self.board.name, self.board.name)
+            clock_source = "internal"
         self._board_clock_source = clock_source     # what bring-up programs
         self._clock_source = clock_source           # what the client last asked for (get_clock_source)
         self._time_source = "internal"
@@ -1229,11 +1244,14 @@ class HwBackend(Backend):
         fail (the first after a board reboot on a ZCU216; DAC alignment, see
         MTS_ATTEMPTS), so it runs up to MTS_ATTEMPTS times; the attempt that
         locked is logged. MyMTS takes
-        the board's tile mask and reference tile (Board.mts_tiles,
-        mts_ref_tile)."""
+        the board's tile masks and reference tiles (Board.mts_tiles,
+        mts_ref_tile; mts_adc_tiles, mts_adc_ref_tile)."""
         from rfsoc_lib.mts import MyMTS
         mts = MyMTS(self.ol.rfdc.usp_rf_data_converter, self.ol,
                     tiles=self.board.mts_tiles, ref_tile=self.board.mts_ref_tile,
+                    adc_tiles=self.board.mts_adc_tiles,
+                    adc_ref_tile=self.board.mts_adc_ref_tile,
+                    fifo_both=self.geo.ip_type >= 2,
                     after_clkwiz_reset=after_clkwiz_reset, after_dac_reset=after_dac_reset)
         last = None
         for attempt in range(1, attempts + 1):

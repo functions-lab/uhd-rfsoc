@@ -1,4 +1,4 @@
-"""The board's LMK04828 + LMX2594 clock chain: which TICS register files a
+"""The board's LMK (LMK04828; ZCU111: LMK04208) + LMX2594 clock chain: which TICS register files a
 build needs (clock_plan, no board access) and writing them through PYNQ's
 xrfclk (program_clocks, on the board)."""
 import os
@@ -29,7 +29,7 @@ class ExternalClkConfig:
         if not self.reg:
             raise ValueError("Registers not loaded")
 
-        if isinstance(self, LMK04828ClkConfig):
+        if isinstance(self, LMKClkConfig):
             devices = xrfclk.lmk_devices
             write_func = xrfclk.xrfclk._write_LMK_regs
         elif isinstance(self, LMX2594ClkConfig):
@@ -52,7 +52,10 @@ class ExternalClkConfig:
         }
 
 
-class LMK04828ClkConfig(ExternalClkConfig):
+class LMKClkConfig(ExternalClkConfig):
+    """The board's LMK (chip: "LMK04828", or "LMK04208" on a ZCU111): xrfclk
+    writes it to every LMK the device tree lists, with the register width the
+    device tree gives (4 bytes on an LMK04208, 3 on an LMK04828)."""
     def __init__(self, chip, freq_in, freq_out, mts_pl_clk_freq=0.0, mts_pl_sysref_freq=0.0):
         super().__init__(chip, freq_in, freq_out)
         self.mts_pl_clk_freq = mts_pl_clk_freq
@@ -63,6 +66,9 @@ class LMK04828ClkConfig(ExternalClkConfig):
                     mts_pl_sysref_freq=self.mts_pl_sysref_freq)
 
 
+LMK04828ClkConfig = LMKClkConfig     # the name before the LMK04208
+
+
 class LMX2594ClkConfig(ExternalClkConfig):
     pass
 
@@ -70,7 +76,7 @@ class LMX2594ClkConfig(ExternalClkConfig):
 # "_ext": the same plan with the LMK04828 in automatic input selection (CLKin_SEL_MODE 4): PLL1 takes the board's
 # reference input (CLKin0, e.g. a GPSDO's 10 MHz) and falls back to the board's own oscillator (CLKin1) when that
 # is lost. Without the suffix: CLKin1 only. clock_plan(source="external") picks the "_ext" file.
-_LMK_RE = re.compile(r"LMK04828_([0-9.]+)_([0-9.]+)_([0-9.]+)_([0-9.]+?)(_ext)?\.txt")
+_LMK_RE = re.compile(r"(LMK04828|LMK04208)_([0-9.]+)_([0-9.]+)_([0-9.]+)_([0-9.]+?)(_ext)?\.txt")
 CLOCK_SOURCES = ("internal", "external")
 _LMX_RE = re.compile(r"LMX2594_([0-9.]+)_([0-9.]+)\.txt")
 
@@ -79,19 +85,21 @@ def _same(a, b):
     return abs(float(a) - float(b)) < 1e-6
 
 
-def clock_plan(config_dir, lmx_out, pl_clk, lmk_in=10.0, source="internal"):
+def clock_plan(config_dir, lmx_out, pl_clk, lmk_in=None, source="internal"):
     """The clock plan that gives a build its clocks, from the TICS register
     files in `config_dir` (rfsoc_lib/xrfclk/<board>/):
 
-      LMK04828_<lmk_in>_<ref>_<pl_clk>_<sysref>.txt  LMK04828 from its
-          <lmk_in> MHz input: <ref> MHz to the LMX2594, the MTS PL clock
-          <pl_clk> MHz (the build's MTS_clk_wiz input) and SYSREF <sysref> MHz
+      <LMK>_<lmk_in>_<ref>_<pl_clk>_<sysref>.txt  the LMK (LMK04828, or
+          LMK04208 on a ZCU111) from its <lmk_in> MHz input: <ref> MHz to
+          the LMX2594, the MTS PL clock <pl_clk> MHz (the build's
+          MTS_clk_wiz input) and SYSREF <sysref> MHz
       LMX2594_<ref>_<lmx_out>.txt  LMX2594 from <ref> MHz: <lmx_out> MHz to
           the converter tiles (the build's Refclk_Freq)
 
-    Two clock families exist: ref 250 MHz with PL_CLK 300 / SYSREF 10, and
-    ref 245.76 MHz with PL_CLK 122.88 / SYSREF 7.68. Frequencies are compared
-    as numbers ("250.0" = 250). -> (LMK04828ClkConfig, LMX2594ClkConfig) with
+    The clock families: ref 250 MHz with PL_CLK 300 / SYSREF 10, ref 245.76
+    MHz with PL_CLK 122.88 / SYSREF 7.68 (and a board's own, e.g. the
+    ZCU111's ref 122.88 MHz). Frequencies are compared as numbers ("250.0" =
+    250); lmk_in None takes any LMK input. -> (LMKClkConfig, LMX2594ClkConfig) with
     their files set; FileNotFoundError when no LMK file has this PL clock
     with an LMX file for lmx_out from its reference, ValueError when more
     than one pair does.
@@ -108,15 +116,16 @@ def clock_plan(config_dir, lmx_out, pl_clk, lmk_in=10.0, source="internal"):
         mk = _LMK_RE.fullmatch(fk)
         if not mk:
             continue
-        fin, ref, pl, sysref = (float(v) for v in mk.groups()[:4])
-        if bool(mk.group(5)) != (source == "external"):
+        chip = mk.group(1)
+        fin, ref, pl, sysref = (float(v) for v in mk.groups()[1:5])
+        if bool(mk.group(6)) != (source == "external"):
             continue
-        if not (_same(fin, lmk_in) and _same(pl, pl_clk)):
+        if not ((lmk_in is None or _same(fin, lmk_in)) and _same(pl, pl_clk)):
             continue
         for fx in names:
             mx = _LMX_RE.fullmatch(fx)
             if mx and _same(mx.group(1), ref) and _same(mx.group(2), lmx_out):
-                lmk = LMK04828ClkConfig("LMK04828", fin, ref, pl, sysref)
+                lmk = LMKClkConfig(chip, fin, ref, pl, sysref)
                 lmx = LMX2594ClkConfig("LMX2594", ref, float(lmx_out))
                 lmk.file, lmk.loc = fk, os.path.join(config_dir, fk)
                 lmx.file, lmx.loc = fx, os.path.join(config_dir, fx)
@@ -124,7 +133,7 @@ def clock_plan(config_dir, lmx_out, pl_clk, lmk_in=10.0, source="internal"):
     if not plans:
         raise FileNotFoundError(
             f"no clock plan in {config_dir} for PL clock {pl_clk:g} MHz and "
-            f"converter clock {float(lmx_out):g} MHz ({source} reference): needs LMK04828_{lmk_in:g}_<ref>_"
+            f"converter clock {float(lmx_out):g} MHz ({source} reference): needs <LMK>_{'<in>' if lmk_in is None else format(lmk_in, 'g')}_<ref>_"
             f"{pl_clk:g}_<sysref>{'_ext' if source == 'external' else ''}.txt and LMX2594_<ref>_{float(lmx_out):g}.txt; there are "
             f"{', '.join(n for n in names if _LMK_RE.fullmatch(n) or _LMX_RE.fullmatch(n))}")
     if len(plans) > 1:
@@ -135,7 +144,7 @@ def clock_plan(config_dir, lmx_out, pl_clk, lmk_in=10.0, source="internal"):
 
 
 def program_clocks(lmk_config, lmx_config):
-    """Write the LMK04828 and then the LMX2594 register files (their .loc)
+    """Write the LMK and then the LMX2594 register files (their .loc)
     to every such device xrfclk finds. -> (LMK dict, LMX dict)."""
     import xrfclk
     if not xrfclk.lmk_devices and not xrfclk.lmx_devices:

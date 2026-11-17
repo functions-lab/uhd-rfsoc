@@ -101,6 +101,10 @@ std::string board_display_name(const std::string& product)
         return "ZCU216";
     if (product == "rfsoc4x2")
         return "RFSoC 4x2";
+    if (product == "zcu208")
+        return "ZCU208";
+    if (product == "zcu111")
+        return "ZCU111";
     return product;
 }
 

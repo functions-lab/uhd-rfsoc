@@ -18,6 +18,17 @@ maps block 1 to the second converter and rejects blocks 2 and 3. RF-DACs
 are one slice = one block on both boards.
 
 ZCU216    xczu49dr  channel c: ADC and DAC tile c // 4, block c % 4 (§9)
+ZCU111    xczu28dr  channel c: ADC tile c // 2 converter c % 2 (slices 2(c%2)
+                         I / 2(c%2)+1 Q, API block c % 2); DAC tile c // 4,
+                         block c % 4 (quad RF-DAC tiles)
+          (fpga/boards/zcu111/block_designs/zcu111_uhd_v49_122m88/, v49_channel_slices)
+ZCU208    xczu48dr  channel c: ADC tile c % 4 converter c // 4 (vin<t>_01 /
+                         vin<t>_23: slices 2(c//4) I / 2(c//4)+1 Q, API
+                         block c // 4); DAC tile c % 4 slice 2 (c // 4)
+                         (vout<t>0 / vout<t>2). Channels 0..3 are the four
+                         converters PYNQ's ZCU208 base overlay uses
+          (fpga/boards/zcu208/block_designs/zcu208_uhd_v49/zcu208_uhd_v49.tcl,
+          v49_channel_slices)
 RFSoC4x2  xczu48dr  ch0: DAC s20 (vout20), ADC tile 2 converter 0 (vin2_01,
                          slices m20 I / m21 Q)
                     ch1: DAC s00 (vout00), ADC tile 0 converter 1 (vin0_23,
@@ -26,8 +37,16 @@ RFSoC4x2  xczu48dr  ch0: DAC s20 (vout20), ADC tile 2 converter 0 (vin2_01,
           v49_channel_slices; the PYNQ RFSoC4x2 base overlay enables the same slices)
 
 GT refclk of the 100G CMAC: the ZCU216's comes from the 8A34001 (U409), which
-boots unconfigured and is programmed by rfsoc_lib.gt_refclk; the RFSoC 4x2's
-is a Si570 at 156.25 MHz from power-up (Board.gt_refclk "si570": left alone).
+boots unconfigured and is programmed by rfsoc_lib.gt_refclk; the ZCU208 has
+the same 8A34001 at the same I2C address (fpga/boards/zcu208/AGENTS.md); the
+RFSoC 4x2's is a Si570 at 156.25 MHz from power-up (Board.gt_refclk "si570":
+left alone).
+
+MTS: the tiles synchronised and the reference tile are the tile that takes
+the board's converter clock and distributes it (ZCU216: tile 1 for both; RFSoC
+4x2: tile 2; ZCU208: ADC tile 1 = 225, DAC tile 2 = 230, the CLK104's two
+inputs), per converter kind when they differ (mts_adc_tiles,
+mts_adc_ref_tile).
 """
 from __future__ import annotations
 
@@ -37,6 +56,10 @@ from typing import List, Optional, Tuple
 
 Slice = Tuple[int, int]
 
+# Gen3 RF-ADC decimation / RF-DAC interpolation factors (XRFdc_Set*Factor):
+# the run-time factors a template can be retuned to (Protocol §8)
+GEN3_FACTORS = (1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 40)
+
 
 class Board:
     def __init__(self, name: str, dual_adc: bool, max_channels: int,
@@ -45,7 +68,11 @@ class Board:
                  dac_blocks: Optional[Tuple[Slice, ...]] = None,
                  adc_blocks: Optional[Tuple[Slice, ...]] = None,
                  mts_tiles: int = 0b1111, mts_ref_tile: int = 1,
-                 gt_refclk: str = "8a34001"):
+                 mts_adc_tiles: Optional[int] = None,
+                 mts_adc_ref_tile: Optional[int] = None,
+                 gt_refclk: str = "8a34001",
+                 factors: Tuple[int, ...] = GEN3_FACTORS,
+                 external_ref: bool = True):
         self.name = name                    # rfsoc_lib board name (rfsoc_lib/xrfclk/<name>/)
         self.prefix = name.lower()          # bitstream prefix <prefix>_v49_<N>ch_qsfp*, discovery product=
         self.dual_adc = dual_adc            # dual RF-ADC tiles (I and Q on two IP slices)
@@ -58,10 +85,20 @@ class Board:
         # block); None: tile c // 4, block c % 4 (four blocks per tile)
         self.dac_blocks = dac_blocks
         self.adc_blocks = adc_blocks
-        # MTS: the tiles synchronised (bit t = tile t, DAC and ADC) and the
-        # reference tile
+        # MTS: the tiles synchronised (bit t = tile t) and the reference
+        # tile; mts_tiles / mts_ref_tile are the DAC's, and the ADC's too
+        # unless mts_adc_tiles / mts_adc_ref_tile say otherwise
         self.mts_tiles = mts_tiles
         self.mts_ref_tile = mts_ref_tile
+        self.mts_adc_tiles = mts_tiles if mts_adc_tiles is None else mts_adc_tiles
+        self.mts_adc_ref_tile = mts_ref_tile if mts_adc_ref_tile is None else mts_adc_ref_tile
+        # the converter factors the RFDC takes at run time (a template's
+        # retune ladder, Protocol §8)
+        self.factors = tuple(factors)
+        # whether the board has an external-reference (GPSDO) clock plan,
+        # the "_ext" LMK register files; without one the daemon runs on the
+        # board's own oscillator whatever clock_source says
+        self.external_ref = external_ref
         # the 100G GT refclk: "8a34001" (programmed at bring-up) or "si570"
         # (fixed, runs from power-up: never programmed)
         self.gt_refclk = gt_refclk
@@ -118,6 +155,27 @@ BOARDS = {
                       masked_tiles=(1, 3), mts_tiles=0b0101, mts_ref_tile=2,
                       dac_blocks=((2, 0), (0, 0)), adc_blocks=((2, 0), (0, 1)),
                       gt_refclk="si570"),
+    # ZU48DR like the RFSoC 4x2 (dual RF-ADC tiles), the ZCU216's CLK104 and
+    # 8A34001; every tile bonded and enabled, 8 + 8 converters
+    "ZCU208": Board("ZCU208", dual_adc=True, max_channels=8,
+                    default_bitstream="zcu208_v49_1ch_qsfp_f2_fs5000.bit",   # 1 ch, 2500 MS/s
+                    lib_config="RFSOC4X2_MIN_MAX_CONFIG",
+                    mts_tiles=0b1111, mts_ref_tile=2, mts_adc_ref_tile=1,
+                    dac_blocks=tuple((c % 4, 2 * (c // 4)) for c in range(8)),
+                    adc_blocks=tuple((c % 4, c // 4) for c in range(8)),
+                    gt_refclk="8a34001"),
+    # ZU28DR, Gen1: dual RF-ADC tiles (4), quad RF-DAC tiles (2), every tile
+    # clocked by its own LMX2594 output (no distribution); MTS on the 2 DAC
+    # and 4 ADC tiles, reference tile 0; run-time factors 2 4 8 only (Gen1
+    # decimation 1 2 4 8, I/Q interpolation 2 4 8); the 100G refclk is the
+    # user MGT Si570, 156.25 MHz from power-up (fpga/boards/zcu111/AGENTS.md)
+    "ZCU111": Board("ZCU111", dual_adc=True, max_channels=8,
+                    default_bitstream="zcu111_v49_1ch_qsfp_f2_fs4000.bit",   # 1 ch, 2000 MS/s
+                    lib_config="ZCU111_MIN_MAX_CONFIG",
+                    mts_tiles=0b0011, mts_ref_tile=0,
+                    mts_adc_tiles=0b1111, mts_adc_ref_tile=0,
+                    adc_blocks=tuple((c // 2, c % 2) for c in range(8)),
+                    gt_refclk="si570", factors=(2, 4, 8), external_ref=False),
 }
 DEFAULT_BOARD = "ZCU216"
 

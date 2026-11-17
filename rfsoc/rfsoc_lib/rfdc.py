@@ -49,8 +49,14 @@ class MyRFdcStatus:
         self.adc_block_mask_out = adc_r2iq_mask_out
         self.dac_block_mask_out = dac_iq2r_mask_out
 
-        self.dac_clk_dist_status = rfdc.ClkDistribution['DAC']
-        self.adc_clk_dist_status = rfdc.ClkDistribution['ADC']
+        # on-chip clock distribution is Gen3 only: a Gen1 RFDC (ZCU111)
+        # refuses the query (diagnostics only, read in debug mode)
+        try:
+            self.dac_clk_dist_status = rfdc.ClkDistribution['DAC']
+            self.adc_clk_dist_status = rfdc.ClkDistribution['ADC']
+        except Exception as e:
+            logging.info(f"no clock distribution status ({e}): a Gen1 RFDC")
+            self.dac_clk_dist_status = self.adc_clk_dist_status = {}
 
     def get_dac_tile_enb(self, tile_id):
         return self.dac_tile_status[tile_id]['IsEnabled'] and not self.dac_tile_mask_out[tile_id]
@@ -65,7 +71,8 @@ class MyRFdcStatus:
             return self.dac_tile_status[tile_id]['BlockStatusMask'] & (1 << block_id)
 
     def get_dac_clk_dist(self, tile_id):
-        return self.dac_clk_dist_status[tile_id]
+        return self.dac_clk_dist_status.get(tile_id) if isinstance(self.dac_clk_dist_status, dict) \
+            else self.dac_clk_dist_status[tile_id]
 
     def get_adc_tile_enb(self, tile_id):
         return self.adc_tile_status[tile_id]['IsEnabled'] and not self.adc_tile_mask_out[tile_id]
@@ -80,7 +87,8 @@ class MyRFdcStatus:
             return self.adc_tile_status[tile_id]['BlockStatusMask'] & (1 << block_id)
 
     def get_adc_clk_dist(self, tile_id):
-        return self.adc_clk_dist_status[tile_id]
+        return self.adc_clk_dist_status.get(tile_id) if isinstance(self.adc_clk_dist_status, dict) \
+            else self.adc_clk_dist_status[tile_id]
 
 
 class MyRFdcDACTile(RFdcDacTile):
