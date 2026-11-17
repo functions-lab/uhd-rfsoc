@@ -11,7 +11,10 @@ Contract: Protocol (../../AGENTS.md) -- UDP discovery (49700), line-based TCP co
 The same daemon serves an RFSoC 4x2 (rfsoc4x2_v49_<N>ch_qsfp*.bit, N = 1, 2):
 --board RFSoC4x2, or $UHD_BOARD, or nothing when the bitstream directory holds
 only RFSoC 4x2 builds (boards.py). UHD still sees type=rfsoc (the protocol);
-discovery reports product=rfsoc4x2.
+discovery reports product=rfsoc4x2. Likewise the ZCU208
+(zcu208_v49_<N>ch_qsfp*.bit, N = 1, 2, 4, 8; --board ZCU208) and the ZCU111
+(zcu111_v49_<N>ch_qsfp*.bit, N = 1, 2, 4, 8; --board ZCU111), product=zcu208 /
+zcu111.
 
 Addresses (Protocol §1, board_config.py): the management address in every
 reply is the one the request arrived on (nothing configured); the FPGA's 100G
@@ -265,7 +268,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--data-mac", default=None,
                    help="FPGA 100G MAC [config data_mac, else derived from the eth0 MAC]")
     p.add_argument("--serial", default=None, help="device serial [from eth0 MAC]")
-    p.add_argument("--name", default=None, help="device name [config name, else the board: zcu216, rfsoc4x2]")
+    p.add_argument("--name", default=None, help="device name [config name, else the board: zcu216, zcu208, zcu111, rfsoc4x2]")
     p.add_argument("--clock-source", default=None, choices=("internal", "external"),
                    help="LMK04828 reference: external = the reference input (a GPSDO's 10 MHz), falling back to the "
                         "board's own oscillator; internal = the oscillator only [config clock_source, else external]")

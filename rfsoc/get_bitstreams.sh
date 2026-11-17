@@ -8,12 +8,12 @@
 # Run on the PC, in a checkout of this repository. The prebuilt bitstreams
 # are the bitstreams/ submodule: one set per PYNQ version and board,
 # bitstreams/pynq<version>/<board>/, six sets and ~2 GB in all. A board uses
-# one. This fetches only that set (ZCU216 ~500 MB of files, RFSoC 4x2 ~200 MB;
+# one. This fetches only that set (ZCU216 ~500 MB of files, ZCU208 / ZCU111 / RFSoC 4x2 less;
 # less over the network) at the commit this repository pins, and checks it
 # against its SHA256SUMS. Needs git >= 2.25 and no account: the bitstream
 # repository is public and fetched over https.
 #
-#   <board> <pynq-version>   board: zcu216, rfsoc4x2; version: 2.7, 3.0, 3.1.
+#   <board> <pynq-version>   board: zcu216, zcu208, zcu111, rfsoc4x2; version: 2.7, 3.0, 3.1.
 #                            Fetch that set; install it with
 #                            rfsoc/push_bitstreams.sh.
 #   <user@board>             ask the board over ssh which board and PYNQ

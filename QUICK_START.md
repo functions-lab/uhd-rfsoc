@@ -7,7 +7,11 @@ You need:
 
 - **Board:** a [ZCU216](https://www.amd.com/en/products/adaptive-socs-and-fpgas/evaluation-boards/zcu216.html)
   or [RFSoC 4x2](https://www.realdigital.org/hardware/rfsoc-4x2) running PYNQ 2.7, 3.0 or 3.1, on the LAN,
-  with a QSFP28 100G cable to the host.
+  with a QSFP28 100G cable to the host. A [ZCU208](https://www.amd.com/en/products/adaptive-socs-and-fpgas/evaluation-boards/zcu208.html)
+  (PYNQ 3.0 or 3.1; zSFP28 cage, like the ZCU216) or a [ZCU111](https://www.amd.com/en/products/adaptive-socs-and-fpgas/evaluation-boards/zcu111.html)
+  (four SFP28 cages: a QSFP28-to-4xSFP28 breakout cable) works the same way,
+  but those two are not yet tested on hardware. The ZCU111 runs on its own
+  oscillator (`clock_source = internal`).
 - **Host:** Linux (x86_64 or aarch64) with a ConnectX-5, -6 or -7
   100G NIC. We tested with UHD 4.6, DPDK 23.11 and GNU Radio 3.10 but it is 
   possible that other versions will still work.

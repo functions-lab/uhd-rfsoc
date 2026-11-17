@@ -1,4 +1,4 @@
-# systemd unit TEMPLATE for the UHD daemon (hardware mode; ZCU216 or RFSoC 4x2).
+# systemd unit TEMPLATE for the UHD daemon (hardware mode; ZCU216, ZCU208, ZCU111 or RFSoC 4x2).
 # Nothing installs or enables it; ./run_daemon.sh is the usual way to start the
 # daemon. To use it instead:
 #   sudo cp uhd-rfsoc.service /etc/systemd/system/

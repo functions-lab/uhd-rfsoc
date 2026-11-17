@@ -6,8 +6,9 @@ the generated RTL top rather than in the block design.
 
 | board | port | lanes | `CMAC_LANES` |
 |---|---|---|---|
-| ZCU216 | the four zSFP28 cages | quads 128 and 129 | `zsfp` (default) |
+| ZCU216, ZCU208 | the four zSFP28 cages | quads 128 and 129 | `zsfp` (default) |
 | RFSoC 4x2 | the QSFP28 | quad 128 | `qsfp128` |
+| ZCU111 | the four SFP28 cages (a QSFP28-to-4xSFP28 breakout cable) | quad 128, refclk from quad 129 | `sfp128` |
 
 | file | what |
 |---|---|

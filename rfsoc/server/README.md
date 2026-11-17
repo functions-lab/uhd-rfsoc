@@ -8,7 +8,7 @@ converters, locks multi-tile sync and aligns the 100G link. Then it serves
 one UHD client at a time: channel count, sample rate, carriers (NCOs),
 gains, RX / TX streams and the beamformers.
 
-It runs as root in the PYNQ environment, on a ZCU216 or an RFSoC 4x2.
+It runs as root in the PYNQ environment, on a ZCU216, ZCU208, ZCU111 or RFSoC 4x2.
 
 ## Run
 
@@ -35,7 +35,7 @@ On the board, in this directory, as root in the PYNQ environment
 ```sh
 python3 bringup.py --status                   # read-only: 100G link status, clock meters, streamer / player registers
 python3 bringup.py --link-only --rsfec 0      # redo the 100G link bring-up on the loaded build
-python3 ../rfsoc_lib/gt_refclk.py --status    # ZCU216: the 100G reference clock chip (8A34001)
+python3 ../rfsoc_lib/gt_refclk.py --status    # ZCU216, ZCU208: the 100G reference clock chip (8A34001)
 ```
 
 ## Tests

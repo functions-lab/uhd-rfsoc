@@ -1,6 +1,7 @@
 # rfsoc — the board side
 
-What runs on the RFSoC board (a ZCU216 or an RFSoC 4x2 with its PYNQ image).
+What runs on the RFSoC board (a ZCU216, ZCU208, ZCU111 or RFSoC 4x2 with its PYNQ image; the ZCU208
+and ZCU111 are not yet tested on hardware).
 
 | path | what |
 |---|---|
@@ -16,7 +17,7 @@ What runs on the RFSoC board (a ZCU216 or an RFSoC 4x2 with its PYNQ image).
 
 You need:
 
-- a ZCU216 or RFSoC 4x2 running PYNQ 2.7, 3.0 or 3.1, on the LAN (ssh as
+- a ZCU216, ZCU208, ZCU111 or RFSoC 4x2 running PYNQ 2.7, 3.0 or 3.1 (ZCU208: 3.0 or 3.1), on the LAN (ssh as
   user `xilinx`);
 - the QSFP28 cable to the host PC;
 - the bitstreams for that PYNQ version. Every prebuilt set comes from
@@ -61,12 +62,13 @@ gives it, and the FPGA's MAC is derived from the board's (`data_mac`
 overrides it).
 
 **Reference clock** (optional). By default the board takes a 10 MHz
-reference from its reference input (CLK104 REF IN on a ZCU216, the
+reference from its reference input (CLK104 REF IN on a ZCU216 or ZCU208, the
 reference SMA on an RFSoC 4x2), for example a GPSDO shared by several
 boards, and falls back to its own oscillator when nothing is connected.
 Boards that must agree in frequency (a gNB and a UE radio) need the shared
 reference. `clock_source = internal` in `uhd_rfsoc.conf` uses the board's
-oscillator only.
+oscillator only. The ZCU111 (LMK04208) has no external-reference plan
+yet and always runs on its own oscillator.
 
 ### 4. Put the bitstreams in `rfsoc/server/`
 
@@ -131,7 +133,7 @@ pull leaves them alone.
 | `not serving: this board's PYNQ xrfdc has no multi-tile-sync bindings` | `sudo rfsoc/setup_board.sh` |
 | `no FPGA data IP configured` / `no rfsoc/server/uhd_rfsoc.conf` | steps 2 and 3 |
 | `no bitstreams in rfsoc/server` / `bitstream variant skipped: ...` | step 4. The log says why a build was skipped: no `.hwh`, a build of the other board, or no clock register files for its fs |
-| `MTS NOT locked after 10 attempts` | the converter clocks: check that the CLK104 (ZCU216) is seated, power-cycle the board, start again |
+| `MTS NOT locked after 10 attempts` | the converter clocks: check that the CLK104 (ZCU216, ZCU208) is seated, power-cycle the board, start again |
 | serving, but `uhd_usrp_probe` reports `cmac_aligned: false` | the 100G link: the PC's port must be at 100G with RS-FEC (`host/setup_cx5.sh`). To decode the link status on the board, see "Debugging" in `server/README.md` |
 
 ## Start at boot

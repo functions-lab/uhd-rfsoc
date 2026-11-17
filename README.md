@@ -12,6 +12,8 @@ Supported boards, each with multiple sample-rate and channel-count options:
 
 - [**Xilinx RFSoC ZCU216**](https://www.amd.com/en/products/adaptive-socs-and-fpgas/evaluation-boards/zcu216.html) (16T16R)
 - [**Real Digital RFSoC4x2**](https://www.realdigital.org/hardware/rfsoc-4x2) (2T4R)
+- [**Xilinx RFSoC ZCU208**](https://www.amd.com/en/products/adaptive-socs-and-fpgas/evaluation-boards/zcu208.html) (8T8R): new, not yet tested on hardware
+- [**Xilinx RFSoC ZCU111**](https://www.amd.com/en/products/adaptive-socs-and-fpgas/evaluation-boards/zcu111.html) (8T8R): new, not yet tested on hardware
 - **Other Xilinx RFSoC boards**: Work in progress
 <!-- Demo video placeholder. Replace the block below with the video: drag
      the .mp4 into the GitHub editor, or link a thumbnail to it. -->
@@ -90,11 +92,35 @@ Available sampling rate options:
 | | | | 2 | 1228.8 / 1638.4 / 2457.6 | **122.88**, 204.8, **245.76**, 307.2, 409.6, **491.52**, 614.4, 819.2, 983.04, 1228.8, ${\color{orange}\textsf{1638.4}}$, ${\color{red}\textsf{2457.6}}$ |
 | | 4.8 | 0 .. 2400 | 1 | 2400 / 2400 / 2400 | 120, 200, 240, 300, 400, 480, 600, 800, 960, 1200, 1600, 2400 |
 | | | | 2 | 1200 / 1600 / 2400 | 120, 200, 240, 300, 400, 480, 600, 800, 960, 1200, ${\color{orange}\textsf{1600}}$, ${\color{red}\textsf{2400}}$ |
+| **ZCU208** | 5.0 | 0 .. 2500 | 1 | 2500 / 2500 / 2500 | 125, 208.33, 250, 312.5, 416.67, 500, 625, 833.33, 1000, 1250, 1666.67, 2500 |
+| | | | 2 | 1250 / 1666.67 / 2500 | 125, 208.33, 250, 312.5, 416.67, 500, 625, 833.33, 1000, 1250, ${\color{orange}\textsf{1666.67}}$, ${\color{red}\textsf{2500}}$ |
+| | | | 4 | 625 / 1000 / 1250 | 125, 208.33, 250, 312.5, 416.67, 500, 625, ${\color{orange}\textsf{833.33}}$, ${\color{orange}\textsf{1000}}$, ${\color{red}\textsf{1250}}$ |
+| | | | 8 | 312.5 / 500 / 625 | 125, 208.33, 250, 312.5, ${\color{orange}\textsf{416.67}}$, ${\color{orange}\textsf{500}}$, ${\color{red}\textsf{625}}$ |
+| | 4.9152 | 0 .. 2457.6 | 1 | 2457.6 / 2457.6 / 2457.6 | **122.88**, 204.8, **245.76**, 307.2, 409.6, **491.52**, 614.4, 819.2, 983.04, 1228.8, 1638.4, 2457.6 |
+| | | | 2 | 1228.8 / 1638.4 / 2457.6 | **122.88**, 204.8, **245.76**, 307.2, 409.6, **491.52**, 614.4, 819.2, 983.04, 1228.8, ${\color{orange}\textsf{1638.4}}$, ${\color{red}\textsf{2457.6}}$ |
+| | | | 4 | 614.4 / 983.04 / 1228.8 | **122.88**, 204.8, **245.76**, 307.2, 409.6, **491.52**, 614.4, ${\color{orange}\textsf{819.2}}$, ${\color{orange}\textsf{983.04}}$, ${\color{red}\textsf{1228.8}}$ |
+| | | | 8 | 307.2 / 491.52 / 614.4 | **122.88**, 204.8, **245.76**, 307.2, ${\color{orange}\textsf{409.6}}$, ${\color{orange}\textsf{\textbf{491.52}}}$, ${\color{red}\textsf{614.4}}$ |
+| | 4.8 | 0 .. 2400 | 1 | 2400 / 2400 / 2400 | 120, 200, 240, 300, 400, 480, 600, 800, 960, 1200, 1600, 2400 |
+| | | | 2 | 1200 / 1600 / 2400 | 120, 200, 240, 300, 400, 480, 600, 800, 960, 1200, ${\color{orange}\textsf{1600}}$, ${\color{red}\textsf{2400}}$ |
+| | | | 4 | 600 / 960 / 1200 | 120, 200, 240, 300, 400, 480, 600, ${\color{orange}\textsf{800}}$, ${\color{orange}\textsf{960}}$, ${\color{red}\textsf{1200}}$ |
+| | | | 8 | 300 / 480 / 600 | 120, 200, 240, 300, ${\color{orange}\textsf{400}}$, ${\color{orange}\textsf{480}}$, ${\color{red}\textsf{600}}$ |
+| **ZCU111** | 4.0 | 0 .. 2000 | 1 | 2000 / 2000 / 2000 | 500, 1000, 2000 |
+| | | | 2 | 1000 / 2000 / 2000 | 500, 1000, ${\color{orange}\textsf{2000}}$ |
+| | | | 4 | 500 / 1000 / 1000 | 500, ${\color{orange}\textsf{1000}}$ |
+| | | | 8 | — / 500 / 500 | ${\color{orange}\textsf{500}}$ |
+| | 3.93216 | 0 .. 1966.08 | 1 | 1966.08 / 1966.08 / 1966.08 | **491.52**, 983.04, 1966.08 |
+| | | | 2 | 983.04 / 1966.08 / 1966.08 | **491.52**, 983.04, ${\color{orange}\textsf{1966.08}}$ |
+| | | | 4 | 491.52 / 983.04 / 983.04 | **491.52**, ${\color{orange}\textsf{983.04}}$ |
+| | | | 8 | — / 491.52 / 491.52 | ${\color{orange}\textsf{\textbf{491.52}}}$ |
 
 Note:
 
 - **The OTW format is sc16 by default.** Pass the device argument `otw=sc8`
   or `otw=sc12` to ask for the type you want.
+- **ZCU208 and ZCU111** are built and checked but not yet tested on a board.
+  The ZCU111 is a Gen1 RFSoC: each sample rate offers three per-channel rates
+  (decimation 2, 4, 8), so 3932.16 MS/s gives the 3GPP rates 1966.08, 983.04
+  and 491.52; 122.88 and 61.44 MS/s are not reachable on it.
 
 ## GNU Radio demo
 

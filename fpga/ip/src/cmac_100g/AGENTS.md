@@ -1,7 +1,9 @@
 # AGENTS.md — fpga/ip/src/cmac_100g
 
-100 GbE MAC wrapper for the v49 designs (ZCU216 zSFP28, RFSoC 4x2 QSFP28 with
-`CMAC_LANES qsfp128`). Not a packaged IP on purpose.
+100 GbE MAC wrapper for the v49 designs (ZCU216 / ZCU208 zSFP28 with
+`CMAC_LANES zsfp`, RFSoC 4x2 QSFP28 with `qsfp128`, ZCU111 SFP28 x4 with
+`sfp128`: the 4x2's lanes, refclk MGTREFCLK1_129 = the ZCU111's user MGT
+Si570). Not a packaged IP on purpose.
 
 ## Why it is RTL in the top, not IP in the block design
 - `cmac_usplus` and `gtwizard_ultrascale` may not sit inside a block-design

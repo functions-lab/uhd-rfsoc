@@ -1,4 +1,4 @@
-# uhd_rfsoc.conf -- board-local settings of the UHD daemon (ZCU216 or RFSoC 4x2).
+# uhd_rfsoc.conf -- board-local settings of the UHD daemon (ZCU216, ZCU208, ZCU111 or RFSoC 4x2).
 #
 # Copy to uhd_rfsoc.conf (next to uhd_rfsoc_daemon.py, or /etc/uhd_rfsoc.conf,
 # or point $UHD_RFSOC_CONF at it; rfsoc/setup_board.sh makes the copy) and
@@ -16,13 +16,14 @@
 #   data_mac  the FPGA's MAC on the 100G link. Optional: by default a locally
 #             administered MAC derived from the board's eth0 MAC.
 #   name      discovery name (UHD device arg name=). Optional, default the
-#             board's: zcu216 or rfsoc4x2.
+#             board's: zcu216, zcu208, zcu111 or rfsoc4x2.
 #   clock_source  the reference of the board's LMK04828, applied at every
 #             bring-up. external (default): the reference input (the 10 MHz
-#             of a GPSDO shared by several boards: CLK104 REF IN on a ZCU216,
-#             the reference SMA on an RFSoC 4x2); the LMK04828 falls back to
+#             of a GPSDO shared by several boards: CLK104 REF IN on a ZCU216
+#             or ZCU208, the reference SMA on an RFSoC 4x2); the LMK04828 falls back to
 #             the board's own oscillator by itself when there is no
-#             reference. internal: the board's oscillator only.
+#             reference. internal: the board's oscillator only. The ZCU111
+#             (LMK04208) has no external-reference plan yet: set internal.
 #
 # Command-line --data-ip / --data-mac / --name / --clock-source override these.
 

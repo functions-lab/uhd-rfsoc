@@ -13,11 +13,11 @@ Rules and map of the FPGA side. `README.md` has the commands; each board's
 | `flow/ladder.sh` | the builds of `builds.txt` (filtered by kind / fs / name), in parallel, with a summary |
 | `boards/<b>/board.tcl` | the board's facts for the flow: part, board part, board files, xrfclk dir, clock families, CMAC lanes, top tie-offs, XDC net checks |
 | `boards/<b>/builds.txt` | `N F fs kind [strategy]`: the templates and fixed-factor builds, each with its implementation strategy |
-| `boards/<b>/block_designs/<b>_uhd_v49[_245m76]/` | the design of a clock family (`.tcl` + `.xdc`), every N |
+| `boards/<b>/block_designs/<b>_uhd_v49[_<family>]/` | the design of a clock family (`.tcl` + `.xdc`), every N (`_245m76`; the ZCU111's `_320m` and `_122m88`) |
 | `boards/rfsoc4x2/board_files/` | Real Digital's Vivado board files (vendored, Apache-2.0): do not edit |
 | `ip/src/uhd_ip/`, `ip/repo/uhd_ip/` | the data-plane cores: sources + sims, and packaged (`make package`) |
 | `ip/src/cmac_100g/` | the 100G CMAC + GT wrapper RTL (in the generated top, never in a block design) |
-| `ip/repo/dual_*` | the RFSoC 4x2's dual RF-ADC I/Q joiners (packaged in place) |
+| `ip/repo/dual_*` | the dual RF-ADC I/Q joiners of the RFSoC 4x2, ZCU208 and ZCU111 (packaged in place) |
 | `build/<b>/`, `build/pynq<v>/<b>/` | outputs, gitignored: `bitstreams/`, `bitstreams_timing_fail/`, `logs/` (default PYNQ version, other ones) |
 
 ## Rules
@@ -26,7 +26,7 @@ Rules and map of the FPGA side. `README.md` has the commands; each board's
   plus its xrfclk register files (`README.md`, "Add a board").
 - A block design is ONE self-contained `.tcl` + `.xdc` per board and clock
   family, parameterised by `V49_NCH` / `V49_FACTOR` / `V49_FS`; never derive
-  one from another (no sourcing between them). The two families differ only
+  one from another (no sourcing between them). A board's families differ only
   in the clock tree (MTS_clk_wiz input 300 / 122.88 MHz, PL_CLK / PL_SYSREF,
   the XDC PL_CLK period, the geometry rows, the default fs): a data-path
   change is made in every design of every board.
