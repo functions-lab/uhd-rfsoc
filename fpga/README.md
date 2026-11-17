@@ -18,7 +18,7 @@ to factors 2, 4 and 8 only (at 3932.16 MS/s: 1966.08, 983.04 and 491.52 MS/s
 per channel, the 3GPP rates; at 4000: 2000, 1000 and 500); its clock register
 files were made in TICS Pro; and its 100G link is its four SFP28 cages, used
 with a QSFP28-to-4xSFP28 breakout cable. The ZCU208 has no official PYNQ 2.7
-image (3.0.1 and 3.1.1 exist); its 2.7 set is for a self-built image.
+image (3.0.1 and 3.1.1 exist), so it has PYNQ 3.0 and 3.1 sets only.
 
 A **template** is the top-rate build of one channel count at one fs. At run
 time the board's daemon retunes it to every lower rate, so the templates

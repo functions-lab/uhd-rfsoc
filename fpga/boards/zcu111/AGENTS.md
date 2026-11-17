@@ -100,9 +100,12 @@ register decoders and the full research with line-level citations
   CMACE4_X0Y0; UG1271 Fig 3-29, BF sfp0..3), a QSFP28 → 4 x SFP28 breakout
   to the NIC. Refclk: the user MGT Si570 U49 on MGTREFCLK1_129 (V31/V32),
   156.25 MHz at power-up (UG1271 p.48, BF `user_mgt_si570_clock`): nothing
-  programs it (`gt_refclk "si570"`), and the PYNQ ZCU111 kernel device tree
-  (zynqmp-zcu111-revA.dts, `si570_mgt` u49) leaves it at 156.25 MHz
-  (factory-fout = clock-frequency = 156250000). `CMAC_LANES sfp128` =
+  programs it (`gt_refclk "si570"`), and the ZCU111 device trees of every
+  PYNQ image leave it at 156.25 MHz (`si570_mgt` u49: factory-fout =
+  clock-frequency = 156250000 in linux-xlnx zynqmp-zcu111-revA.dts at
+  xilinx-v2020.2 (PYNQ 2.7), v2022.1 (3.0) and v2024.1 (3.1), and in
+  device-tree-xlnx's zcu111-reva.dtsi; PYNQ's ZCU111 BSP overlay does not
+  touch it). `CMAC_LANES sfp128` =
   qsfp128's lanes and one-quad QPLL0 (`CMAC_ONE_QUAD`) with `REFCLK_SOURCE
   clk1+1`; the GT wizard's port list is identical to qsfp128's (probe6).
   Quad 128's QPLL0 fed from quad 129's refclk1 (the ZCU216 routes the other

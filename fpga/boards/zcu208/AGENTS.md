@@ -71,7 +71,7 @@ board**: every fact below comes from a primary source, none from a board.
 - LEDs: `led[7:0]` = GPIO_LED_0..7_LS (AR19 AT17 AR17 AU19 AU20 AW21 AV21
   AV17, LVCMOS12), axi_gpio_led single channel.
 - PYNQ images: 3.0.1, 3.1.1 (and 4.0) exist for the ZCU208; there is no
-  official 2.7 image (the 2.7 builds are for a self-built image).
+  official 2.7 image: the published sets are PYNQ 3.0 and 3.1 only.
   `pynq_board` / `$BOARD` = `ZCU208`.
 
 ## Design
