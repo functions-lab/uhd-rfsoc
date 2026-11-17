@@ -1,0 +1,22 @@
+# builds.txt -- the ZCU111 bitstreams: one line per build, read by fpga/flow/ladder.sh.
+#   N  F  fs  kind  [strategy]
+# kind: template = a channel count's top build at an fs, which the daemon
+# retunes at run time to every higher Gen1 factor (2, 4, 8; Protocol §8): the
+# templates alone cover every rate. ladder = a fixed-factor build of the same
+# design, for fixed-rate comparisons only. strategy: Vivado implementation
+# strategy (default: Vivado's). Performance_ExtraTimingOpt on every template,
+# as on the ZCU208 (the same fabric size; routing-dominated 322 MHz
+# CMAC-side paths).
+# fs 4000 (the 320 MHz family): fabric 250 MHz on every template. With PYNQ
+# 3.1 (Vivado 2024.1) the 1ch template missed by 0.003 ns with
+# Performance_ExtraTimingOpt and met timing with Performance_Explore (the
+# published 3.1 build); 2.7 and 3.0 meet it with the strategy below.
+1  2  4000    template Performance_ExtraTimingOpt
+2  2  4000    template Performance_ExtraTimingOpt
+4  4  4000    template Performance_ExtraTimingOpt
+8  8  4000    template Performance_ExtraTimingOpt
+# fs 3932.16 (the 122.88 MHz family, the 3GPP rates): fabric 245.76 MHz
+1  2  3932.16 template Performance_ExtraTimingOpt
+2  2  3932.16 template Performance_ExtraTimingOpt
+4  4  3932.16 template Performance_ExtraTimingOpt
+8  8  3932.16 template Performance_ExtraTimingOpt

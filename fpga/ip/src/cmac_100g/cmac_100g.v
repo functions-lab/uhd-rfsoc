@@ -7,8 +7,10 @@
 // The core-support hierarchy below (cmac/cmac_caui4_*.v) is the example's, with
 // the split-quad edits proven to place and route.
 // With CMAC_ONE_QUAD defined (create_cmac_ip.tcl CMAC_LANES qsfp128: the
-// RFSoC 4x2 QSFP28) the four lanes are GTY X0Y4..X0Y7 in quad 128 alone, on
-// MGTREFCLK0_128 (its Si570), and only quad 128's QPLL common is built.
+// RFSoC 4x2 QSFP28; sfp128: the ZCU111's four SFP28 cages) the four lanes are
+// GTY X0Y4..X0Y7 in quad 128 alone, on MGTREFCLK0_128 (the 4x2's Si570) or
+// MGTREFCLK1_129 from the quad above (the ZCU111's Si570), and only quad
+// 128's QPLL common is built. (ZCU208: the ZCU216's zSFP28 layout.)
 //
 // What replaces the example's packet generator/monitor:
 //   * the CMAC TX/RX 512-bit AXIS on s_axis_tx / m_axis_rx (usr_clk domain,

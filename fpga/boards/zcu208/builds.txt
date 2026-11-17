@@ -1,0 +1,21 @@
+# builds.txt -- the ZCU208 bitstreams: one line per build, read by fpga/flow/ladder.sh.
+#   N  F  fs  kind  [strategy]
+# kind: template = a channel count's top build at an fs, which the daemon
+# retunes at run time to every lower factor (Protocol §8): the templates
+# alone cover every rate. ladder = a fixed-factor build of the same design,
+# for fixed-rate comparisons only. strategy: Vivado implementation strategy
+# (default: Vivado's). Performance_ExtraTimingOpt on every template, as on the
+# same die in the RFSoC 4x2 (routing-dominated 322 MHz CMAC-side paths) and
+# on the ZCU216's 512-bit-beat templates.
+1  2  5000   template Performance_ExtraTimingOpt
+2  2  5000   template Performance_ExtraTimingOpt
+4  4  5000   template Performance_ExtraTimingOpt
+8  8  5000   template Performance_ExtraTimingOpt
+1  2  4915.2 template Performance_ExtraTimingOpt
+2  2  4915.2 template Performance_ExtraTimingOpt
+4  4  4915.2 template Performance_ExtraTimingOpt
+8  8  4915.2 template Performance_ExtraTimingOpt
+1  2  4800   template Performance_ExtraTimingOpt
+2  2  4800   template Performance_ExtraTimingOpt
+4  4  4800   template Performance_ExtraTimingOpt
+8  8  4800   template Performance_ExtraTimingOpt

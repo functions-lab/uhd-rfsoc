@@ -14,10 +14,14 @@
 # with an out-of-context checkpoint may not sit inside a block-design module
 # reference (filemgmt 56-328), and cmac_100g is one.
 #
-# CMAC_LANES selects the GT sites: zsfp (default; the zSFP28 cages above) or
+# CMAC_LANES selects the GT sites: zsfp (default; the zSFP28 cages above),
 # qsfp128 (the RFSoC 4x2 QSFP28: X0Y4..X0Y7, one quad, on MGTREFCLK0_128 from
-# its Si570 at 156.25 MHz). qsfp128 sets the Verilog define CMAC_ONE_QUAD, which
-# makes the wrapper RTL use quad 128's QPLL0 alone.
+# its Si570 at 156.25 MHz) or sfp128 (the ZCU111's four SFP28 cages: the same
+# X0Y4..X0Y7, refclk from the quad above, MGTREFCLK1_129, its user MGT Si570
+# at 156.25 MHz: TX/RX_REFCLK_SOURCE clk1+1). qsfp128 and sfp128 set the
+# Verilog define CMAC_ONE_QUAD, which makes the wrapper RTL use quad 128's
+# QPLL0 alone (its GTREFCLK00 takes the refclk buffer wherever it sits; the
+# design XDC places the buffer's pins).
 #
 # CMAC_REFCLK selects the refclk the 8A34001 is programmed to. 156.25 needs a
 # fractional QPLL0 (SDM 2^23); 161.1328125 is integer. The QPLL common
@@ -32,7 +36,9 @@ switch -- $CMAC_LANES {
             set gt_ref {X0Y4 clk1 X0Y5 clk1 X0Y8 clk1-1 X0Y9 clk1-1} }
   qsfp128 { set gt_ch {X0Y7 X0Y6 X0Y5 X0Y4}
             set gt_ref {X0Y4 clk0 X0Y5 clk0 X0Y6 clk0 X0Y7 clk0} }
-  default { error "create_cmac_ip: CMAC_LANES $CMAC_LANES (zsfp or qsfp128)" }
+  sfp128  { set gt_ch {X0Y7 X0Y6 X0Y5 X0Y4}
+            set gt_ref {X0Y4 clk1+1 X0Y5 clk1+1 X0Y6 clk1+1 X0Y7 clk1+1} }
+  default { error "create_cmac_ip: CMAC_LANES $CMAC_LANES (zsfp, qsfp128 or sfp128)" }
 }
 
 create_ip -vlnv [v49_vlnv xilinx.com:ip:cmac_usplus:3.1] -module_name cmac_caui4
@@ -83,7 +89,7 @@ foreach x {cmac_caui4 cmac_caui4_gt} {
 
 add_files -norecurse [glob $cmac_dir/cmac_*.v]
 add_files -norecurse $cmac_dir/refclk_$CMAC_REFCLK/cmac_caui4_common_wrapper.v
-if {$CMAC_LANES eq "qsfp128"} {
+if {$CMAC_LANES in {qsfp128 sfp128}} {
   set_property verilog_define [concat [get_property verilog_define [current_fileset]] CMAC_ONE_QUAD] [current_fileset]
 }
 update_compile_order -fileset sources_1
