@@ -85,11 +85,13 @@ The user chose (conversation, 2026-11-17):
   a timed burst may start up to ~3 low-rate beats early. Measure it in
   simulation and document it (or correct the allowance if it is simple and
   keeps depth 0 cycle-identical).
-- **Beat geometry**: the fabric carries spc = Data_Width/2 complex samples
-  per channel per beat: 4 (ZCU216 1/2/4ch, 4x2 1ch and 2ch at 4915.2/4800),
-  2 (ZCU216 8ch, 4x2 2ch at 5000), 1 (ZCU216 16ch). At F = 40 the converter
-  clock is fs/40/spc: 15.36 .. 62.5 MHz. The chain's first stages see spc
-  samples per clock; after log2(spc) halvings it is at <= 1 per clock.
+- **Beat geometry**: the fabric carries spc complex samples per channel per
+  beat. ZCU216 (spc = Data_Width/2): 4 at 1/2/4ch, 2 at 8ch, 1 at 16ch.
+  RFSoC 4x2 (dual tiles, spc = the ADC Data_Width S, `boards/rfsoc4x2/AGENTS.md`):
+  8 at 1ch and at 2ch fs 4915.2 / 4800 (F2 templates), 4 at 2ch fs 5000 (F4
+  template). At F = 40 the converter clock is fs/40/spc: 15.36 .. 62.5 MHz.
+  The chain's first log2(spc) stages see > 1 sample per clock (up to three
+  SSR stages, 8 -> 4 -> 2 -> 1, on the 4x2); the rest <= 1.
 - **Clock**: the chain runs on `adc_clk` (the converter AXIS clock). The
   template is timed at its top clock (312.5 / 307.2 / 300 MHz on the ZCU216,
   likewise on the 4x2), so the chain must close timing there although it is
@@ -233,9 +235,11 @@ README rate table (new rates per board / family / N), QUICK_START if it
 lists the lowest rate, `fpga/README.md` + `fpga/AGENTS.md` (the chain, its
 address, the rule that it is in every design), `uhd_ip/README.md` (new
 cores), `rfsoc/server/README.md` (the depth in a variant). The Protocol (the
-top `AGENTS.md`, local and untracked) is not in the repo; the user's copy
-is theirs to update: list the Protocol changes (§8 rates and retune, §11
-address, §4/§6 timed-start note) in the final report.
+top `AGENTS.md`, local and untracked) is not in this checkout. The closest
+copy is `/home/wei/uhd-rfsoc-dpd/AGENTS.md` (the DPD work tree: the same
+Protocol plus §12 DPD); read §3-§11 there as the contract. The user's own
+copy is theirs to update: list the Protocol changes (§8 rates and retune,
+the new core's address, §4/§6 timed-start note) in the final report.
 
 ### Verification (no boards here: the user tests on hardware)
 
@@ -244,7 +248,7 @@ address, §4/§6 timed-start note) in the final report.
   `fir_compiler:7.2` is current in each catalog), the worst configurations:
   ÷2 at 4->2 and 2->1 samples/clock with 2N paths, ×2 at 1->2 and 2->4,
   half-band at <= 1 sample/clock with 2N paths; ZCU216 4ch, 8ch, 16ch chains
-  (RX + TX) at 312.5 MHz. Pass: every configuration generates and simulates,
+  and RFSoC 4x2 1ch (SSR 8) and 2ch chains (RX + TX) at 312.5 MHz. Pass: every configuration generates and simulates,
   closes 312.5 MHz OOC, and a whole design's chains (RX + TX) use <= 1500
   DSP48E2 (35 % of the ZU49DR's 4272) and <= 10 % of its BRAM. Fail: shorten
   the SSR stages (they are "final" only at depths 1 and 2), then re-measure;
@@ -289,9 +293,29 @@ address, §4/§6 timed-start note) in the final report.
 - Build order, strategies per build (`Performance_ExtraTimingOpt` where the
   current templates use it; others as timing requires).
 
+### Timing closure (calls made here, in this order)
+
+The chain is clocked by `adc_clk` at every factor but its output is only
+selected at F = 40, where `adc_clk` <= 62.5 MHz (>= 5x the templates' top
+period); the daemon never sets depth > 0 at another factor (it refuses to).
+The published templates close with almost no margin (WNS 0.000-0.05 ns).
+So:
+
+1. **Multicycle constraints on the chain**, from the start (XDC in each
+   design, scoped to the chain's cells and its paths into the RX / TX output
+   muxes): setup multicycle 4 with the matching hold, valid because those
+   paths only carry data when `adc_clk` is <= 1/4 of the timed clock.
+2. **A registered depth-0 bypass** (one constant `adc_clk` cycle more on the
+   existing rates: invisible to the Protocol, which promises no absolute
+   latency) if the combinational mux on the 128-512-bit beat is what fails.
+3. **A stronger strategy** for that build (as `builds.txt` already does).
+4. **The spec relaxed on that board / N** (fewer taps, 70 dB) or K lowered,
+   recorded in the README.
+5. Last resort, back to the user: publish that template without the chain.
+
 ## Risks
 
-- **DSP budget at spc = 4.** An SSR ÷2 at 4 samples/clock with a ~40-50 tap
+- **DSP budget at spc = 4 (ZCU216 4ch) and spc = 8 (4x2).** An SSR ÷2 at 4 samples/clock with a ~40-50 tap
   vector costs ~2 x taps multipliers per path unless FIR Compiler exploits
   the half-band zeros and symmetry; 4 channels x I/Q x RX+TX could approach
   half of the ZU49DR's 4272 DSPs. First plan task: a FIR Compiler spike
