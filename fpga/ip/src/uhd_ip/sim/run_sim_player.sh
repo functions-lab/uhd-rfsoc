@@ -12,6 +12,8 @@
 # 300 MHz at every width (512 b: one group per cycle) and appends _fast;
 # TXBW=<words> sets TX_BUF_WORDS (default 256) and appends _bufN. CHAIN=<n>
 # [CHAIN_D=<words>, default 64] adds the deep play-out chain and appends _chN.
+# GAP=g [GPH=p]: adc_time one beat in 2^g cycles, the DAC tready one cycle in
+# 2^g at phase p (the low-rate chains); appends _gap<g>p<p>.
 #   FMTS="0 1 2 3" TICK_STEPS=1 ./run_sim_player.sh      # the format sweep
 #   FAST=1 WIDTHS=512 TICK_STEPS=1 FMTS="1 2" ./run_sim_player.sh
 set -euo pipefail
@@ -32,7 +34,8 @@ run() {   # $1 = build dir, $2 = TICK_STEP, $3 = M_WIDTH, $4 = FMT, rest = extra
     xelab -L xpm -debug off --timescale 1ns/1ps -generic_top "TICK_STEP=$ts" \
           -generic_top "M_WIDTH=$w" -generic_top "FMT=$f" -generic_top "FAST=${FAST:-0}" \
           -generic_top "TXBW=${TXBW:-256}" -generic_top "CHAIN=${CHAIN:-0}" \
-          -generic_top "CHAIN_D=${CHAIN_D:-64}" tb_udp_player glbl -s tb > xelab.log
+          -generic_top "CHAIN_D=${CHAIN_D:-64}" \
+          -generic_top "GAP=${GAP:-0}" -generic_top "GPH=${GPH:-0}" tb_udp_player glbl -s tb > xelab.log
     xsim tb -runall -log xsim.log > /dev/null
     grep -E "ERROR|Fatal|TB_ERRORS|DMA|FRAMES_SENT|INTEG|overflow:" xsim.log || true
     cd "$HERE"
@@ -48,6 +51,7 @@ for TS in ${TICK_STEPS:-1 2}; do
     if [ "${FAST:-0}" != 0 ]; then SFX=${SFX}_fast; fi
     if [ "${TXBW:-256}" != 256 ]; then SFX=${SFX}_buf$TXBW; fi
     if [ "${CHAIN:-0}" != 0 ]; then SFX=${SFX}_ch$CHAIN; fi
+    if [ "${GAP:-0}" != 0 ]; then SFX=${SFX}_gap${GAP}p${GPH:-0}; fi
 
     echo "== udp_player, M_WIDTH=$W TICK_STEP=$TS FMT=$F"
     run build_player$SFX "$TS" "$W" "$F"

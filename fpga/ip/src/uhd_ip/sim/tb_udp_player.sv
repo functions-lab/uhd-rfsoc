@@ -56,7 +56,14 @@
 module tb_udp_player #(parameter int TICK_STEP = 1, parameter int M_WIDTH = 128,
                        parameter int FMT = 0, parameter int FAST = 0,
                        parameter int TXBW = 256, parameter int CHAIN = 0,
-                       parameter int CHAIN_D = 64);
+                       parameter int CHAIN_D = 64, parameter int GAP = 0,
+                       parameter int GPH = 0);
+    // GAP > 0 (Gate 1 of the low-rate chains): adc_time advances one beat in
+    // 2^GAP cycles (on cyc % 2^GAP == 0, like udp_streamer behind rx_rate at
+    // depth GAP) and m_axis_dac_tready is high one cycle in 2^GAP (on
+    // cyc % 2^GAP == GPH, like tx_rate pulling); every wait scales by GSC so
+    // each scenario keeps its length in samples.
+    localparam int GSC  = 1 << GAP;
     localparam int BPS  = (FMT == 1) ? 2 : (FMT == 2) ? 3 : (FMT == 3) ? 8 : 4;  // bytes per slot
     localparam int GW   = (FMT == 2) ? 3 : 1;          // smallest packet, words
     localparam int GS   = GW * 64 / BPS;               // ... in slots
@@ -89,6 +96,9 @@ module tb_udp_player #(parameter int TICK_STEP = 1, parameter int M_WIDTH = 128,
     always #1.5515 tx_clk  = tx_run ? ~tx_clk : tx_clk;    // 322.27 MHz
     always #5.0    axi_clk = ~axi_clk;   // 100 MHz
     reg adc_rstn = 0, tx_rstn = 0, axi_rstn = 0;
+    int unsigned gcyc = 0;             // counted by the last process of the module (random stability)
+    wire t_stb = (GAP == 0) || (gcyc % GSC == 0);              // adc_time advances
+    wire r_stb = (GAP == 0) || (gcyc % GSC == GPH % GSC);      // the DAC side pulls
 
     integer fd;
     int errors = 0;
@@ -99,7 +109,7 @@ module tb_udp_player #(parameter int TICK_STEP = 1, parameter int M_WIDTH = 128,
     wire [63:0] adc_time;
 `ifndef INTEG
     reg  [63:0] tb_time = 64'h0000_0000_FFFF_C000;   // crosses 2^32 during the run
-    always @(posedge adc_clk) if (adc_rstn) tb_time <= tb_time + SLOTS * TICK_STEP;
+    always @(posedge adc_clk) if (adc_rstn && t_stb) tb_time <= tb_time + SLOTS * TICK_STEP;
     assign adc_time = tb_time;
 `endif
 
@@ -154,7 +164,7 @@ module tb_udp_player #(parameter int TICK_STEP = 1, parameter int M_WIDTH = 128,
     wire mon_tuser;
     udp_streamer #(.DATA_FIFO_DEPTH(512), .TICK_STEP(TICK_STEP), .S_WIDTH(M_WIDTH)) u_str (
         .adc_clk(adc_clk), .adc_aresetn(adc_rstn),
-        .s_axis_tdata({M_WIDTH{1'b0}}), .s_axis_tvalid(1'b1), .s_axis_tready(),
+        .s_axis_tdata({M_WIDTH{1'b0}}), .s_axis_tvalid(t_stb), .s_axis_tready(),
         .m_axis_adc_tdata(), .m_axis_adc_tvalid(), .m_axis_adc_tready(1'b1),
         .adc_time(adc_time),
         .tx_clk(tx_clk), .tx_aresetn(tx_rstn),
@@ -493,7 +503,7 @@ module tb_udp_player #(parameter int TICK_STEP = 1, parameter int M_WIDTH = 128,
         for (int w = 0; w < SLOTS; w += 4)
             dma_tdata[32*w +: 128] <= {$urandom, $urandom, $urandom, $urandom};
         dma_tvalid <= ($urandom % 4) != 0;
-        dac_tready <= rand_ready ? (($urandom % 4) != 0) : 1'b1;
+        dac_tready <= rand_ready ? (($urandom % 4) != 0) : (GAP == 0) ? 1'b1 : (((gcyc + 1) % GSC) == GPH % GSC);
     end
     // the URAM buffer must never be written while full (credit exactness)
     int buf_ovf = 0;
@@ -527,7 +537,7 @@ module tb_udp_player #(parameter int TICK_STEP = 1, parameter int M_WIDTH = 128,
     task quiesce(input string what);
         reg [31:0] d;
         begin
-            repeat (3000) @(posedge adc_clk);
+            repeat (3000 * GSC) @(posedge adc_clk);
             axi_rd(8'h64, d);
             if (d !== host_sent) begin
                 $display("ERROR %s: CONSUMED=%0d, host sent %0d", what, d, host_sent);
@@ -598,16 +608,16 @@ module tb_udp_player #(parameter int TICK_STEP = 1, parameter int M_WIDTH = 128,
         // ---- DMA pass-through (dac_src = 0), DAC tready toggling, while the
         // CMAC user clock is still stopped: must not depend on tx_clk at all.
         axi_wr(8'h04, 32'h1);
-        repeat (50) @(posedge adc_clk);
+        repeat (50 * GSC) @(posedge adc_clk);
         rand_ready = 1; chk_dma = 1;
-        repeat (500) @(posedge adc_clk);
+        repeat (500 * GSC) @(posedge adc_clk);
         chk_dma = 0; rand_ready = 0;
-        repeat (4) @(posedge adc_clk);
+        repeat (4 * GSC) @(posedge adc_clk);
         $display("DMA pass-through (tx_clk stopped): %0d beats, %0d mismatches", dma_beats, dma_err);
         axi_wr(8'h04, 32'h3);                // player selected, still no tx_clk: zeros
-        repeat (50) @(posedge adc_clk);
+        repeat (50 * GSC) @(posedge adc_clk);
         chk_player = 1; log_dac = 1;
-        repeat (300) @(posedge adc_clk);
+        repeat (300 * GSC) @(posedge adc_clk);
         chk_player = 0;
         axi_wr(8'h04, 32'h1);
         // ---- now the CMAC comes up: clock first, reset released later
@@ -630,7 +640,7 @@ module tb_udp_player #(parameter int TICK_STEP = 1, parameter int M_WIDTH = 128,
         axi_wr(8'h08, 32'h101);
         axsel = 0;
         axi_wr(8'h04, 32'h3 | 32'h8);
-        repeat (400) @(posedge adc_clk);
+        repeat (400 * GSC) @(posedge adc_clk);
         $fwrite(fd, "# phase integ\n");
         for (int k = 0; k < 3; k++) begin
             arp_req(48'hFFFFFFFFFFFF, HOST_MAC, HOST_IP, MY_IP, 0);
@@ -640,9 +650,9 @@ module tb_udp_player #(parameter int TICK_STEP = 1, parameter int M_WIDTH = 128,
         send_burst(1, sz, 0, 0);
         wait_ev(1, 1);
         arp_req(MY_MAC, HOST_MAC, HOST_IP, MY_IP, 0);
-        repeat (3000) @(posedge adc_clk);
+        repeat (3000 * GSC) @(posedge adc_clk);
         axsel = 1; axi_wr(8'h08, 32'h100); axsel = 0;     // stop the streamer
-        repeat (3000) @(posedge adc_clk);
+        repeat (3000 * GSC) @(posedge adc_clk);
         $fwrite(fd, "# integ arp %0d status %0d streamer %0d bubbles %0d\n",
                 n_arp_rx, n_status, n_str, bubbles);
         $display("INTEG: ARP=%0d STATUS=%0d STREAMER_FRAMES=%0d BUBBLES=%0d",
@@ -655,7 +665,7 @@ module tb_udp_player #(parameter int TICK_STEP = 1, parameter int M_WIDTH = 128,
         // ---- player on (stream_setup_tx: enable, dac_src, flush)
         axi_wr(8'h04, 32'h3 | 32'h8);
         expect_rd(8'h04, 32'h3, "CTRL readback");
-        repeat (400) @(posedge adc_clk);
+        repeat (400 * GSC) @(posedge adc_clk);
         chk_player = 1; log_dac = 1;
 
         // ---- ARP
@@ -712,7 +722,7 @@ module tb_udp_player #(parameter int TICK_STEP = 1, parameter int M_WIDTH = 128,
         send_pkt(4, 0,   256, 1, 0, 1, t0);
         send_pkt(4, 256, 256, 0, 0, 1, t0 + 256 * TICK_STEP);
         wait_ev(2, 1);
-        repeat (200) @(posedge adc_clk);
+        repeat (200 * GSC) @(posedge adc_clk);
         send_pkt(4, 512, 256, 0, 0, 1, t0 + 512 * TICK_STEP);
         send_pkt(4, 768, 256, 0, 1, 1, t0 + 768 * TICK_STEP);
         wait_ev(1, 4);
@@ -807,7 +817,7 @@ module tb_udp_player #(parameter int TICK_STEP = 1, parameter int M_WIDTH = 128,
         // stream_stop_tx / stream_setup_tx: flush
         $fwrite(fd, "# flush\n");
         axi_wr(8'h04, 32'h3 | 32'h8);
-        repeat (1000) @(posedge adc_clk);
+        repeat (1000 * GSC) @(posedge adc_clk);
         expect_rd(8'h64, host_sent, "consumed after flush (monotonic: all sent words)");
         expect_rd(8'h68, 32'h2, "status after flush: idle, empty");
 
@@ -882,7 +892,7 @@ module tb_udp_player #(parameter int TICK_STEP = 1, parameter int M_WIDTH = 128,
         repeat (1000) @(posedge tx_clk);
         expect_rd(8'h68, 32'h0, "gate: held before its timeout");
         wait_ev(2, 2);
-        repeat (200) @(posedge adc_clk);
+        repeat (200 * GSC) @(posedge adc_clk);
         send_pkt(11, 512, 512, 0, 1, 0, 0);
         wait_ev(1, 10);
         quiesce("gate_timeout");
@@ -923,4 +933,7 @@ module tb_udp_player #(parameter int TICK_STEP = 1, parameter int M_WIDTH = 128,
         $display("TB_ERRORS=%0d", errors);
         $finish;
     end
+    // gcyc: declared last so every earlier process keeps its $urandom seed
+    // (SV random stability): GAP = 0 replays the original stimulus exactly
+    always @(posedge adc_clk) gcyc <= gcyc + 1;
 endmodule

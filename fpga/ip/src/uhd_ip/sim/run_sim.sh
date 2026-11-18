@@ -6,6 +6,8 @@
 # over-the-wire format in $FMTS (default "0"; 0 sc16, 1 sc8, 2 sc12, 3 fc32 --
 # Protocol §10). Width 128 step 1 builds in build/, width 128 step N in
 # build_tsN/, width W in build_wW/ and build_wW_tsN/; FMT F != 0 appends _fmtF.
+# GAP=g (1..6): s_axis_tvalid one cycle in 2^g (the low-rate chains' output),
+# every scenario scaled to the same sample count; appends _gapg.
 # FAST=1 runs adc_clk at 300 MHz at every width (512 b: one group per cycle,
 # the max-rate geometry) and appends _fast.
 #   FMTS="0 1 2 3" TICK_STEPS=1 ./run_sim.sh      # the format sweep
@@ -25,13 +27,14 @@ for TS in ${TICK_STEPS:-1 2}; do
     if [ "$TS" != 1 ]; then WORK=${WORK}_ts$TS; fi
     if [ "$F" != 0 ]; then WORK=${WORK}_fmt$F; fi
     if [ "${FAST:-0}" != 0 ]; then WORK=${WORK}_fast; fi
+    if [ "${GAP:-0}" != 0 ]; then WORK=${WORK}_gap${GAP}; fi
     mkdir -p "$WORK" && cd "$WORK"
     xvlog -sv "$XPM/xpm_cdc/hdl/xpm_cdc.sv" "$XPM/xpm_memory/hdl/xpm_memory.sv" \
               "$XPM/xpm_fifo/hdl/xpm_fifo.sv" --work xpm=xsim.dir/xpm > xvlog_xpm.log
     xvlog "$VIVADO_ROOT/data/verilog/src/glbl.v" "$HERE/../src/udp_streamer.v" > xvlog_rtl.log
     xvlog -sv "$HERE/tb_udp_streamer.sv" > xvlog_tb.log
     xelab -L xpm -debug off --timescale 1ns/1ps -generic_top "TICK_STEP=$TS" \
-          -generic_top "S_WIDTH=$W" -generic_top "FMT=$F" -generic_top "FAST=${FAST:-0}" tb_udp_streamer glbl -s tb > xelab.log
+          -generic_top "S_WIDTH=$W" -generic_top "FMT=$F" -generic_top "FAST=${FAST:-0}" -generic_top "GAP=${GAP:-0}" tb_udp_streamer glbl -s tb > xelab.log
     xsim tb -runall -log xsim.log > /dev/null
     grep -E "ID=|OVERFLOWS|PKTS|CMDS|STATUS|FIFO_HWM|FRAMES|SPP_COERCION|Fatal|ERROR" xsim.log || true
     grep -q SPP_COERCION xsim.log || { echo "FAIL: testbench did not finish"; exit 1; }

@@ -1018,7 +1018,8 @@ module udp_player #(
     reg  [63:0]  w_tsf;
     reg          starving;
     reg  [M_WIDTH-1:0] dac_q;
-    reg  [63:0]  t_cmp, t_cmp4;
+    reg  [63:0]  t_b1, t_b2, t_b3;      // adc_time of the previous cycle + 1 / 2 / 3 beats
+    reg  [15:0]  t_lo_q;               // adc_time[15:0] of the previous cycle
     reg  [7:0]   fl_cnt_d;
     reg          fl_tog_d_q, clr_tog_d_q;
     reg  [31:0]  c_und, c_late, c_ack;
@@ -1145,7 +1146,16 @@ module udp_player #(
                          (WIDE && !is8_d);
     wire         adv   = !src_d || m_axis_dac_tready;
     // t_cmp is the tick of the beat that the decision made in this cycle
-    // puts on m_axis_dac (one output register, one register on adc_time).
+    // puts on m_axis_dac: the adc_time of the cycle it is taken in, one
+    // beat after this one's. adc_time advances one beat per ADC beat; when it
+    // advances every cycle (every rate the RFDC alone makes) that is
+    // adc_time(previous cycle) + 2 beats, as it always was. Behind the
+    // low-rate chains it advances one cycle in 2^k (and the DAC side takes a
+    // beat one cycle in 2^k): t_adv says whether it advanced into this cycle,
+    // so t_cmp is adc_time(this cycle) + 1 beat either way.
+    wire         t_adv  = (adc_time[15:0] != t_lo_q);
+    wire [63:0]  t_cmp  = t_adv ? t_b2 : t_b1;
+    wire [63:0]  t_cmp4 = t_adv ? t_b3 : t_b2;      // end of that beat
     wire         t_hit  = (w_tsf < t_cmp4);
     wire         t_late = (w_tsf < t_cmp);
 
@@ -1164,8 +1174,10 @@ module udp_player #(
     always @(posedge adc_clk) begin
         fl_tog_d_q  <= fl_tog_d;
         clr_tog_d_q <= clr_tog_d;
-        t_cmp  <= adc_time + 2 * BEAT_TICKS;      // two beats of pipeline
-        t_cmp4 <= adc_time + 3 * BEAT_TICKS;      // end of that beat
+        t_b1   <= adc_time + BEAT_TICKS;
+        t_b2   <= adc_time + 2 * BEAT_TICKS;
+        t_b3   <= adc_time + 3 * BEAT_TICKS;
+        t_lo_q <= adc_time[15:0];
         ev_wr  <= 1'b0;
 
         if (!adc_aresetn || !tx_rstn_d)  fl_cnt_d <= 8'd255;

@@ -28,7 +28,8 @@
 // geometry: adc_clk 187.5 MHz, a 32-slot beat -> one sc8 wire word per cycle
 // (96 Gb/s), SPP the format's maximum; any other FMT must drop everything.
 module tb_udp_streamer #(parameter int TICK_STEP = 1, parameter int S_WIDTH = 128,
-                         parameter int FMT = 0, parameter int FAST = 0);
+                         parameter int FMT = 0, parameter int FAST = 0,
+                         parameter int GAP = 0);
     localparam int GRAN = (FMT == 1) ? 32 : (FMT == 2) ? 64 : (FMT == 3) ? 8 : 16;
     localparam int WIDE = (S_WIDTH == 1024);
     localparam int MAXR = FAST || WIDE;             // max-rate SPP
@@ -40,6 +41,10 @@ module tb_udp_streamer #(parameter int TICK_STEP = 1, parameter int S_WIDTH = 12
     localparam bit [15:0] CORNER_Q [16] = '{-16'sd32768, 16'sd32767, -16'sd32640, 16'sd32631,
         16'sd136, -16'sd136, 16'sd383, -16'sd385, 16'sd7, -16'sd9, 16'sd40, -16'sd40,
         -16'sd32760, 16'sd32752, 16'sd1, 16'sd255};
+    // GAP > 0 (Gate 1 of the low-rate chains): s_axis_tvalid one cycle in
+    // 2^GAP, like rx_rate at depth GAP; every wait scales by GS so each
+    // scenario keeps its length in SAMPLES
+    localparam int  GS    = 1 << GAP;
     localparam int  SLOTS = S_WIDTH / 32;
     localparam int  K     = S_WIDTH / 128;          // time-offset scale
     localparam real ADC_HALF = WIDE ? 2.6667 : FAST ? 1.6667 :
@@ -72,7 +77,7 @@ module tb_udp_streamer #(parameter int TICK_STEP = 1, parameter int S_WIDTH = 12
         if (!adc_rstn) begin adc_valid <= 0; t_model <= 0; end
         else begin
             if (adc_valid) t_model <= t_model + SLOTS * TICK_STEP;
-            adc_valid <= (cyc % 97) != 0;
+            adc_valid <= (GAP == 0) ? ((cyc % 97) != 0) : ((cyc % GS) == 0);
         end
     end
 
@@ -177,9 +182,9 @@ module tb_udp_streamer #(parameter int TICK_STEP = 1, parameter int S_WIDTH = 12
         $fwrite(fd, "# case cont\n");
         axi_wr(8'h04, 32'h1);
         axi_wr(8'h08, 32'h101);                 // continuous, now
-        repeat (3000) @(posedge adc_clk);
+        repeat (3000 * GS) @(posedge adc_clk);
         axi_wr(8'h08, 32'h100);                 // stop
-        repeat (2000) @(posedge adc_clk);
+        repeat (2000 * GS) @(posedge adc_clk);
 
         // 2) timed num_done burst with pattern: 1000 samples at t0 + 5000 + 2
         $fwrite(fd, "# case burst\n");
@@ -189,18 +194,18 @@ module tb_udp_streamer #(parameter int TICK_STEP = 1, parameter int S_WIDTH = 12
         axi_wr(8'h0C, 1000); axi_wr(8'h10, 0);
         axi_wr(8'h14, rd + 32'd5002 * K); axi_wr(8'h18, 0);
         axi_wr(8'h08, 32'h002);                 // num_done, timed
-        repeat (4000) @(posedge adc_clk);
+        repeat (4000 * GS) @(posedge adc_clk);
 
         // 3) overflow: stall the CMAC, stream continuous, expect drops
         $fwrite(fd, "# case overflow\n");
         axi_wr(8'h04, 32'h1 | 32'h4);           // enable + clear stats
         m_tready = 0;
         axi_wr(8'h08, 32'h101);
-        repeat (6000) @(posedge adc_clk);
+        repeat (6000 * GS) @(posedge adc_clk);
         m_tready = 1;
-        repeat (3000) @(posedge adc_clk);
+        repeat (3000 * GS) @(posedge adc_clk);
         axi_wr(8'h08, 32'h100);
-        repeat (3000) @(posedge adc_clk);
+        repeat (3000 * GS) @(posedge adc_clk);
         axi_rd(8'h68, rd); $display("OVERFLOWS=%0d", rd);
         $fwrite(fd, "# overflows %0d\n", rd);
         axi_rd(8'h60, rd); $display("PKTS=%0d", rd);
@@ -214,13 +219,13 @@ module tb_udp_streamer #(parameter int TICK_STEP = 1, parameter int S_WIDTH = 12
         axi_wr(8'h54, GRAN);
         axi_wr(8'h04, 32'h1 | 32'h4);           // enable + clear stats
         axi_wr(8'h08, 32'h101);
-        repeat (1000) @(posedge adc_clk);
+        repeat (1000 * GS) @(posedge adc_clk);
         m_tready = 0;
-        repeat (1500) @(posedge adc_clk);
+        repeat (1500 * GS) @(posedge adc_clk);
         m_tready = 1;
-        repeat (1500) @(posedge adc_clk);
+        repeat (1500 * GS) @(posedge adc_clk);
         axi_wr(8'h08, 32'h100);
-        repeat (2000) @(posedge adc_clk);
+        repeat (2000 * GS) @(posedge adc_clk);
         axi_rd(8'h68, rd); $display("SPP16_OVERFLOWS=%0d", rd);
         $fwrite(fd, "# overflows16 %0d\n", rd);
         $display("FRAMES=%0d BUBBLES=%0d FULL_WRITES=%0d", nframes, bubbles, full_wr);
