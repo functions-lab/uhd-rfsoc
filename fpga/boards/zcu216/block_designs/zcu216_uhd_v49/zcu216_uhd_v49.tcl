@@ -114,7 +114,78 @@ proc v49_tx_buffer {} {
               CHAIN_STAGES $chain CHAIN_DEPTH 4096]
 }
 
-proc create_hier_cell_eth100g { parentCell nameHier {nch 1} {beat_w 128} {bf_pipe 0} } {
+# ---- the low-rate chains (rates below the RFDC's F = 40; design
+# docs/superpowers/specs/2026-11-17-low-rate-fir-design.md). Every stage is a
+# polyphase half-band: eth100g/rx_rate and tx_rate (fpga/ip/src/uhd_ip/src)
+# around FIR Compiler cells rx_fir_<i>_<g> / tx_fir_<i>_<g> (stage i = 1
+# next to the RFDC, instance g of G), the 32-tap odd branch of
+# fpga/ip/src/uhd_ip/rate/rate_hb.coe. DEPTH (rx_rate, 0x8009_0000) picks the
+# stage; 0 is the bit-exact bypass, the daemon sets k > 0 only at F = 40.
+# rate_sr_cfg: verbatim in every design and in fpga/ip/src/uhd_ip/sim/rate_fir_ip.tcl.
+proc rate_sr_cfg {p paths coe} {
+  if {$paths < 1 || $paths > 16} { error "rate_sr_cfg: $paths paths (1..16)" }
+  return [list \
+    CONFIG.CoefficientSource Vector CONFIG.CoefficientVector $coe \
+    CONFIG.Coefficient_Width 18 CONFIG.Coefficient_Sign Signed \
+    CONFIG.Quantization Integer_Coefficients CONFIG.Coefficient_Fractional_Bits 0 \
+    CONFIG.Coefficient_Structure Symmetric \
+    CONFIG.Data_Width 16 CONFIG.Data_Fractional_Bits 0 CONFIG.Data_Sign Signed \
+    CONFIG.Output_Rounding_Mode Full_Precision \
+    CONFIG.Number_Channels 1 CONFIG.Number_Paths $paths \
+    CONFIG.RateSpecification Frequency_Specification \
+    CONFIG.Clock_Frequency 100 CONFIG.Sample_Frequency [expr {100.0 * $p}] \
+    CONFIG.Filter_Type Single_Rate \
+    CONFIG.Has_ARESETn true CONFIG.M_DATA_Has_TREADY true CONFIG.S_DATA_Has_FIFO true]
+}
+proc rate_odd_coe {file} {
+  set f [open $file]; set l [split [string trim [read $f]] "\n"]; close $f
+  if {[llength $l] != 63} { error "v49: $file has [llength $l] taps, the chains are built for 63" }
+  set out {}
+  for {set i 0} {$i < [llength $l]} {incr i 2} { lappend out [string trim [lindex $l $i]] }
+  return [join $out ","]
+}
+proc v49_rate_coe_file {} {
+  return [file normalize [file join $::script_folder .. .. .. .. ip src uhd_ip rate rate_hb.coe]]
+}
+# FIR instances per stage: FIR Compiler takes at most 16 paths (I and Q of a channel are 2)
+proc v49_rate_groups {nch} { return [expr {2 * $nch > 16 ? 2 : 1}] }
+# In the current (eth100g) instance: rx_rate, tx_rate and their FIR cells;
+# the caller wires rx_rate/s_axis, rx_rate/m_axis, tx_rate/s_axis, tx_rate/m_axis.
+proc create_hier_cell_rate {nch spc k} {
+  set g [v49_rate_groups $nch]
+  set paths [expr {2 * $nch / $g}]
+  set coe [rate_odd_coe [v49_rate_coe_file]]
+  foreach d {rx tx} {
+    set c [create_bd_cell -type ip -vlnv user.org:uhd:${d}_rate:1.0 ${d}_rate]
+    set_property -dict [list CONFIG.N_CH $nch CONFIG.SPC $spc CONFIG.K $k CONFIG.G $g] $c
+    connect_bd_net [get_bd_pins adc_clk] [get_bd_pins ${d}_rate/aclk]
+    connect_bd_net [get_bd_pins adc_aresetn] [get_bd_pins ${d}_rate/aresetn]
+  }
+  connect_bd_net [get_bd_pins rx_rate/depth_o] [get_bd_pins tx_rate/depth_i]
+  set rst [list [get_bd_pins rx_rate/fir_aresetn_o] [get_bd_pins tx_rate/fir_aresetn_i]]
+  set clk [list [get_bd_pins adc_clk]]
+  for {set i 1} {$i <= $k} {incr i} {
+    set p [expr {double($spc) / (1 << $i)}]
+    for {set j 0} {$j < $g} {incr j} {
+      foreach d {rx tx} {
+        set f [create_bd_cell -type ip -vlnv [v49_vlnv xilinx.com:ip:fir_compiler:7.2] ${d}_fir_${i}_$j]
+        set_property -dict [rate_sr_cfg $p $paths $coe] $f
+        connect_bd_intf_net [get_bd_intf_pins ${d}_rate/m_st${i}g$j] [get_bd_intf_pins ${d}_fir_${i}_$j/S_AXIS_DATA]
+        connect_bd_intf_net [get_bd_intf_pins ${d}_fir_${i}_$j/M_AXIS_DATA] [get_bd_intf_pins ${d}_rate/s_st${i}g$j]
+        lappend clk [get_bd_pins ${d}_fir_${i}_$j/aclk]
+        lappend rst [get_bd_pins ${d}_fir_${i}_$j/aresetn]
+      }
+    }
+  }
+  connect_bd_net {*}$clk
+  connect_bd_net {*}$rst
+  create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:aximm_rtl:1.0 S_AXI_RATE
+  connect_bd_intf_net [get_bd_intf_pins S_AXI_RATE] [get_bd_intf_pins rx_rate/s_axi]
+  connect_bd_net [get_bd_pins s_axi_aclk]    [get_bd_pins rx_rate/s_axi_aclk]
+  connect_bd_net [get_bd_pins s_axi_aresetn] [get_bd_pins rx_rate/s_axi_aresetn]
+}
+
+proc create_hier_cell_eth100g { parentCell nameHier {nch 1} {beat_w 128} {bf_pipe 0} {spc 4} {rate_k 5} } {
   set oldCurInst [current_bd_instance .]
   current_bd_instance [get_bd_cells $parentCell]
   set hier_obj [create_bd_cell -type hier $nameHier]
@@ -171,13 +242,18 @@ proc create_hier_cell_eth100g { parentCell nameHier {nch 1} {beat_w 128} {bf_pip
   set sfp_en [create_bd_cell -type ip -vlnv [v49_vlnv xilinx.com:ip:xlconstant:1.1] sfp_tx_en]
   set_property -dict [list CONFIG.CONST_WIDTH {4} CONFIG.CONST_VAL {15}] $sfp_en
 
-  # ---- streams
+  # ---- streams: the low-rate chains at the converter edges
+  #   S_AXIS_ADC -> rx_rate -> (rx_beamformer -> adc_c2s ->) udp_streamer
+  #   udp_player -> (dac_s2c -> tx_beamformer ->) tx_rate -> M_AXIS_DAC
+  create_hier_cell_rate $nch $spc $rate_k
+  connect_bd_intf_net [get_bd_intf_pins S_AXIS_ADC] [get_bd_intf_pins rx_rate/s_axis]
+  connect_bd_intf_net [get_bd_intf_pins tx_rate/m_axis] [get_bd_intf_pins M_AXIS_DAC]
   # beat width of the combined converter stream (Protocol §9)
   set_property CONFIG.S_WIDTH $beat_w [get_bd_cells udp_streamer]
   set_property CONFIG.M_WIDTH $beat_w [get_bd_cells udp_player]
   if {$nch == 1} {
-    connect_bd_intf_net [get_bd_intf_pins S_AXIS_ADC] [get_bd_intf_pins udp_streamer/s_axis]
-    connect_bd_intf_net [get_bd_intf_pins udp_player/m_axis_dac] [get_bd_intf_pins M_AXIS_DAC]
+    connect_bd_intf_net [get_bd_intf_pins rx_rate/m_axis] [get_bd_intf_pins udp_streamer/s_axis]
+    connect_bd_intf_net [get_bd_intf_pins udp_player/m_axis_dac] [get_bd_intf_pins tx_rate/s_axis]
   } else {
     # channel-major (rfdc combiner/broadcaster) <-> sample-major
     # (udp_streamer / udp_player, the wire order)
@@ -191,7 +267,7 @@ proc create_hier_cell_eth100g { parentCell nameHier {nch 1} {beat_w 128} {bf_pip
     create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:aximm_rtl:1.0 S_AXI_RBF
     set rbf [create_bd_cell -type ip -vlnv user.org:uhd:rx_beamformer:1.0 rx_beamformer]
     set_property -dict [list CONFIG.N_CH $nch CONFIG.BEAT_W $beat_w] $rbf
-    connect_bd_intf_net [get_bd_intf_pins S_AXIS_ADC]            [get_bd_intf_pins rx_beamformer/s_axis]
+    connect_bd_intf_net [get_bd_intf_pins rx_rate/m_axis]        [get_bd_intf_pins rx_beamformer/s_axis]
     connect_bd_intf_net [get_bd_intf_pins rx_beamformer/m_axis]  [get_bd_intf_pins adc_c2s/s_axis]
     connect_bd_intf_net [get_bd_intf_pins S_AXI_RBF]             [get_bd_intf_pins rx_beamformer/s_axi]
     connect_bd_net [get_bd_pins adc_clk]       [get_bd_pins rx_beamformer/aclk]
@@ -206,7 +282,7 @@ proc create_hier_cell_eth100g { parentCell nameHier {nch 1} {beat_w 128} {bf_pip
     set bf [create_bd_cell -type ip -vlnv user.org:uhd:tx_beamformer:1.0 tx_beamformer]
     set_property -dict [list CONFIG.N_CH $nch CONFIG.BEAT_W $beat_w CONFIG.PIPE $bf_pipe] $bf
     connect_bd_intf_net [get_bd_intf_pins dac_s2c/m_axis]        [get_bd_intf_pins tx_beamformer/s_axis]
-    connect_bd_intf_net [get_bd_intf_pins tx_beamformer/m_axis]  [get_bd_intf_pins M_AXIS_DAC]
+    connect_bd_intf_net [get_bd_intf_pins tx_beamformer/m_axis]  [get_bd_intf_pins tx_rate/s_axis]
     connect_bd_intf_net [get_bd_intf_pins S_AXI_BF]              [get_bd_intf_pins tx_beamformer/s_axi]
     connect_bd_net [get_bd_pins adc_clk]       [get_bd_pins tx_beamformer/aclk]
     connect_bd_net [get_bd_pins adc_aresetn]   [get_bd_pins tx_beamformer/aresetn]
@@ -263,6 +339,7 @@ proc create_hier_cell_eth100g { parentCell nameHier {nch 1} {beat_w 128} {bf_pip
 proc v49_eth100g_slaves {nch} {
   set s {S_AXI_STREAMER S_AXI_PLAYER S_AXI_GPIO S_AXI_FREQ}
   if {$nch > 1} { lappend s S_AXI_BF S_AXI_RBF }
+  lappend s S_AXI_RATE
   return $s
 }
 
@@ -342,7 +419,9 @@ proc v49_geometry {nch {F ""}} {
   # meets 150 MHz but not 300 MHz (-0.42 ns routed); PIPE = 1 is the same
   # math pipelined into the DSPs (5 cycles), used above 150 MHz
   set pipe [expr {$fab > 150.0 ? 1 : 0}]
-  return [dict create F $F dw $dw beat_w $beat fabric $fab tick_step $ts bf_pipe $pipe fs $fs]
+  # the low-rate chains (create_hier_cell_rate): 5 stages below F = 40, at
+  # spc samples per channel per beat
+  return [dict create rate_k 5 spc [expr {$dw / 2}] F $F dw $dw beat_w $beat fabric $fab tick_step $ts bf_pipe $pipe fs $fs]
 }
 
 # The 16 converter positions of the ZU49DR, tile t block b as "tb", in
@@ -548,7 +627,7 @@ proc verify_rate_variant {F {nch 1}} {
     }
     # (eth100g/M_AXIS_DAC is the hierarchy pin: compare with its inside net)
     foreach {a z bt} {eth100g/dac_s2c/m_axis eth100g/tx_beamformer/s_axis upper
-                      eth100g/tx_beamformer/m_axis eth100g/M_AXIS_DAC lower} {
+                      eth100g/tx_beamformer/m_axis eth100g/tx_rate/s_axis upper} {
       set na [get_bd_intf_nets -quiet -of_objects [get_bd_intf_pins $a]]
       set nz [get_bd_intf_nets -quiet -boundary_type $bt -of_objects [get_bd_intf_pins $z]]
       if {$na eq "" || $na ne $nz} { error "v49: $a is not wired to $z ('$na' '$nz')" }
@@ -569,7 +648,7 @@ proc verify_rate_variant {F {nch 1}} {
       if {[get_property CONFIG.$k $rbf] != $v} { error "v49: $rbf $k is [get_property CONFIG.$k $rbf], expected $v" }
     }
     foreach {a z bt} {eth100g/rx_beamformer/m_axis eth100g/adc_c2s/s_axis upper
-                      eth100g/rx_beamformer/s_axis eth100g/S_AXIS_ADC lower} {
+                      eth100g/rx_beamformer/s_axis eth100g/rx_rate/m_axis upper} {
       set na [get_bd_intf_nets -quiet -of_objects [get_bd_intf_pins $a]]
       set nz [get_bd_intf_nets -quiet -boundary_type $bt -of_objects [get_bd_intf_pins $z]]
       if {$na eq "" || $na ne $nz} { error "v49: $a is not wired to $z ('$na' '$nz')" }
@@ -596,6 +675,25 @@ proc verify_rate_variant {F {nch 1}} {
       if {[llength $bseg] != 1} { error "v49: $cell has [llength $bseg] address blocks" }
       dict set amap [string trimleft $bseg /] $off
     }
+  }
+  set bseg [get_bd_addr_segs eth100g/rx_rate/s_axi/*]
+  if {[llength $bseg] != 1} { error "v49: rx_rate has [llength $bseg] address blocks" }
+  dict set amap [string trimleft $bseg /] 0x80090000
+  # the low-rate chains: both hubs at this geometry, 2 x K x G FIR stages,
+  # each the build's configuration, at the converter edges of eth100g
+  set rg [v49_rate_groups $nch]
+  foreach d {rx tx} {
+    set c [get_bd_cells eth100g/${d}_rate]
+    if {$c eq ""} { error "v49: no eth100g/${d}_rate" }
+    foreach {p v} [list N_CH $nch SPC $spc K $rate_k G $rg] {
+      if {[get_property CONFIG.$p $c] != $v} { error "v49: eth100g/${d}_rate $p is [get_property CONFIG.$p $c], expected $v" }
+    }
+  }
+  set nfir [llength [get_bd_cells -quiet -filter {VLNV =~ "xilinx.com:ip:fir_compiler:*"} eth100g/*]]
+  if {$nfir != 2 * $rate_k * $rg} { error "v49: $nfir FIR Compiler cells in eth100g, expected [expr {2 * $rate_k * $rg}]" }
+  foreach {a z} {rfdc/M_ADC_AXIS eth100g/rx_rate/s_axis eth100g/tx_rate/m_axis rfdc/S_DAC_AXIS} {
+    set ia [get_bd_intf_nets -quiet -boundary_type upper -of_objects [get_bd_intf_pins $a]]
+    if {$ia eq ""} { error "v49: $a is not connected" }
   }
   set segs [get_bd_addr_segs -of_objects [get_bd_addr_spaces zynq_ultra_ps_e/Data]]
   set seen {}
@@ -1434,7 +1532,8 @@ proc create_root_design { parentCell nch } {
   create_hier_cell_rfdc [current_bd_instance .] rfdc $nch
 
   # Create instance: eth100g -- the 100GbE / UHD data plane
-  create_hier_cell_eth100g [current_bd_instance .] eth100g $nch [dict get $g beat_w] [dict get $g bf_pipe]
+  create_hier_cell_eth100g [current_bd_instance .] eth100g $nch [dict get $g beat_w] [dict get $g bf_pipe] \
+    [dict get $g spc] [dict get $g rate_k]
 
   # Create instance: zynq_ultra_ps_e, and set properties
   set zynq_ultra_ps_e [ create_bd_cell -type ip -vlnv [v49_vlnv xilinx.com:ip:zynq_ultra_ps_e:3.3] zynq_ultra_ps_e ]
@@ -3074,6 +3173,8 @@ Port;FD4A0000;FD4AFFFF;1|FPD;DPDMA;FD4C0000;FD4CFFFF;1|FPD;DDR_XMPU5_CFG;FD05000
     assign_bd_address -offset 0x80060000 -range 0x00010000 -target_address_space $ps [get_bd_addr_segs eth100g/tx_beamformer/s_axi/*] -force
     assign_bd_address -offset 0x80070000 -range 0x00010000 -target_address_space $ps [get_bd_addr_segs eth100g/rx_beamformer/s_axi/*] -force
   }
+  # 0x8008_0000 stays free (eth100g/tx_dpd of the DPD builds)
+  assign_bd_address -offset 0x80090000 -range 0x00010000 -target_address_space $ps [get_bd_addr_segs eth100g/rx_rate/s_axi/*] -force
 
   current_bd_instance $oldCurInst
 }

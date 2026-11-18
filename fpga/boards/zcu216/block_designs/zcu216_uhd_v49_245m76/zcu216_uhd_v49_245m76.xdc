@@ -46,3 +46,18 @@ set_property IOSTANDARD LVCMOS18 [get_ports {sfp_tx_disable_b[*]}]
 # asynchronous to the converter and PS clocks: every crossing goes through an
 # XPM CDC macro, which carries its own constraints. One group = async to all.
 set_clock_groups -asynchronous -group [get_clocks -include_generated_clocks sfp_refclk]
+
+# ---- the low-rate chains (eth100g/rx_rate, tx_rate and their FIR Compiler
+# cells; design docs/superpowers/specs/2026-11-17-low-rate-fir-design.md).
+# They run on the converter clock at every factor, but their output is used
+# only at the RFDC's F = 40, where that clock is <= 62.5 MHz (<= 1/4 of the
+# templates' 300-312.5 MHz it is timed at); the daemon never selects a depth
+# > 0 at another factor, and the depth registers change only while the chain
+# is held in reset. Paths into and out of the chain therefore have 4 cycles.
+# The depth-0 bypass (s_axis -> m_axis of each hub, a 2:1 mux) is not a
+# chain cell and keeps its single cycle.
+set v49_rate_cells [get_cells -hierarchical -filter {NAME =~ "*/eth100g/rx_fir_*" || NAME =~ "*/eth100g/tx_fir_*" || NAME =~ "*/eth100g/rx_rate/*g_stage*" || NAME =~ "*/eth100g/rx_rate/*g_pack*" || NAME =~ "*/eth100g/rx_rate/*pkr_*" || NAME =~ "*/eth100g/rx_rate/*depth_reg*" || NAME =~ "*/eth100g/rx_rate/*run_reg*" || NAME =~ "*/eth100g/tx_rate/*g_stage*" || NAME =~ "*/eth100g/tx_rate/*ub*" || NAME =~ "*/eth100g/tx_rate/*depth_reg*" || NAME =~ "*/eth100g/tx_rate/*run_reg*"}]
+set_multicycle_path -setup 4 -from $v49_rate_cells
+set_multicycle_path -hold 3  -from $v49_rate_cells
+set_multicycle_path -setup 4 -to   $v49_rate_cells
+set_multicycle_path -hold 3  -to   $v49_rate_cells
