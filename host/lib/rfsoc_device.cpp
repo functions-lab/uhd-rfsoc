@@ -1070,8 +1070,11 @@ void rfsoc_device::_build_chan(bool rx, size_t ch)
 
     // Bandwidth: the (complex) sample rate, fs / the decimation or
     // interpolation factor in force -- the RFDC Gen3 filters' -3 dB width is
-    // 0.96 x it at every factor (measured with benchmark/rate_bandwidth.py). It
-    // follows the sample rate, so setting it only reads it back.
+    // 0.96 x it at every factor (measured with benchmark/rate_bandwidth.py).
+    // Below fs/40 the rate is the FPGA's low-rate chains' (half-band stages
+    // after the RFDC's factor 40): flat to 0.4 x the rate (0.001 dB), -6 dB
+    // at 0.5 x, aliases down 88 dB from 0.6 x. It follows the sample rate, so
+    // setting it only reads it back.
     _tree->create<double>(fe / "bandwidth/value")
         .set_coercer([&rate_cache](double) { return rate_cache.load(); })
         .set_publisher([&rate_cache] { return rate_cache.load(); });

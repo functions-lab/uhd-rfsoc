@@ -18,6 +18,7 @@ Sources of truth:
                                      ch2 = CMAC user clock kHz (156250 / 322266)
   0x8006_0000  eth100g/tx_beamformer N >= 2 builds only: tx_beamformer.py
   0x8007_0000  eth100g/rx_beamformer N >= 2 builds that have it: rx_beamformer.py
+  0x8009_0000  eth100g/rx_rate       builds with the low-rate chains: rate_chain.py
 
 udp_streamer's m_axis_adc copy is unused and udp_player's s_axis_dma input
 is tied idle in every build, so the DAC source is ALWAYS the player (CTRL

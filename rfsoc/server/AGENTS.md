@@ -40,6 +40,7 @@ short version for people; this file is the reference for the code.
 | `board_config.py` | `uhd_rfsoc.conf`: search path, parsing, the eth0-derived default MAC |
 | `eth100g.py` | `Eth100G`: udp_streamer, udp_player, CMAC ctl / status GPIO, clock meters |
 | `tx_beamformer.py`, `rx_beamformer.py` | the §11 register files (`eth100g/tx_beamformer` 0x8006_0000, `eth100g/rx_beamformer` 0x8007_0000); `rx_beamformer.beam_payload` is the bit-exact reference of the RX beam |
+| `rate_chain.py` | `eth100g/rx_rate` 0x8009_0000: the depth of the low-rate chains (rates fs/40/2^k at F = 40; `Variant.run_points` / `at_point`, `HwBackend._retune_hw`) |
 | `bringup.py` | the 100G link steps (`link_bringup`, shared with `HwBackend`) and a CLI to run them by hand or dump the status |
 | `rx_cmdq.py` | the §4a RX stream-command queue over the streamer's one command slot |
 | `cmd_timer.py` | the §3c timed commands, run by the FPGA timekeeper |

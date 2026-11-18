@@ -45,7 +45,17 @@ Rules and map of the FPGA side. `README.md` has the commands; each board's
 - The PS address map is fixed (daemon and `rfsoc_lib` depend on it):
   MTS_clk_wiz 0x8020_0000, axi_gpio_led 0x8023_0000, axi_intc 0x8024_0000,
   RFDC 0x8028_0000, eth100g 0x8002_0000 .. 0x8007_0000 (Protocol §11,
-  `rfsoc/server/eth100g.py`). `verify_rate_variant` checks it.
+  `rfsoc/server/eth100g.py`), eth100g/rx_rate 0x8009_0000 (0x8008_0000 is
+  left to `tx_dpd`). `verify_rate_variant` checks it.
+- Every design carries the low-rate chains (`create_hier_cell_rate`, written
+  verbatim into each design with `rate_sr_cfg`): `eth100g/rx_rate` and
+  `tx_rate` at the converter edges (RX before the RX beamformer, TX after the
+  TX beamformer; with DPD, `tx_dpd` stays last) and 2 x K x G FIR Compiler
+  cells, K = `rate_k` of `v49_geometry` (ZCU216 5, RFSoC 4x2 6). They serve
+  fs/40/2^k at the RFDC's F = 40 only; the XDC gives their paths 4 cycles.
+  The filter is `ip/src/uhd_ip/rate/rate_hb.coe` (`rate/LANES.md`): change
+  it only there, with `design_hb.py`, and re-run `make -C ip/src/uhd_ip
+  sim-rate`.
 - Build only through the Makefile (the Vivado release of `PYNQ=`, checked;
   `build.tcl` refuses a release `flow/versions.txt` does not name). Only
   the bitstream is kept (`V49_KEEP_PROJ=1` keeps the project). Bitstreams

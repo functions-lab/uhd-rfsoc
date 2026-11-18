@@ -19,7 +19,16 @@ touching `src/`.
     `run_sim_rbf.sh` (RX beamformer), `run_sim_arb.sh` (axis_pkt_arb against
     its previous skid-buffer form `sim/axis_pkt_arb_skid_ref.v`, every port
     every cycle). Make targets: `sim sim-fmt sim-max sim-wide sim-interleave
-    sim-bf sim-rbf sim-arb` (`all` runs them all).
+    sim-bf sim-rbf sim-arb sim-gap sim-rate` (`all` runs them all).
+  - `GAP=g` [`GPH=p`] on `run_sim.sh` / `run_sim_player.sh` (`sim-gap`): the
+    streamer's tvalid, the player's adc_time and DAC tready one cycle in 2^g,
+    as behind the low-rate chains at depth g. A testbench process added for
+    it goes LAST in its module: SV seeds each process's `$urandom` by
+    declaration order, and GAP = 0 must replay the original stimulus.
+  - `run_sim_rate.sh` (`sim-rate`): `rx_rate` / `tx_rate` with their real FIR
+    Compiler stages (`rate_fir_ip.tcl`: a project per geometry), every depth,
+    bit-exact against `check_rate.py` (whose `selftest` checks the filter
+    spec).
   - `otw_ref.py` = reference sc8/sc12/fc32 converters (shared with the checkers;
     the daemon's `rfsoc/server/vrt.py` is the other reference).
 - `package_ip.tcl` (`make package`) → `../../repo/uhd_ip/<core>_1.0`
@@ -29,6 +38,11 @@ touching `src/`.
   description string breaks it (command substitution): avoid brackets there.
 - `ooc_timing.tcl` (`make ooc`) — out-of-context timing for streamer / player
   at the deployed beat widths.
+- `rate/` — the low-rate chains' filter (`design_hb.py` -> `rate_hb.coe`),
+  their FIR Compiler contract (`LANES.md`) and Gate 0 (`spike/`). The hubs
+  `rx_rate` / `tx_rate` are the exception to "no FIR inside": FIR Compiler
+  cores cannot be packaged into them, so they expose one AXIS pair per stage
+  (`m_st<i>g<g>` / `s_st<i>g<g>`) and the block designs place the FIRs.
 
 ## Rules
 - After ANY change in `src/` (comments included: the packaged copy must stay
