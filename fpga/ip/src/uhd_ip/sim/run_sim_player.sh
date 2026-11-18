@@ -55,11 +55,11 @@ for TS in ${TICK_STEPS:-1 2}; do
 
     echo "== udp_player, M_WIDTH=$W TICK_STEP=$TS FMT=$F"
     run build_player$SFX "$TS" "$W" "$F"
-    python3 check_player.py --tick-step "$TS" --width "$W" --fmt "$F" build_player$SFX/player.log
+    python3 check_player.py --tick-step "$TS" --width "$W" --fmt "$F" --gap "${GAP:-0}" build_player$SFX/player.log
 
     echo "== integration: udp_streamer + udp_player -> axis_pkt_arb, M_WIDTH=$W TICK_STEP=$TS FMT=$F"
     run build_integ$SFX "$TS" "$W" "$F" -d INTEG
-    python3 check_player.py --integ --tick-step "$TS" --width "$W" --fmt "$F" build_integ$SFX/player.log
+    python3 check_player.py --integ --tick-step "$TS" --width "$W" --fmt "$F" --gap "${GAP:-0}" build_integ$SFX/player.log
 done
 done
 done

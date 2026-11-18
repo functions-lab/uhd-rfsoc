@@ -526,7 +526,7 @@ module tb_udp_player #(parameter int TICK_STEP = 1, parameter int M_WIDTH = 128,
             t0 = $time;
             while (n_ev[code] < n) begin
                 @(posedge tx_clk);
-                if ($time - t0 > timeout_us * 1000) begin
+                if ($time - t0 > timeout_us * 1000 * GSC) begin    // GAP: playout is 2^GAP x slower
                     $display("ERROR timeout waiting for event 0x%0h #%0d", code, n);
                     errors++;
                     return;
@@ -558,7 +558,7 @@ module tb_udp_player #(parameter int TICK_STEP = 1, parameter int M_WIDTH = 128,
     endtask
 
     initial begin
-        #3ms;
+        #(3ms * GSC);
         $display("ERROR global timeout");
         $fatal(1, "timeout");
     end

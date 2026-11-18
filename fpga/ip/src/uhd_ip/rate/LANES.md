@@ -69,3 +69,9 @@ the current cycle + 1 beat (a 16-bit "advanced" compare selecting
 precomputed +1 / +2 / +3 beat sums), which is the same value whenever time
 advances every cycle (every depth-0 build): `make sim-gap` (GAP = 1..6) and
 the depth-0 regressions pass.
+
+BURST_ACK at depth k: the player raises it when it decides the burst's last
+beat; behind `tx_rate` that beat leaves up to one low-rate beat (2^k
+converter cycles, ~2 us at 1.92 MS/s) later, so the status packet can reach
+the host that much before the last beat is played. Its TSF is exact. The
+gap testbenches allow exactly that (`check_player.py --gap`).

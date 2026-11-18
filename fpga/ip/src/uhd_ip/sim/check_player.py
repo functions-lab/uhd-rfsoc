@@ -191,6 +191,10 @@ def main():
     ap.add_argument("--tick-step", type=int, default=1)
     ap.add_argument("--width", type=int, default=128, choices=(128, 256, 512, 1024))
     ap.add_argument("--fmt", type=int, default=0, choices=(0, 1, 2, 3))
+    # behind the low-rate chains (GAP > 0) the DAC takes a beat one cycle in 2^GAP:
+    # BURST_ACK, emitted when the last beat is decided, may reach the host up to
+    # one beat before that beat leaves (its TSF is exact)
+    ap.add_argument("--gap", type=int, default=0)
     a = ap.parse_args()
     integ, path, ts, width = a.integ, a.path, a.tick_step, a.width
     global FMT
@@ -383,7 +387,7 @@ def main():
         if i < len(acks):
             if acks[i].tsf != end:
                 err(f"{name}: BURST_ACK tsf {acks[i].tsf}, last beat at {end}")
-            elif acks[i].nbeats < pos:
+            elif acks[i].nbeats < pos - (1 if a.gap else 0):
                 err(f"{name}: BURST_ACK arrived before the burst's last beat")
             else:
                 info += ", BURST_ACK ok"
