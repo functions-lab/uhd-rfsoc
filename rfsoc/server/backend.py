@@ -340,8 +340,9 @@ class Backend(ABC):
     # so the two directions always run at the same rate.
     @property
     def samp_rate(self) -> float:
-        """Current complex sample rate (both directions)."""
-        return self.adc_rate / self.rx_decim
+        """Current complex sample rate (both directions): fs / F, and / 2^k
+        behind the low-rate chains at depth k."""
+        return self.adc_rate / self.rx_decim / (1 << getattr(self, "rate_depth", 0))
 
     @property
     def ticks_per_sample(self) -> int:

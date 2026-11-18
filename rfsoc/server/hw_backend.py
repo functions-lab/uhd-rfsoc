@@ -61,6 +61,7 @@ from backend import (Backend, BackendError, default_fc_interval, DSA_MAX_DB,
                      link_problem,
                      nyquist_plan, read_sysmon_temp, vop_ua_for_gain)
 from boards import Board, board_of_bitstream, get_board
+from rate_chain import RateChain
 from rx_beamformer import RxBeamformer, default_shift
 from tx_beamformer import TxBeamformer
 import vrt
@@ -212,12 +213,17 @@ def _rfdc_params(ol) -> Tuple[str, Dict[str, str]]:
     return keys[0], ol.ip_dict[keys[0]]["parameters"]
 
 
-HWH_CORES = ("udp_streamer", "udp_player", "tx_beamformer", "rx_beamformer")
+HWH_CORES = ("udp_streamer", "udp_player", "tx_beamformer", "rx_beamformer",
+             "rx_rate", "tx_rate")
 # the converter clock's clocking wizard: with USE_DYN_RECONFIG the build
 # serves a run-time rate change (§8, Variant.run_factors)
 MTS_CW = "MTS_clk_wiz"
 # Gen3 RF-ADC decimation / RF-DAC interpolation factors (XRFdc_Set*Factor)
 GEN3_FACTORS = (1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 40)
+# the low-rate chains (eth100g/rx_rate + tx_rate) run below this RFDC factor
+# only, at depths 1..K (K <= RATE_K_MAX): rate fs / RATE_FACTOR / 2^k
+RATE_FACTOR = 40
+RATE_K_MAX = 6
 # the lowest converter AXIS clock a run-time factor may need (the ladder's
 # lowest is 15.36 MHz: 1/2/4ch F40 at 2457.6 MS/s)
 FABRIC_MIN_MHZ = 10.0
@@ -423,6 +429,23 @@ class Variant:
         self.pl_clk_mhz = float(cw.get("PRIM_IN_FREQ", 300.0))
         self.built_factor = self.factor
         self.spc = next(iter(spc))
+        # the low-rate chains (eth100g/rx_rate + tx_rate): K stages of ÷2 / ×2
+        # below the RFDC's F = 40; rate_k = 0 on a build without them
+        self.depth = 0
+        self.rate_k = 0
+        if "rx_rate" in cores or "tx_rate" in cores:
+            hub = {}
+            for d in ("rx_rate", "tx_rate"):
+                if d not in cores:
+                    raise RuntimeError(f"{d} missing (the low-rate chains need rx_rate and tx_rate)")
+                hub[d] = tuple(_core_int(cores, d, p) for p in ("N_CH", "SPC", "K", "G"))
+            if hub["rx_rate"] != hub["tx_rate"]:
+                raise RuntimeError(f"rx_rate {hub['rx_rate']} != tx_rate {hub['tx_rate']} (N_CH SPC K G)")
+            n, s_, k, _g = hub["rx_rate"]
+            if n != self.nch or s_ != int(self.spc) or not 1 <= (k or 0) <= RATE_K_MAX:
+                raise RuntimeError(f"rx_rate N_CH {n} SPC {s_} K {k}: the build streams "
+                                   f"{self.nch} ch at {self.spc:g} samples/clock (K 1..{RATE_K_MAX})")
+            self.rate_k = int(k)
 
     @property
     def retunable(self) -> bool:
@@ -449,13 +472,38 @@ class Variant:
             out.append(f)
         return out
 
+    def run_points(self) -> List[Tuple[int, int]]:
+        """(factor, depth) of every rate this bitstream serves: each of its
+        run_factors at depth 0, and with the low-rate chains (rate_k > 0) the
+        RFDC's F = RATE_FACTOR, when it is one of them, at depths 1..rate_k
+        (rate fs / 40 / 2^k)."""
+        pts = [(f, 0) for f in self.run_factors()]
+        if self.rate_k and RATE_FACTOR in self.run_factors():
+            pts += [(RATE_FACTOR, k) for k in range(1, self.rate_k + 1)]
+        return pts
+
+    def at_point(self, f: int, depth: int) -> "Variant":
+        """This bitstream at factor f and chain depth `depth` (run_points):
+        rate fs / f / 2^depth; the converter clock is f's."""
+        if (f, depth) not in self.run_points():
+            raise ValueError(f"{self.name}: (F, depth) ({f}, {depth}) not in {self.run_points()}")
+        v = self.at_factor(f) if f != self.factor or self.depth else copy.copy(self)
+        if depth:
+            v.depth = depth
+            v.rate = self.adc_rate / f / (1 << depth)
+            v.slot_rate = v.nch * v.rate
+            v.tick_rate = v.slot_rate * v.tick_step
+        return v
+
     def at_factor(self, f: int) -> "Variant":
-        """This bitstream retuned to factor f (run_factors): rate, converter
-        clock and tick rate of f; the beat, TICK_STEP and cores are the build's."""
+        """This bitstream retuned to factor f (run_factors), chain depth 0:
+        rate, converter clock and tick rate of f; the beat, TICK_STEP and
+        cores are the build's."""
         if f not in self.run_factors():
             raise ValueError(f"{self.name}: factor {f} not in {self.run_factors()}")
         v = copy.copy(self)
         v.factor = f
+        v.depth = 0
         v.rate = self.adc_rate / f
         v.slot_rate = v.nch * v.rate
         v.fabric_mhz = self.adc_rate / f / self.spc / 1e6
@@ -472,8 +520,10 @@ class Variant:
 
     def __repr__(self):
         return (f"{self.name}: {self.nch} ch, F={self.factor}"
+                f"{' depth %d' % self.depth if self.depth else ''}"
                 f"{'' if self.factor == self.built_factor else ' (built F=%d)' % self.built_factor}"
-                f"{' run-time F ' + ','.join(map(str, self.run_factors())) if self.retunable else ''} "
+                f"{' run-time F ' + ','.join(map(str, self.run_factors())) if self.retunable else ''}"
+                f"{' + chain depths 1..%d at F=%d' % (self.rate_k, RATE_FACTOR) if self.rate_k else ''} "
                 f"{self.rate / 1e6:g} "
                 f"MS/s/ch, {self.beat_bits}-bit beat @ {self.fabric_mhz:g} MHz, "
                 f"tick_rate {self.tick_rate / 1e6:g} MHz ({self.tick_step} tick(s)/slot, "
@@ -549,8 +599,10 @@ def scan_bitstreams(directory: str, extra: Tuple[str, ...] = (),
         except ValueError as e:
             log.warning("bitstream variant skipped: %s", e)
             continue
-        # a retunable build is one variant per run-time factor (§8)
-        for v in [v0] + [v0.at_factor(f) for f in v0.run_factors() if f != v0.factor]:
+        # a retunable build is one variant per run-time factor (§8), and one
+        # per depth of its low-rate chains
+        for v in [v0] + [v0.at_point(f, k) for f, k in v0.run_points()
+                         if (f, k) != (v0.factor, 0)]:
             old = by_key.get(v.key)
             if old is not None:
                 if old.bitstream not in extras and nfmt(v) > nfmt(old):
@@ -656,9 +708,9 @@ class HwBackend(Backend):
             self.variants[initial.key] = initial
             # its run-time factors (§8) are its rates too, and win over other
             # bitstreams of the same rate: they retune instead of reloading
-            for f in initial.run_factors():
-                if f != initial.factor:
-                    v = initial.at_factor(f)
+            for f, k in initial.run_points():
+                if (f, k) != (initial.factor, 0):
+                    v = initial.at_point(f, k)
                     self.variants[v.key] = v
         for v in sorted(self.variants.values(), key=lambda v: (v.nch, -v.rate)):
             log.info("bitstream variant %r%s", v, "  <- initial" if v is initial else "")
@@ -874,6 +926,16 @@ class HwBackend(Backend):
             self.rbf = None
         if self.rbf is not None:
             self.rbf.apply(False, [(32767, 0)] * nch, default_shift(nch))
+        # the low-rate chains: held at depth 0 (the bypass) on every load
+        try:
+            self.rate_chain = RateChain.from_ip_dict(self.ol.ip_dict, nch)
+        except RuntimeError as e:      # wrong ID / NCH: serve without the low rates
+            log.error("rx_rate unusable, rates below F=%d disabled: %s", RATE_FACTOR, e)
+            self.rate_chain = None
+        if self.rate_chain is not None:
+            self.rate_chain.hold(True)
+            self.rate_chain.set_depth(0)
+        self.rate_depth = 0
         pr(f"[e] TX beamformer: {'present (bypass)' if self.bf is not None else 'none'}; "
            f"RX beamformer: {'present (bypass)' if self.rbf is not None else 'none'}; "
            f"TX buffer {self.tx_buf_words} words, FC every {self.fc_interval}")
@@ -936,7 +998,7 @@ class HwBackend(Backend):
     def _switch_rate(self, rate: float) -> None:
         v = self.variants[(self.num_channels, rate)]
         old = self.variant
-        if (v.retunable and old is not None
+        if (old is not None and (v.retunable or v.factor == old.factor)
                 and os.path.realpath(v.bitstream) == os.path.realpath(old.bitstream)):
             self._retune_to(v)
             return
@@ -1036,15 +1098,41 @@ class HwBackend(Backend):
         n0, t0 = self.eth.get_time(), time.monotonic()
         time.sleep(secs)
         n1, t1 = self.eth.get_time(), time.monotonic()
-        return (n1 - n0) / (t1 - t0) / bt / 1e6
+        # behind the low-rate chains at depth k the timekeeper counts one
+        # output beat per 2^k converter beats
+        return (n1 - n0) / (t1 - t0) / bt / 1e6 * (1 << getattr(self, "rate_depth", 0))
 
     def _retune_hw(self, v: Variant) -> None:
-        """The loaded (retunable) bitstream to v.factor, in place: MMCM to
-        fs/F/spc over clk_wiz DRP, the factor on every enabled block, MTS with the two things its tile-sync reset undoes put back
-        (the MMCM setting after the clk_wiz reset, the DAC factor after the
-        DAC tile resets), NCOs re-programmed and phase-reset, then checked:
-        factor readback of every enabled block, MMCM locked, the converter
-        clock measured within 1 %. Raises on any failure."""
+        """The loaded bitstream to (v.factor, v.depth), in place: the chains
+        held at depth 0 first; if the factor changes, the RFDC / MMCM / MTS /
+        NCO retune (_retune_factor); then the chains to v.depth (released only
+        when it is > 0: depth 0 is the bypass) and the checks
+        (_check_retune). A depth change at F = 40 alone touches neither the
+        converters nor the clocks. Raises on any failure."""
+        chain = getattr(self, "rate_chain", None)
+        if v.depth and chain is None:
+            raise RuntimeError(f"{v.name}: depth {v.depth} asked of a build without the low-rate chains")
+        if v.depth and v.factor != RATE_FACTOR:
+            raise RuntimeError(f"{v.name}: depth {v.depth} only at F={RATE_FACTOR}, not F={v.factor}")
+        if chain is not None:
+            chain.hold(True)
+            chain.set_depth(0)
+        self.rate_depth = 0
+        if v.factor != self.rx_decim:
+            self._retune_factor(v)
+        if v.depth:
+            chain.set_depth(v.depth)
+            chain.hold(False)
+            self.rate_depth = v.depth
+        self.variant = v
+        self._check_retune(v)
+
+    def _retune_factor(self, v: Variant) -> None:
+        """The RFDC factor of the loaded (retunable) bitstream to v.factor:
+        MMCM to fs/F/spc over clk_wiz DRP, the factor on every enabled block,
+        MTS with the two things its tile-sync reset undoes put back (the MMCM
+        setting after the clk_wiz reset, the DAC factor after the DAC tile
+        resets), NCOs re-programmed and phase-reset."""
         pr = self._pr
         cw = clk_wiz_lib().ClkWiz(self.ol.MTS_block.MTS_clk_wiz.mmio, v.retune_fin)
         f = v.factor
@@ -1063,18 +1151,32 @@ class HwBackend(Backend):
             self._program_nco("tx", ch, self._tx_freq[ch])
         self.reset_nco_phases("rx", range(self.num_rx))
         self.reset_nco_phases("tx", range(self.num_tx))
+
+    def _check_retune(self, v: Variant) -> None:
+        """After a retune: the factor read back on every enabled block, the
+        MMCM locked (retunable builds), the chain depth read back, the
+        converter clock measured by the timekeeper within 1 %."""
+        pr = self._pr
         self.readback = self._readback(print_it=True)
         bad = [f"{k}: {x}" for k, x in self.readback["factor_errors"].items()]
         if bad:
             raise RuntimeError("factor readback after the retune: " + "; ".join(bad))
-        if not cw.locked():
-            raise RuntimeError("MMCM not locked after MTS")
+        if v.retunable:
+            cw = clk_wiz_lib().ClkWiz(self.ol.MTS_block.MTS_clk_wiz.mmio, v.retune_fin)
+            if not cw.locked():
+                raise RuntimeError("MMCM not locked after MTS")
+        chain = getattr(self, "rate_chain", None)
+        if chain is not None and chain.depth() != v.depth:
+            raise RuntimeError(f"rate chain depth reads {chain.depth()}, want {v.depth}")
         meas = self._measure_fabric_mhz()
         if abs(meas / v.fabric_mhz - 1.0) > 0.01:
             raise RuntimeError(f"converter clock measured {meas:.4f} MHz, want "
                                f"{v.fabric_mhz:g} MHz")
+        if chain is not None and v.depth and chain.status():
+            raise RuntimeError(f"rate chain lost samples (STATUS 0x{chain.status():x})")
         pr(f"[t] converter clock measured {meas:.4f} MHz (timekeeper; want "
-           f"{v.fabric_mhz:g}); F={f} on every enabled block; MTS locked")
+           f"{v.fabric_mhz:g}); F={v.factor} on every enabled block"
+           f"{', chain depth %d (%g MS/s)' % (v.depth, v.rate / 1e6) if v.depth else ''}; MTS locked")
 
     def _switch_channels(self, n: int) -> None:
         # that channel count's DEFAULT build: the sc16-max one (the highest
@@ -1169,7 +1271,7 @@ class HwBackend(Backend):
         self._bring_up(v.bitstream, load=True, rx_freqs=rx_freqs,
                        tx_freqs=tx_freqs,
                        refclk="auto" if self._refclk else False, variant=base)
-        if v.factor != v.built_factor:
+        if v.factor != v.built_factor or v.depth:
             self._retune_hw(v)
         self._restore(state)
 
