@@ -54,3 +54,13 @@ at least one per path. BRAM 0. A design's chains (RX + TX, every stage,
 
 Gate 0 DSP / BRAM: **pass** (<= 1500 DSP, <= 10 % BRAM). Whole designs:
 the template builds' utilization reports.
+
+## Every release
+
+`fir_compiler:7.2` is current in 2021.1, 2022.1 and 2024.1 (`rate_sr_cfg`
+generates in each). The chain sims with each release's own FIR Compiler
+models (`RATE_TAG=v<rel> VIVADO_ROOT=... GEOMS="1:4:5:1 2:8:6:1"
+sim/run_sim_rate.sh`, RX and TX, every depth): bit-exact against
+`check_rate.py` in all three, no stall, no DAC underrun — the cores pad and
+delay alike (2021.1 runs all eight geometries: `make sim-rate`).
+Whole-design timing per release: the template builds.
