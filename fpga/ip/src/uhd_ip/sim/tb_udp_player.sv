@@ -107,10 +107,12 @@ module tb_udp_player #(parameter int TICK_STEP = 1, parameter int M_WIDTH = 128,
     // Time base
     // ------------------------------------------------------------------
     wire [63:0] adc_time;
+    wire        adc_tick;              // adc_time advances at this edge
 `ifndef INTEG
     reg  [63:0] tb_time = 64'h0000_0000_FFFF_C000;   // crosses 2^32 during the run
     always @(posedge adc_clk) if (adc_rstn && t_stb) tb_time <= tb_time + SLOTS * TICK_STEP;
     assign adc_time = tb_time;
+    assign adc_tick = adc_rstn && t_stb;
 `endif
 
     // ------------------------------------------------------------------
@@ -144,7 +146,7 @@ module tb_udp_player #(parameter int TICK_STEP = 1, parameter int M_WIDTH = 128,
         .s_axis_rx_tlast(rx_tlast), .s_axis_rx_tuser(rx_tuser),
         .m_axis_ctl_tdata(ctl_tdata), .m_axis_ctl_tkeep(ctl_tkeep), .m_axis_ctl_tvalid(ctl_tvalid),
         .m_axis_ctl_tlast(ctl_tlast), .m_axis_ctl_tuser(ctl_tuser), .m_axis_ctl_tready(ctl_tready),
-        .adc_clk(adc_clk), .adc_aresetn(adc_rstn), .adc_time(adc_time),
+        .adc_clk(adc_clk), .adc_aresetn(adc_rstn), .adc_time(adc_time), .adc_tick(adc_tick),
         .s_axis_dma_tdata(dma_tdata), .s_axis_dma_tvalid(dma_tvalid), .s_axis_dma_tready(dma_tready),
         .m_axis_dac_tdata(dac_tdata), .m_axis_dac_tvalid(dac_tvalid), .m_axis_dac_tready(dac_tready),
         .s_axi_aclk(axi_clk), .s_axi_aresetn(axi_rstn),
@@ -166,7 +168,7 @@ module tb_udp_player #(parameter int TICK_STEP = 1, parameter int M_WIDTH = 128,
         .adc_clk(adc_clk), .adc_aresetn(adc_rstn),
         .s_axis_tdata({M_WIDTH{1'b0}}), .s_axis_tvalid(t_stb), .s_axis_tready(),
         .m_axis_adc_tdata(), .m_axis_adc_tvalid(), .m_axis_adc_tready(1'b1),
-        .adc_time(adc_time),
+        .adc_time(adc_time), .adc_tick(adc_tick),
         .tx_clk(tx_clk), .tx_aresetn(tx_rstn),
         .m_axis_tdata(st_tdata), .m_axis_tkeep(st_tkeep), .m_axis_tvalid(st_tvalid),
         .m_axis_tlast(st_tlast), .m_axis_tuser(st_tuser), .m_axis_tready(st_tready),

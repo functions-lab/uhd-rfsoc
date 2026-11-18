@@ -96,6 +96,11 @@ foreach name [dict keys $cores] {
     if {$blk ne "reg0"} { error "$name: s_axi address block '$blk', zcu216_uhd_v49.tcl uses reg0" }
   }
 
+  # udp_player's adc_tick (udp_streamer's: adc_time advances at this edge)
+  # reads 1 when unconnected: the timed start of every rate the RFDC alone makes
+  if {$name eq "udp_player"} {
+    set_property driver_value 1 [ipx::get_ports adc_tick -of_objects $core]
+  }
   # the rate hubs: a FIR stage's ports exist only for stages i <= K and FIR
   # instances g < G (an unused input reads 0)
   if {$name eq "rx_rate" || $name eq "tx_rate"} {

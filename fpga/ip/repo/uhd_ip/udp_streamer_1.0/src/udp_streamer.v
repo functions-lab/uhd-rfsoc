@@ -111,6 +111,7 @@ module udp_streamer #(
     output wire         m_axis_adc_tvalid,
     input  wire         m_axis_adc_tready,
     output wire [63:0]  adc_time,        // timekeeper (adc_clk): shared with the DAC player
+    output wire         adc_tick,        // s_axis_tvalid: adc_time advances one beat at this edge (for the player)
 
     // ---- CMAC TX side
     (* X_INTERFACE_INFO = "xilinx.com:signal:clock:1.0 tx_clk CLK" *)
@@ -539,6 +540,7 @@ module udp_streamer #(
 
     assign streaming_d = (st_d != S_IDLE);
     assign adc_time    = now_d;
+    assign adc_tick    = s_axis_tvalid;
 
     always @(posedge adc_clk) begin
         cmd_req_d_q  <= cmd_req_d;

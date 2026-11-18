@@ -318,6 +318,7 @@ proc create_hier_cell_eth100g { parentCell nameHier {nch 1} {beat_w 128} {bf_pip
 
   # ---- shared time base, CMAC control/status
   connect_bd_net [get_bd_pins udp_streamer/adc_time] [get_bd_pins udp_player/adc_time]
+  connect_bd_net [get_bd_pins udp_streamer/adc_tick] [get_bd_pins udp_player/adc_tick]
   connect_bd_net [get_bd_pins cmac_gpio/gpio_io_o] [get_bd_pins cmac_ctl]
   connect_bd_net [get_bd_pins cmac_status] [get_bd_pins cmac_gpio/gpio2_io_i]
   set aligned [create_bd_cell -type ip -vlnv [v49_vlnv xilinx.com:ip:xlslice:1.0] cmac_aligned]
@@ -689,6 +690,9 @@ proc verify_rate_variant {F {nch 1}} {
       if {[get_property CONFIG.$p $c] != $v} { error "v49: eth100g/${d}_rate $p is [get_property CONFIG.$p $c], expected $v" }
     }
   }
+  # the player's timed start counts the timekeeper's ticks (adc_tick)
+  set tn [get_bd_nets -quiet -of_objects [get_bd_pins eth100g/udp_player/adc_tick]]
+  if {$tn eq "" || $tn ne [get_bd_nets -quiet -of_objects [get_bd_pins eth100g/udp_streamer/adc_tick]]} { error "v49: udp_player/adc_tick is not udp_streamer/adc_tick" }
   set nfir [llength [get_bd_cells -quiet -filter {VLNV =~ "xilinx.com:ip:fir_compiler:*"} eth100g/*]]
   if {$nfir != 2 * $rate_k * $rg} { error "v49: $nfir FIR Compiler cells in eth100g, expected [expr {2 * $rate_k * $rg}]" }
   foreach {a z} {rfdc/M_ADC_AXIS eth100g/rx_rate/s_axis eth100g/tx_rate/m_axis rfdc/S_DAC_AXIS} {
