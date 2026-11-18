@@ -16,6 +16,8 @@
 # commit src/ and the repo together.
 set here [file normalize [file dirname [info script]]]
 set repo [file normalize [expr {$argc > 0 ? [lindex $argv 0] : "$here/../../repo/uhd_ip"}]]
+# optional: only these cores (default: every one)
+set only [lrange $argv 1 end]
 set part xczu49dr-ffvf1760-2-e
 
 # core -> {description, bus interfaces, user parameters}
@@ -44,6 +46,14 @@ set cores [dict create \
     "RX beamformer on the channel-major ADC beat: channel 0 = sat16(round(sum over c of x_c w_c >> (15+SHIFT))), channels 1..N-1 unchanged, or bit-exact bypass; atomic weight/shift LOAD. Register map in the HDL header; Protocol §11." \
     {s_axis m_axis s_axi aclk s_axi_aclk aresetn s_axi_aresetn} \
     {N_CH BEAT_W}] \
+  rx_rate [list \
+    "RX low-rate chain hub (rates below the RFDC's F = 40): the channel-major ADC beat through K FIR Compiler polyphase half-band ÷2 stages (the FIRs outside, on m_st/s_st), DEPTH 0 = bit-exact bypass; AXI-Lite DEPTH/CTRL. Register map in the HDL header." \
+    {s_axis m_axis s_axi aclk s_axi_aclk aresetn s_axi_aresetn fir_aresetn_o m_st1g0 s_st1g0 m_st1g1 s_st1g1 m_st2g0 s_st2g0 m_st2g1 s_st2g1 m_st3g0 s_st3g0 m_st3g1 s_st3g1 m_st4g0 s_st4g0 m_st4g1 s_st4g1 m_st5g0 s_st5g0 m_st5g1 s_st5g1 m_st6g0 s_st6g0 m_st6g1 s_st6g1} \
+    {N_CH SPC K G}] \
+  tx_rate [list \
+    "TX low-rate chain hub: the channel-major DAC beat through K FIR Compiler polyphase half-band ×2 stages (the FIRs outside, on m_st/s_st), DEPTH 0 = bit-exact bypass; DEPTH and reset from rx_rate." \
+    {s_axis m_axis aclk aresetn fir_aresetn_i m_st1g0 s_st1g0 m_st1g1 s_st1g1 m_st2g0 s_st2g0 m_st2g1 s_st2g1 m_st3g0 s_st3g0 m_st3g1 s_st3g1 m_st4g0 s_st4g0 m_st4g1 s_st4g1 m_st5g0 s_st5g0 m_st5g1 s_st5g1 m_st6g0 s_st6g0 m_st6g1 s_st6g1} \
+    {N_CH SPC K G}] \
 ]
 # extra HDL a core instantiates (copied into the IP with its own source)
 set extra [dict create \
@@ -53,6 +63,7 @@ set extra [dict create \
 file mkdir $repo
 set tmp [file normalize $here/.pkg_tmp]
 foreach name [dict keys $cores] {
+  if {[llength $only] && [lsearch -exact $only $name] < 0} continue
   lassign [dict get $cores $name] desc want_if want_par
   set root $repo/${name}_1.0
   file delete -force $root $tmp
@@ -83,6 +94,23 @@ foreach name [dict keys $cores] {
     set blk [get_property NAME [ipx::get_address_blocks -of_objects \
                  [ipx::get_memory_maps s_axi -of_objects $core]]]
     if {$blk ne "reg0"} { error "$name: s_axi address block '$blk', zcu216_uhd_v49.tcl uses reg0" }
+  }
+
+  # the rate hubs: a FIR stage's ports exist only for stages i <= K and FIR
+  # instances g < G (an unused input reads 0)
+  if {$name eq "rx_rate" || $name eq "tx_rate"} {
+    for {set i 1} {$i <= 6} {incr i} {
+      for {set g 0} {$g < 2} {incr g} {
+        set dep "\$K >= $i && \$G > $g"
+        foreach b [list m_st${i}g${g} s_st${i}g${g}] {
+          set_property enablement_dependency $dep [ipx::get_bus_interfaces $b -of_objects $core]
+          foreach port [ipx::get_ports ${b}_* -of_objects $core] {
+            set_property enablement_dependency $dep $port
+            if {[get_property DIRECTION $port] eq "in"} { set_property driver_value 0 $port }
+          }
+        }
+      }
+    }
   }
 
   ipx::create_xgui_files $core

@@ -14,9 +14,9 @@
 VIVADO_ROOT ?= $(or $(patsubst %/bin/vivado,%,$(realpath $(shell command -v vivado 2>/dev/null))),/tools/Xilinx/Vivado/2021.1)
 VIVADO      := $(VIVADO_ROOT)/bin/vivado
 
-.PHONY: all sim sim-streamer sim-player sim-fmt sim-max sim-wide sim-interleave sim-bf sim-rbf sim-arb package ooc clean
+.PHONY: all sim sim-streamer sim-player sim-fmt sim-max sim-wide sim-interleave sim-bf sim-rbf sim-arb sim-gap sim-rate package ooc clean
 
-all: sim sim-fmt sim-max sim-wide sim-interleave sim-bf sim-rbf sim-arb
+all: sim sim-fmt sim-max sim-wide sim-interleave sim-bf sim-rbf sim-arb sim-gap sim-rate
 
 # sc16 regression: S_WIDTH/M_WIDTH 128/256/512 x TICK_STEP 1/2
 sim: sim-streamer sim-player
@@ -47,6 +47,30 @@ sim-wide:
 	VIVADO_ROOT=$(VIVADO_ROOT) WIDTHS=1024 TICK_STEPS=1 FMTS="1 0 2 3" sim/run_sim.sh
 	VIVADO_ROOT=$(VIVADO_ROOT) WIDTHS=1024 TICK_STEPS=1 FMTS=1 sim/run_sim_player.sh
 	VIVADO_ROOT=$(VIVADO_ROOT) TXBW=32768 WIDTHS=1024 TICK_STEPS=1 FMTS=1 sim/run_sim_player.sh
+
+# the low-rate chains (rx_rate / tx_rate) at depth g: the streamer's
+# s_axis_tvalid and the player's adc_time one beat in 2^g cycles, the DAC
+# tready one cycle in 2^g (phase 0 and 2^g / 2). g = 1 and 6 over every format
+# and width, g = 2..5 sc16 at 128 bits.
+sim-gap:
+	for g in 1 6; do \
+	  VIVADO_ROOT=$(VIVADO_ROOT) GAP=$$g TICK_STEPS=1 FMTS="0 1 2 3" sim/run_sim.sh || exit 1; \
+	  for p in 0 $$((1 << ($$g - 1))); do \
+	    VIVADO_ROOT=$(VIVADO_ROOT) GAP=$$g GPH=$$p TICK_STEPS=1 FMTS="0 1 2 3" sim/run_sim_player.sh || exit 1; \
+	  done; \
+	done
+	for g in 2 3 4 5; do \
+	  VIVADO_ROOT=$(VIVADO_ROOT) GAP=$$g WIDTHS=128 TICK_STEPS=1 FMTS=0 sim/run_sim.sh || exit 1; \
+	  for p in 0 $$((1 << ($$g - 1))); do \
+	    VIVADO_ROOT=$(VIVADO_ROOT) GAP=$$g GPH=$$p WIDTHS=128 TICK_STEPS=1 FMTS=0 sim/run_sim_player.sh || exit 1; \
+	  done; \
+	done
+
+# the low-rate chains' hubs (rx_rate / tx_rate) with their real FIR Compiler
+# stages, every geometry of the v49 designs, every depth, bit-exact against
+# sim/check_rate.py (DIR=rx|tx, GEOMS="N:SPC:K:G ...", RATE_NIN=<samples>)
+sim-rate:
+	VIVADO_ROOT=$(VIVADO_ROOT) DIR="$(or $(DIR),rx tx)" RATE_NIN=$(or $(RATE_NIN),256) sim/run_sim_rate.sh
 
 sim-interleave:
 	VIVADO_ROOT=$(VIVADO_ROOT) sim/run_sim_interleave.sh
