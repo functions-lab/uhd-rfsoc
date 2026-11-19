@@ -20,8 +20,11 @@ changes: no packet format, command, reply or register of an existing core.
   The register map is in `fpga/ip/src/uhd_ip/src/rx_rate.v` and
   `rfsoc/server/rate_chain.py`. `0x8008_0000` stays `eth100g/tx_dpd` (§12).
 - The datapath order: `rfdc -> rx_rate -> rx_beamformer -> adc_c2s ->
-  udp_streamer` and `udp_player -> dac_s2c -> tx_beamformer -> tx_rate ->
-  (tx_dpd ->) rfdc`. The beamformers therefore run at the decimated rate.
+  udp_streamer` and `udp_player -> dac_s2c -> tx_beamformer -> tx_slice ->
+  tx_rate -> (tx_dpd ->) rfdc`. The beamformers therefore run at the
+  decimated rate. `tx_slice` (a registered AXIS slice, for timing) adds one
+  converter cycle of TX latency at every rate, existing ones included:
+  re-measure any calibrated TX->RX delay (`rate_loopback.py`).
 
 ## §4 Data plane (FPGA -> host)
 
