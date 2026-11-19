@@ -4,7 +4,8 @@
 //   I <lane> <v>   every input sample the chain took after the reset
 //   O <lane> <v>   every output sample (m_axis beats)
 // Lane 2c = I, 2c+1 = Q of channel c. Ends with ASSERT_RX_NO_STALL ok|FAIL and
-// ASSERT_ALIGNED ok|FAIL (every channel's beat carries the same sample index).
+// the alignment of the channels follows from the per-lane bit-exact check
+// (check_rate.py: every lane against the model from the same first sample).
 `timescale 1ns / 1ps
 module tb_rx_rate #(parameter int N_CH = 1, parameter int SPC = 4, parameter int K = 5,
                     parameter int G = 1, parameter int NIN = 512);
@@ -213,7 +214,7 @@ module tb_rx_rate #(parameter int N_CH = 1, parameter int SPC = 4, parameter int
 
     // ---- dumps
     int fd = 0, nin_d = 0, nout_d = 0, cur = -1;
-    bit stall_seen = 0, misalign = 0;
+    bit stall_seen = 0;
     always @(posedge aclk) begin
         if (fd != 0 && !dut.crst && s_tvalid && nin_d < NIN * (1 << cur)) begin
             for (int s = 0; s < SPC; s++)

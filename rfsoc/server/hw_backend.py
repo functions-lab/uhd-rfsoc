@@ -224,6 +224,8 @@ GEN3_FACTORS = (1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 40)
 # only, at depths 1..K (K <= RATE_K_MAX): rate fs / RATE_FACTOR / 2^k
 RATE_FACTOR = 40
 RATE_K_MAX = 6
+# the designs' XDC gives the chains' paths this many converter cycles
+RATE_MULTICYCLE = 4
 # the lowest converter AXIS clock a run-time factor may need (the ladder's
 # lowest is 15.36 MHz: 1/2/4ch F40 at 2457.6 MS/s)
 FABRIC_MIN_MHZ = 10.0
@@ -478,7 +480,12 @@ class Variant:
         RFDC's F = RATE_FACTOR, when it is one of them, at depths 1..rate_k
         (rate fs / 40 / 2^k)."""
         pts = [(f, 0) for f in self.run_factors()]
-        if self.rate_k and RATE_FACTOR in self.run_factors():
+        # the chains' paths are timed with RATE_MULTICYCLE cycles at the
+        # BUILT converter clock (the designs' XDC): valid only where F = 40's
+        # clock is at most 1/RATE_MULTICYCLE of it (built F <= 10; every
+        # template, never a fixed F40 build)
+        if (self.rate_k and RATE_FACTOR in self.run_factors()
+                and self.built_factor * RATE_MULTICYCLE <= RATE_FACTOR):
             pts += [(RATE_FACTOR, k) for k in range(1, self.rate_k + 1)]
         return pts
 
@@ -1119,6 +1126,9 @@ class HwBackend(Backend):
             chain.set_depth(0)
         self.rate_depth = 0
         if v.factor != self.rx_decim:
+            # unknown until _retune_factor completes: a fallback after a
+            # failure in it then redoes the RFDC part
+            self.rx_decim = None
             self._retune_factor(v)
         if v.depth:
             chain.set_depth(v.depth)

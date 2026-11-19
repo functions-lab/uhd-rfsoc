@@ -52,7 +52,9 @@ set_clock_groups -asynchronous -group [get_clocks -include_generated_clocks sfp_
 # only at the RFDC's F = 40, where that clock is <= 62.5 MHz (<= 1/4 of the
 # templates' 300-312.5 MHz it is timed at); the daemon never selects a depth
 # > 0 at another factor, and the depth registers change only while the chain
-# is held in reset. Paths into and out of the chain therefore have 4 cycles.
+# is held in reset. Paths into and out of the chain therefore have 4 cycles:
+# valid for builds timed at >= 4x the F = 40 clock (built F <= 10, every
+# template); the daemon serves no depth on any other build (RATE_MULTICYCLE).
 # The depth-0 bypass (s_axis -> m_axis of each hub, a 2:1 mux) is not a
 # chain cell and keeps its single cycle.
 set v49_rate_cells [get_cells -hierarchical -filter {NAME =~ "*/eth100g/rx_fir_*" || NAME =~ "*/eth100g/tx_fir_*" || NAME =~ "*/eth100g/rx_rate/*g_stage*" || NAME =~ "*/eth100g/rx_rate/*g_pack*" || NAME =~ "*/eth100g/rx_rate/*pkr_*" || NAME =~ "*/eth100g/rx_rate/*depth_reg*" || NAME =~ "*/eth100g/rx_rate/*run_reg*" || NAME =~ "*/eth100g/tx_rate/*g_stage*" || NAME =~ "*/eth100g/tx_rate/*ub*" || NAME =~ "*/eth100g/tx_rate/*depth_reg*" || NAME =~ "*/eth100g/tx_rate/*run_reg*"}]

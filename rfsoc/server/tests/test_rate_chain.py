@@ -111,6 +111,21 @@ class RatePoints(unittest.TestCase):
         base = v.at_factor(v.built_factor)
         self.assertEqual((base.factor, base.depth, base.rate), (2, 0, 1228.8e6))
 
+    def test_points_need_4x_timing_margin(self):
+        # the chain's paths are timed with 4 cycles at the BUILT converter
+        # clock: depths only where F = 40's clock is <= 1/4 of it (built F <= 10)
+        import copy
+        b = chained_build(self.tmp, old_build("zcu216", "zcu216_v49_16ch_qsfp_f8_fs2500"), 16, 1, 5, 2)
+        v = hw_backend.load_variant(b)
+        self.assertEqual(sum(1 for _, k in v.run_points() if k), 5)       # built F8: 8 x 4 <= 40
+        fixed = copy.copy(v)
+        fixed.built_factor = fixed.factor = 40
+        fixed.retune_fin = None                                         # a fixed F40 ladder build
+        self.assertEqual(fixed.run_points(), [(40, 0)])
+        f12 = copy.copy(v)
+        f12.built_factor = f12.factor = 12
+        self.assertEqual([k for _, k in f12.run_points() if k], [])
+
     def test_coerce_new_rates(self):
         b = chained_build(self.tmp, old_build("zcu216", "zcu216_v49_1ch_qsfp_f2_fs2457p6"), 1, 4, 5)
         v = hw_backend.load_variant(b)
@@ -194,6 +209,22 @@ class RetuneOrder(unittest.TestCase):
         hw_backend.HwBackend._retune_hw(f, self._v(24, 0))
         self.assertEqual(log, [("hold", True), ("depth", 0), ("factor", 24), ("check",)])
         self.assertEqual(f.rate_depth, 0)
+
+    def test_failed_factor_retune_is_redone_by_the_fallback(self):
+        # a retune that fails inside the RFDC part leaves the factor unknown,
+        # so the fallback to the old (F, depth) redoes the RFDC part
+        f, log = self._fake(2)
+
+        def boom(v):
+            log.append(("factor", v.factor))
+            raise RuntimeError("clk_wiz DRP")
+        f._retune_factor = boom
+        with self.assertRaises(RuntimeError):
+            hw_backend.HwBackend._retune_hw(f, self._v(40, 3))
+        log.clear()
+        f._retune_factor = lambda v: log.append(("factor", v.factor))
+        hw_backend.HwBackend._retune_hw(f, self._v(2, 0))
+        self.assertIn(("factor", 2), log)
 
     def test_depth_without_chain_refused(self):
         f, log = self._fake(40)

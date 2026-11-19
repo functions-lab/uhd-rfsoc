@@ -39,6 +39,9 @@ changes: no packet format, command, reply or register of an existing core.
   TIME_ERROR) use adc_time of the current cycle + 1 beat. That is identical
   to the old "+2 beats of pipeline" whenever time advances every cycle, and
   correct behind the chains.
+- At depth k a BURST_ACK can reach the host up to one low-rate beat
+  (2^k converter cycles, ~2 us at 1.92 MS/s) before the burst's last beat
+  leaves the player: it is raised when that beat is decided. Its TSF is exact.
 - Flow control, the 2 MiB buffer and the untimed-start gate are unchanged.
   At 1.92 MS/s the buffer holds seconds of samples.
 
@@ -47,7 +50,9 @@ changes: no packet format, command, reply or register of an existing core.
 - A build whose `.hwh` has `rx_rate` + `tx_rate` (`N_CH SPC K G`, both alike,
   N_CH = the build's N, SPC its samples per channel per beat) also serves
   fs / 40 / 2^k, k = 1..K, provided F = 40 is one of its run-time factors
-  (every template; a fixed F40 build too). They are listed in
+  (every template), and the build was built at F <= 10: the chains'
+  paths are timed with 4 cycles at the built converter clock, so a fixed
+  F40 build gets no depths. They are listed in
   `get_rx_rates` / `info rx_rates=` like any rate, are met from below, and
   fit every wire format.
 - A rate change to one of them is an in-place retune:

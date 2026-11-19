@@ -7,7 +7,7 @@
 # Run by run_sim_rate.sh, which then checks the dumps with check_rate.py.
 
 # ---- rate_sr_cfg (verbatim in every design and in fpga/ip/src/uhd_ip/rate/spike/fir_spike.tcl) ----
-# One stage's FIR: the 26-tap odd polyphase branch of the half-band
+# One stage's FIR: the 32-tap odd polyphase branch of the half-band
 # (rate_hb.coe, even taps), single rate, symmetric, p samples per clock per
 # path (p = max(SPC >> i, 1) per valid at the rate of stage i), full precision
 # out (the hub adds the centre tap, rounds and saturates).

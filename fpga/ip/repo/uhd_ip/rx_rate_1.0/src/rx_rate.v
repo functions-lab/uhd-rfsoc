@@ -15,7 +15,7 @@
 //                  s_axis_data, from its m_axis_data. Lanes are I and Q of
 //                  every channel (lane 2c = I, 2c+1 = Q of channel c),
 //                  sample-major in tdata (16-bit lanes in, 40-bit full
-//                  precision out). Each FIR is the 26-tap odd branch of the
+//                  precision out). Each FIR is the 32-tap odd branch of the
 //                  half-band (32 taps) at max(SPC >> i, 1) samples per valid.
 //   depth_o, fir_aresetn_o (aclk) for tx_rate and every FIR of both chains.
 //   s_axi   (s_axi_aclk) the register file below.

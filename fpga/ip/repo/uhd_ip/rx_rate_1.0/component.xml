@@ -1312,7 +1312,7 @@
         <spirit:parameters>
           <spirit:parameter>
             <spirit:name>viewChecksum</spirit:name>
-            <spirit:value>617e1f82</spirit:value>
+            <spirit:value>3f58a2b6</spirit:value>
           </spirit:parameter>
         </spirit:parameters>
       </spirit:view>
@@ -1328,7 +1328,7 @@
         <spirit:parameters>
           <spirit:parameter>
             <spirit:name>viewChecksum</spirit:name>
-            <spirit:value>617e1f82</spirit:value>
+            <spirit:value>3f58a2b6</spirit:value>
           </spirit:parameter>
         </spirit:parameters>
       </spirit:view>
@@ -3519,7 +3519,7 @@
       <spirit:file>
         <spirit:name>src/rx_rate.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
-        <spirit:userFileType>CHECKSUM_617e1f82</spirit:userFileType>
+        <spirit:userFileType>CHECKSUM_3f58a2b6</spirit:userFileType>
         <spirit:userFileType>IMPORTED_FILE</spirit:userFileType>
       </spirit:file>
     </spirit:fileSet>
@@ -3583,13 +3583,13 @@
       </xilinx:xpmLibraries>
       <xilinx:vendorDisplayName>uhd-rfsoc</xilinx:vendorDisplayName>
       <xilinx:coreRevision>1</xilinx:coreRevision>
-      <xilinx:coreCreationDateTime>2026-11-18T16:54:23Z</xilinx:coreCreationDateTime>
+      <xilinx:coreCreationDateTime>2026-11-19T00:04:00Z</xilinx:coreCreationDateTime>
     </xilinx:coreExtensions>
     <xilinx:packagingInfo>
       <xilinx:xilinxVersion>2021.1</xilinx:xilinxVersion>
       <xilinx:checksum xilinx:scope="busInterfaces" xilinx:value="49104687"/>
       <xilinx:checksum xilinx:scope="memoryMaps" xilinx:value="5c66d603"/>
-      <xilinx:checksum xilinx:scope="fileGroups" xilinx:value="b38dd716"/>
+      <xilinx:checksum xilinx:scope="fileGroups" xilinx:value="c63ce48b"/>
       <xilinx:checksum xilinx:scope="ports" xilinx:value="451dbbda"/>
       <xilinx:checksum xilinx:scope="hdlParameters" xilinx:value="ec659f69"/>
       <xilinx:checksum xilinx:scope="parameters" xilinx:value="013a9aad"/>

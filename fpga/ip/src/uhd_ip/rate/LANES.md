@@ -62,13 +62,16 @@ instance's share of the channels).
 
 `udp_player` decides a timed start two pipeline stages before a beat
 reaches the DAC. Behind `tx_rate` the DAC side takes a beat one cycle in 2^k
-and `adc_time` advances one beat in 2^k cycles, so the old allowance
+and `adc_time` advances one beat in 2^k cycles, so the original allowance
 (adc_time of the previous cycle + 2 beats) started bursts and stamped
-BURST_ACK / UNDERFLOW / TIME_ERROR one beat off. It now uses the adc_time of
-the current cycle + 1 beat (a 16-bit "advanced" compare selecting
-precomputed +1 / +2 / +3 beat sums), which is the same value whenever time
-advances every cycle (every depth-0 build): `make sim-gap` (GAP = 1..6) and
-the depth-0 regressions pass.
+BURST_ACK / UNDERFLOW / TIME_ERROR one beat off. `udp_streamer` now exports
+`adc_tick` (its s_axis_tvalid: adc_time advances at this edge) and the player
+registers adc_time + (adc_tick ? 2 : 1) beats = the adc_time of the current
+cycle + 1 beat. Whenever time advances every cycle (every depth-0 build,
+adc_tick = 1) that is the original value: the depth-0 regressions and the
+player / integration logs are byte-identical to the original cores; `make
+sim-gap` (GAP = 1..6) passes. The packaged player reads adc_tick = 1 when
+it is unconnected.
 
 BURST_ACK at depth k: the player raises it when it decides the burst's last
 beat; behind `tx_rate` that beat leaves up to one low-rate beat (2^k
