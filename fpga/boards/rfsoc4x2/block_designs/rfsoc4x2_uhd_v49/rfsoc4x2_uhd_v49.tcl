@@ -254,16 +254,25 @@ proc create_hier_cell_eth100g { parentCell nameHier {nch 1} {beat_w 128} {bf_pip
 
   # ---- streams: the low-rate chains at the converter edges
   #   S_AXIS_ADC -> rx_rate -> (rx_beamformer -> adc_c2s ->) udp_streamer
-  #   udp_player -> (dac_s2c -> tx_beamformer ->) tx_rate -> M_AXIS_DAC
+  #   udp_player -> (dac_s2c -> tx_beamformer ->) tx_slice -> tx_rate -> M_AXIS_DAC
   create_hier_cell_rate $nch $spc $rate_k
   connect_bd_intf_net [get_bd_intf_pins S_AXIS_ADC] [get_bd_intf_pins rx_rate/s_axis]
   connect_bd_intf_net [get_bd_intf_pins tx_rate/m_axis] [get_bd_intf_pins M_AXIS_DAC]
+  # tx_slice: a fully registered slice in front of tx_rate, so the TX source's
+  # tready is a register again (tx_rate's s_axis_tready is combinational: at
+  # depth 0 the DAC's, else its unpacker's). Without it the 4ch fs 2500
+  # template missed by 0.022 ns on tx_beamformer's clock-enable fan-out. One
+  # constant cycle of TX latency at every rate.
+  set tsl [create_bd_cell -type ip -vlnv [v49_vlnv xilinx.com:ip:axis_register_slice:1.1] tx_slice]
+  connect_bd_net [get_bd_pins adc_clk] [get_bd_pins tx_slice/aclk]
+  connect_bd_net [get_bd_pins adc_aresetn] [get_bd_pins tx_slice/aresetn]
+  connect_bd_intf_net [get_bd_intf_pins tx_slice/M_AXIS] [get_bd_intf_pins tx_rate/s_axis]
   # beat width of the combined converter stream (Protocol §9)
   set_property CONFIG.S_WIDTH $beat_w [get_bd_cells udp_streamer]
   set_property CONFIG.M_WIDTH $beat_w [get_bd_cells udp_player]
   if {$nch == 1} {
     connect_bd_intf_net [get_bd_intf_pins rx_rate/m_axis] [get_bd_intf_pins udp_streamer/s_axis]
-    connect_bd_intf_net [get_bd_intf_pins udp_player/m_axis_dac] [get_bd_intf_pins tx_rate/s_axis]
+    connect_bd_intf_net [get_bd_intf_pins udp_player/m_axis_dac] [get_bd_intf_pins tx_slice/S_AXIS]
   } else {
     # channel-major (rfdc joiner/broadcaster) <-> sample-major
     # (udp_streamer / udp_player, the wire order)
@@ -292,7 +301,7 @@ proc create_hier_cell_eth100g { parentCell nameHier {nch 1} {beat_w 128} {bf_pip
     set bf [create_bd_cell -type ip -vlnv user.org:uhd:tx_beamformer:1.0 tx_beamformer]
     set_property -dict [list CONFIG.N_CH $nch CONFIG.BEAT_W $beat_w CONFIG.PIPE $bf_pipe] $bf
     connect_bd_intf_net [get_bd_intf_pins dac_s2c/m_axis]        [get_bd_intf_pins tx_beamformer/s_axis]
-    connect_bd_intf_net [get_bd_intf_pins tx_beamformer/m_axis]  [get_bd_intf_pins tx_rate/s_axis]
+    connect_bd_intf_net [get_bd_intf_pins tx_beamformer/m_axis]  [get_bd_intf_pins tx_slice/S_AXIS]
     connect_bd_intf_net [get_bd_intf_pins S_AXI_BF]              [get_bd_intf_pins tx_beamformer/s_axi]
     connect_bd_net [get_bd_pins adc_clk]       [get_bd_pins tx_beamformer/aclk]
     connect_bd_net [get_bd_pins adc_aresetn]   [get_bd_pins tx_beamformer/aresetn]
