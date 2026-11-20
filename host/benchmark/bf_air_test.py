@@ -40,7 +40,7 @@ BF = "/mboards/0/beamformer"
 
 ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
 ap.add_argument("--args", required=True, help="device args incl. addr= and channels=N (N >= 2)")
-ap.add_argument("--freq", type=float, default=600e6, help="TX and RX centre (NCO), Hz (<= fs/2)")
+ap.add_argument("--freq", type=float, default=600e6, help="TX and RX centre (NCO), Hz")
 ap.add_argument("--tone", type=float, default=7.3e6, help="baseband tone, Hz")
 # -18 dBFS: at -6 dBFS a ZCU216's TX analog chain compresses (measured:
 # weight 0.5 came back as 0.66 / +3 deg, 0.125 as 0.18 / +6 deg on

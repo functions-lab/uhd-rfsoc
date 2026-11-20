@@ -59,7 +59,7 @@ from backend import (Backend, BackendError, default_fc_interval, DSA_MAX_DB,
                      DSA_STEP_DB, TICK_STEP, bool_sensor,
                      coerce_nco, default_rate, find_lib_root, gain_for_vop_ua,
                      link_problem,
-                     nyquist_plan, read_sysmon_temp, vop_ua_for_gain)
+                     nyquist_plan, read_sysmon_temp, vop_ua_for_gain, zone_warning)
 from boards import Board, board_of_bitstream, get_board
 from rx_beamformer import RxBeamformer, default_shift
 from tx_beamformer import TxBeamformer
@@ -597,6 +597,7 @@ class HwBackend(Backend):
         # the board: given, else the one the bitstream's name belongs to
         self.board = board or board_of_bitstream(bitstream) or get_board(None)
         self.product = self.board.prefix          # discovery product= (zcu216 / rfsoc4x2)
+        self.rf_max_hz = self.board.rf_max_hz     # top of the tuning range (§3)
         if nco_phase_reset not in ("all", "tuned", "off"):
             raise ValueError(f"nco_phase_reset {nco_phase_reset!r}: all|tuned|off")
         self.nco_phase_reset = nco_phase_reset
@@ -624,6 +625,9 @@ class HwBackend(Backend):
         # channel-count switch gives each channel of the new build its value
         self._rx_freq_mem: Dict[int, float] = {}
         self._tx_freq_mem: Dict[int, float] = {}
+        # the Nyquist zone each channel was last tuned into: a channel is
+        # warned about when it enters a zone beyond the first (zone_warning)
+        self._nco_zone: Dict[Tuple[str, int], int] = {}
         self._default_rx_freq, self._default_tx_freq = float(rx_freq), float(tx_freq)
         self._time_set = False
         self._streaming_cfg = None
@@ -761,6 +765,9 @@ class HwBackend(Backend):
         tx_freqs = [(tx_freqs[ch] if tx_freqs and ch < len(tx_freqs) else tx_freq)
                     for ch in range(self.num_tx)]
 
+        # RfdcTask's NCOs, for every enabled block (it wants DAC >= 0 >= ADC
+        # within fs/2: the first-zone alias). The streamed channels get their
+        # own, zone included, from _program_nco after MTS.
         _z, _p, rx_fold = nyquist_plan(rx_freqs[0], self.adc_rate)
         _z, _p, tx_fold = nyquist_plan(tx_freqs[0], self.dac_rate)
         NEW_CONFIG = {
@@ -770,10 +777,10 @@ class HwBackend(Backend):
             "MTSPLClockFreq": self.variant.pl_clk_mhz,
             "DACSampleRate": self.dac_rate / 1e6,
             "DACInterpolationRate": self.tx_interp,
-            "DACNCO": tx_fold / 1e6,
+            "DACNCO": abs(tx_fold) / 1e6,
             "ADCSampleRate": self.adc_rate / 1e6,
             "ADCInterpolationRate": self.rx_decim,     # rfsoc_lib's key for DECIMATION
-            "ADCNCO": -rx_fold / 1e6,
+            "ADCNCO": -abs(rx_fold) / 1e6,
         }
         self._rfdc_cfg.update(NEW_CONFIG)
         log.info("NEW_CONFIG (compiled geometry): %s", NEW_CONFIG)
@@ -1377,19 +1384,24 @@ class HwBackend(Backend):
     def _program_nco(self, kind, ch, hz):
         """Write one channel's NCO (and Nyquist zone); -> the frequency."""
         lo, hi = self.rx_freq_range(ch) if kind == "rx" else self.tx_freq_range(ch)
-        hz = min(hi, max(lo, float(hz)))
         fs = self.adc_rate if kind == "rx" else self.dac_rate
-        _zone, parity, folded = nyquist_plan(hz, fs)
+        f = coerce_nco(min(hi, max(lo, float(hz))), fs, hi)
+        # the carrier of any zone folded into [-fs/2, fs/2], so the driver
+        # writes it as it is (nyquist_plan: its own fold mirrors even zones)
+        zone, parity, folded = nyquist_plan(f, fs)
         tile, b, blk = self._adc_block(ch) if kind == "rx" else self._dac_block(ch)
         with self._lock:
             blk.NyquistZone = parity
             if kind == "rx":
-                # rfsoc_lib convention (real->I/Q): ADC NCO = -f. The driver
-                # folds into [-fs/2, fs/2] and handles the even-zone inversion.
+                # rfsoc_lib convention (real->I/Q): ADC NCO = -f
                 self.my.config_adc_nco(tile, b, -folded / 1e6)
             else:
                 self.my.config_dac_nco(tile, b, folded / 1e6)
-        f = min(hi, coerce_nco(hz, fs))
+        if self._nco_zone.get((kind, ch), 1) != zone:
+            self._nco_zone[(kind, ch)] = zone
+            msg = zone_warning(kind, ch, f, fs)
+            if msg:
+                log.warning("%s", msg)
         if kind == "rx":
             self._rx_freq[ch] = self._rx_freq_mem[ch] = f
         else:

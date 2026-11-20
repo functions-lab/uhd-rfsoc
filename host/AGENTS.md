@@ -457,18 +457,27 @@ caller converts alone instead of waiting.
   part (frontend `freq/value`) and a DSP part (`dsps/<i>/freq/value`, range
   ±rate/2). Both go to the daemon's `set_*_freq <ch> <rf> dsp=<dsp>`, which
   programs the one RFDC NCO to rf - dsp (RX) / rf + dsp (TX), clamped to
-  0..fs/2, and replies with the two parts in effect. So `tune_request_t(f,
+  the frequency range, and replies with the two parts in effect. So `tune_request_t(f,
   lo_off)` reports `actual_rf_freq` = f + lo_off, `actual_dsp_freq` = lo_off (RX)
   or -lo_off (TX), and `get_rx_freq()` = f, the frequency the converter mixes
   to; `dsp_freq_policy` MANUAL / AUTO / NONE behave as on a USRP. A plain tune
   has DSP part 0 (one NCO write; the DSP node skips an unchanged value).
 * **Frequency range.** The frontend's `freq/range` and `los/NCO/freq/range`
-  are the daemon's `get_*_freq_range` (0..fs/2 of the loaded build), cached
-  in `dev_state` and re-read by `set_rate()` after every rate change: a rate
-  of the other clock family (Protocol §8a) changes fs, e.g. 0..1250 ->
-  0..1228.8 MHz on a 4-channel ZCU216 going from 625 to 614.4 MS/s.
+  are the daemon's `get_*_freq_range` (0..6 GHz, the converters' analog
+  bandwidth, whatever the build; Protocol §3e), cached in `dev_state` and
+  re-read by `set_rate()` after every rate change.
   `multi_usrp::get_*_freq_range()` is UHD's overall range, the frontend's
-  widened by the DSP part (±rate/2); the NCO centre still stops at fs/2.
+  widened by the DSP part (±rate/2); the NCO centre still stops at the
+  frontend's.
+* **Nyquist zones (Protocol §3e).** A carrier beyond the first zone
+  (0..fs/2; fs from `info adc_rate=` / `dac_rate=`, kept in `dev_state` and
+  re-read after a rate change) is tuned like any other, spectrum upright.
+  The converter cannot tell the zones apart, so the module logs a warning
+  (`rfsoc_device::_note_zone`) that names the zone and asks for a bandpass
+  filter on the RF port: when a tune puts a channel's NCO centre into a zone
+  beyond the first, at `make()` for a carrier the daemon kept, and after a
+  rate change that loaded a build of another fs (e.g. 1240 MHz is zone 1 at
+  fs 2500 and zone 2 at fs 2457.6). Once per channel and zone.
 * **LOs.** Each frontend has `los/all` and `los/NCO` (`source` `internal` only,
   `export` false): `get_rx_lo_names()` = `all, NCO`, `get_rx_lo_freq("NCO")` =
   the RF part, `set_rx_lo_freq("NCO", f)` tunes it. The frontend also has the

@@ -8,7 +8,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import vrt  # noqa: E402
-from backend import Backend, coerce_nco  # noqa: E402
+from backend import Backend, coerce_nco, nyquist_plan, zone_warning  # noqa: E402
 from protocol import ControlCore, Session  # noqa: E402
 
 
@@ -46,14 +46,14 @@ class FakeBackend(Backend):
 
     # tuning / gain
     def set_rx_freq(self, ch, hz):
-        self._rx[ch] = coerce_nco(min(self.adc_rate / 2, max(0.0, hz)), self.adc_rate)
+        self._rx[ch] = coerce_nco(min(self.rf_max_hz, max(0.0, hz)), self.adc_rate, self.rf_max_hz)
         return self._rx[ch]
 
     def get_rx_freq(self, ch):
         return self._rx[ch]
 
     def set_tx_freq(self, ch, hz):
-        self._tx[ch] = coerce_nco(min(self.dac_rate / 2, max(0.0, hz)), self.dac_rate)
+        self._tx[ch] = coerce_nco(min(self.rf_max_hz, max(0.0, hz)), self.dac_rate, self.rf_max_hz)
         return self._tx[ch]
 
     def get_tx_freq(self, ch):
@@ -239,11 +239,46 @@ class TuneAndStream(unittest.TestCase):
         self.assertAlmostEqual(be.get_rx_freq(0), 999e6, delta=1e-3)      # NCO = rf - dsp
         self.assertAlmostEqual(float(c.handle_line(s, "get_rx_freq 0")[3:]), 1e9, delta=1e-3)
         self.assertAlmostEqual(float(c.handle_line(s, "get_rx_dsp_freq 0")[3:]), 1e6, delta=1e-3)
-        self.assertEqual(c.handle_line(s, "set_tx_freq 0 3e9"), "OK 1250000000")   # clamped to fs/2
-        self.assertEqual(c.handle_line(s, "get_rx_freq_range 0"), "OK 0 1250000000")
+        self.assertEqual(c.handle_line(s, "get_rx_freq_range 0"), "OK 0 6000000000")
+        self.assertEqual(c.handle_line(s, "get_tx_freq_range 0"), "OK 0 6000000000")
+        # beyond the first Nyquist zone (fs/2 = 1250 MHz): tuned, not clamped
+        r = c.handle_line(s, "set_tx_freq 0 3e9")
+        self.assertAlmostEqual(float(r[3:]), 3e9, delta=1e-3, msg=r)
+        r = c.handle_line(s, "set_rx_freq 0 3.5e9 dsp=1e6").split()
+        self.assertAlmostEqual(float(r[1]), 3.5e9, delta=1e-3)
+        self.assertAlmostEqual(be.get_rx_freq(0), 3.499e9, delta=1e-3)
+        # beyond the converters' analog bandwidth: clamped, at or below it
+        r = c.handle_line(s, "set_tx_freq 0 9e9")
+        self.assertLessEqual(float(r[3:]), 6e9)
+        self.assertAlmostEqual(float(r[3:]), 6e9, delta=1e-3, msg=r)
         self.assertEqual(c.handle_line(s, "set_rx_gain 0 -10.4"), "OK -10")
         self.assertEqual(c.handle_line(s, "get_rx_gain_range 0"), "OK -27 0 1")
         self.assertEqual(c.handle_line(s, "set_rx_antenna 0 RX2"), "OK RX")
+
+    def test_nyquist_zones(self):
+        fs = 2.5e9
+        # zone, the driver's parity, the NCO within +-fs/2: upright in every
+        # zone, so negative (the carrier less a multiple of fs) in the even ones
+        for f, zone, parity, nco in ((0.0, 1, 1, 0.0), (600e6, 1, 1, 600e6),
+                                     (1.25e9, 1, 1, 1.25e9), (1.8e9, 2, 2, -700e6),
+                                     (2.5e9, 2, 2, 0.0), (3.0e9, 3, 1, 500e6),
+                                     (3.75e9, 3, 1, 1.25e9), (4.4e9, 4, 2, -600e6),
+                                     (6.0e9, 5, 1, 1.0e9)):
+            z, p, n = nyquist_plan(f, fs)
+            self.assertEqual((z, p), (zone, parity), f)
+            self.assertAlmostEqual(n, nco, delta=1e-6, msg=f)
+            self.assertLessEqual(abs(n), fs / 2)
+            self.assertAlmostEqual((f - n) / fs, round((f - n) / fs), delta=1e-12)  # same NCO sequence
+        # the n78 carrier on a 4915.2 MS/s converter: zone 2
+        z, p, n = nyquist_plan(3609.99e6, 4915.2e6)
+        self.assertEqual((z, p), (2, 2))
+        self.assertAlmostEqual(n, -1305.21e6, delta=1e-3)
+        self.assertIsNone(zone_warning("rx", 0, 1.25e9, fs))
+        for kind, word in (("rx", "RF input"), ("tx", "RF output")):
+            w = zone_warning(kind, 1, 1.8e9, fs)
+            self.assertIn("Nyquist zone 2 (1250 .. 2500 MHz)", w)
+            self.assertIn("bandpass filter", w)
+            self.assertIn(word, w)
 
     def test_stream_setup_granule_and_formats(self):
         be, c, s = core(4)

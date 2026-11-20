@@ -45,8 +45,8 @@ class Board:
                  dac_blocks: Optional[Tuple[Slice, ...]] = None,
                  adc_blocks: Optional[Tuple[Slice, ...]] = None,
                  mts_tiles: int = 0b1111, mts_ref_tile: int = 1,
-                 gt_refclk: str = "8a34001"):
-        self.name = name                    # rfsoc_lib board name (rfsoc_lib/xrfclk/<name>/)
+                 gt_refclk: str = "8a34001", rf_max_hz: float = 6.0e9):
+        self.name = name                   # rfsoc_lib board name (rfsoc_lib/xrfclk/<name>/)
         self.prefix = name.lower()          # bitstream prefix <prefix>_v49_<N>ch_qsfp*, discovery product=
         self.dual_adc = dual_adc            # dual RF-ADC tiles (I and Q on two IP slices)
         self.max_channels = max_channels
@@ -65,6 +65,9 @@ class Board:
         # the 100G GT refclk: "8a34001" (programmed at bring-up) or "si570"
         # (fixed, runs from power-up: never programmed)
         self.gt_refclk = gt_refclk
+        # top of the tuning range: the converters' full-power (-3 dB) analog
+        # bandwidth (DS926: 6 GHz, RF-ADC and RF-DAC of the ZU48DR / ZU49DR)
+        self.rf_max_hz = rf_max_hz
         self.bitstream_glob = f"{self.prefix}_v49_*ch_qsfp*.bit"
         self.bitstream_re = re.compile(rf"^{self.prefix}_v49_([0-9]+)ch_qsfp(?:_.*)?$")
 

@@ -21,7 +21,7 @@ Checks (each prints PASS/FAIL; exit code = number of failures):
               their times
   tune        tune_request with an LO offset: rf / dsp split and signs like
               UHD's tune helper (RX dsp = rf - f, TX dsp = f - rf), centre =
-              the request; dsp range +-rate/2; clamped to 0..fs/2
+              the request; dsp range +-rate/2; clamped to the frontend range
   lo          get_*_lo_names / lo_freq / lo_source / lo_freq_range
   antenna     aliases (RX2, TX/RX) select the one port, which is reported
   bandwidth   = rate (fs / factor), range
@@ -246,7 +246,7 @@ class Run:
         fmax = u.get_fe_rx_freq_range(0).stop()
         u.set_rx_freq(T.TuneRequest(fmax + 0.3 * self.rate), 0)
         ok &= u.get_rx_freq(0) <= fmax + 1
-        why.append('beyond fs/2 -> %.9g (max %.9g)' % (u.get_rx_freq(0), fmax))
+        why.append('beyond the range -> %.9g (max %.9g)' % (u.get_rx_freq(0), fmax))
         r = u.set_rx_freq(T.TuneRequest(f), 0)
         ok &= abs(r.actual_dsp_freq) < 1e-3 and abs(u.get_rx_freq(0) - f) < 1
         self.result('tune', ok, '; '.join(why))

@@ -180,7 +180,8 @@ struct dev_state
     //! direction (info rx_otw_formats= / tx_otw_formats=, else otw_formats=);
     //! a daemon without the keys offers only sc16
     std::vector<std::string> otw_offered(bool rx);
-    //! take tick_rate, beat_slots, spp, mtu, the otw lists, bf and rbf from `info`
+    //! take tick_rate, beat_slots, spp, mtu, the converter rates, the otw
+    //! lists, bf and rbf from `info`
     void apply_info(const uhd::device_addr_t& info);
     //! re-read `info` (after the daemon reloaded the FPGA)
     void refresh_info();
@@ -198,12 +199,18 @@ struct dev_state
     double set_rate(bool rx, size_t ch, double rate);
     //! re-read the (common) RX and TX rate into every channel's cache
     void refresh_rates();
-    //! Protocol §3: the tuning range of the loaded build, 0 .. fs/2 (the same
-    //! for every channel). A rate change can load a build of another fs (the
-    //! other clock family, §8a), so set_rate() re-reads it.
+    //! Protocol §3: the tuning range, 0 .. the converters' analog bandwidth
+    //! (the same for every channel); set_rate() re-reads it after a reload.
     std::atomic<double> rx_freq_start{0.0}, rx_freq_stop{0.0};
     std::atomic<double> tx_freq_start{0.0}, tx_freq_stop{0.0};
     void refresh_freq_ranges();
+    //! Protocol §3: fs of the loaded build's converters (info adc_rate= /
+    //! dac_rate=; 0 = unknown), whose first Nyquist zone is 0 .. fs/2. A
+    //! rate change can load a build of another fs (§8a): apply_info() takes it.
+    std::atomic<double> adc_rate{0.0}, dac_rate{0.0};
+    //! Nyquist zone (1..) of carrier `hz` on the RX or TX converters; 1 while
+    //! fs is unknown
+    int nyquist_zone(bool rx, double hz) const;
 
     double get_rx_rate(size_t ch) const
     {

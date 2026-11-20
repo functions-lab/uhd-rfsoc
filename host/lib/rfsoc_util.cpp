@@ -582,6 +582,14 @@ std::vector<std::string> dev_state::otw_offered(bool rx)
     return rx ? _otw_rx : _otw_tx;
 }
 
+int dev_state::nyquist_zone(bool rx, double hz) const
+{
+    const double half = (rx ? adc_rate.load() : dac_rate.load()) / 2.0;
+    if (half <= 0.0 or hz <= half) // fs/2 itself belongs to zone 1
+        return 1;
+    return int(std::ceil(hz / half));
+}
+
 void dev_state::apply_info(const uhd::device_addr_t& info)
 {
     const double t = parse_double(info.get("tick_rate", "0"), "info tick_rate");
@@ -592,6 +600,8 @@ void dev_state::apply_info(const uhd::device_addr_t& info)
     rbf             = info.get("rbf", "0") == "1";
     default_spp     = size_t(parse_ll(info.get("spp", std::to_string(kDefaultSpp)), "spp"));
     mtu             = size_t(parse_ll(info.get("mtu", "9000"), "mtu"));
+    adc_rate        = parse_double(info.get("adc_rate", "0"), "info adc_rate");
+    dac_rate        = parse_double(info.get("dac_rate", "0"), "info dac_rate");
     // §10: per direction if the daemon says so, else the common list, else sc16
     auto list = [&](const char* key) -> std::vector<std::string> {
         if (info.has_key(key))
@@ -652,8 +662,8 @@ double dev_state::set_rate(bool rx, size_t ch, double rate)
     const double new_tx = tx_rate.empty() ? 0.0 : tx_rate[0]->load();
     if (new_rx != old_rx or new_tx != old_tx or tick_rate.load() != old_tick) {
         fpga_generation++;
-        refresh_info(); // the new build's beat, formats, tick rate
-        refresh_freq_ranges(); // and its fs: 0 .. fs/2
+        refresh_info(); // the new build's beat, formats, tick rate, fs
+        refresh_freq_ranges();
         const double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
         ZLOG_INFO("Rate changed to " << actual / 1e6 << " MS/s per channel (tick rate "
                                      << tick_rate.load() / 1e6 << " MHz, " << beat_slots()

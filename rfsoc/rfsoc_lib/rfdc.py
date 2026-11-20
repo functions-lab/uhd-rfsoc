@@ -366,9 +366,9 @@ class MyRFdc:
         return cfg
 
     def config_dac_nco(self, tile, block_id, nco_freq_mhz):
-        """Configure the NCO freq of a DAC block"""
+        """Configure the NCO freq of a DAC block (within +-Fs/2; negative
+        for a carrier of an even Nyquist zone)"""
         self._check_nco("DAC", tile, nco_freq_mhz)
-        assert nco_freq_mhz >= 0, f"DAC NCO frequency {nco_freq_mhz} shall be >= 0."
         block_enabled = self.rfdc_status.get_dac_block_enb(
             tile.tile_id, block_id)
         if block_enabled:
@@ -412,9 +412,9 @@ class MyRFdc:
             self.config_dac_block(tile, block_id)
 
     def config_adc_nco(self, tile, block_id, nco_freq_mhz):
-        """Configure the NCO freq of an ADC block"""
+        """Configure the NCO freq of an ADC block (within +-Fs/2; positive
+        for a carrier of an even Nyquist zone)"""
         self._check_nco("ADC", tile, nco_freq_mhz)
-        assert nco_freq_mhz <= 0, f"ADC NCO frequency {nco_freq_mhz} shall be <= 0 "
         block_enabled = self.rfdc_status.get_adc_block_enb(
             tile.tile_id, block_id)
         block = tile.blocks[block_id]

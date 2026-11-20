@@ -43,6 +43,9 @@ STREAM_MODES = ("start_cont", "stop_cont", "num_done", "num_more")
 DSA_MAX_DB, DSA_STEP_DB = 27.0, 1.0          # Gen3 production silicon DSA
 VOP_MIN_UA, VOP_MAX_UA = 2250, 40500         # Gen3 DAC VOP current range
 NCO_BITS = 48
+# Where tuning stops: the full-power (-3 dB) analog bandwidth of the ZU4xDR
+# RF-ADC and RF-DAC (DS926). A board states its own (boards.py, rf_max_hz).
+RF_MAX_HZ = 6.0e9
 # udp_streamer / udp_player TICK_STEP of every build (Protocol §8): one
 # timekeeper tick per 32-bit slot. HwBackend reads the real value from each
 # .hwh; this is the value for a .hwh without the cores.
@@ -148,25 +151,60 @@ def steering_weights(nch: int, angle_deg: float, carrier_freq: float,
 # Converter arithmetic
 # --------------------------------------------------------------------------
 
-def coerce_nco(freq_hz: float, fs_hz: float) -> float:
-    """`freq_hz` on the 48-bit NCO grid of a converter at `fs_hz`."""
+def coerce_nco(freq_hz: float, fs_hz: float, hi: Optional[float] = None) -> float:
+    """`freq_hz` on the 48-bit NCO grid of a converter at `fs_hz`: the
+    nearest grid point, or the last one at or below `hi` if that is above it."""
     step = fs_hz / float(1 << NCO_BITS)
-    return round(freq_hz / step) * step
+    n = round(freq_hz / step)
+    if hi is not None:
+        n = min(n, math.floor(hi / step))
+        if n * step > hi:
+            n -= 1
+    return n * step
 
 
 def nyquist_plan(freq_hz: float, fs_hz: float) -> Tuple[int, int, float]:
-    """(zone number 1.., driver zone 1=odd/2=even, frequency folded into [0, fs)).
+    """(zone number 1.., driver zone 1=odd/2=even, NCO frequency in [-fs/2, fs/2]).
 
-    Folding by whole multiples of fs keeps the zone parity, and the xrfdc
-    driver takes the parity (XRFDC_ODD/EVEN_NYQUIST_ZONE) plus an NCO value
-    within [-fs, fs] and handles the even-zone spectral inversion itself.
+    The NCO is a phase accumulator clocked at fs: f and f + k*fs are the same
+    sequence. A carrier of any zone is therefore mixed, its spectrum upright,
+    by the NCO at the carrier folded by whole multiples of fs into
+    [-fs/2, fs/2]: positive in the odd zones, negative in the even ones.
+
+    The fold is done here and not left to the xrfdc driver. Given a frequency
+    beyond +-fs/2, XRFdc_SetMixerSettings folds it the same way and then
+    negates the result in an even zone, which is the first-zone alias: the
+    spectrum would arrive mirrored. The driver gets the parity
+    (XRFDC_ODD/EVEN_NYQUIST_ZONE) for the analog side only: the ADC's
+    time-skew calibration, the DAC's mix mode (output power moved into the
+    second zone).
     """
     half = fs_hz / 2.0
     zone = int(math.floor(freq_hz / half)) + 1 if freq_hz > 0 else 1
     if freq_hz > 0 and freq_hz % half == 0:
         zone -= 1          # exactly fs/2 belongs to zone 1, fs to zone 2 ...
     folded = math.fmod(freq_hz, fs_hz)
+    if folded > half:
+        folded -= fs_hz
     return zone, (1 if zone % 2 else 2), folded
+
+
+def zone_warning(kind: str, ch: int, freq_hz: float, fs_hz: float) -> Optional[str]:
+    """What to tell the user about a carrier beyond the first Nyquist zone
+    (None inside it): it works, but only behind a bandpass filter."""
+    zone = nyquist_plan(freq_hz, fs_hz)[0]
+    if zone < 2:
+        return None
+    half = fs_hz / 2e6
+    head = (f"{kind.upper()} ch{ch}: {freq_hz / 1e6:.9g} MHz is in Nyquist zone {zone} "
+            f"({(zone - 1) * half:g} .. {zone * half:g} MHz) of the {fs_hz / 1e6:g} MS/s "
+            f"{'ADC' if kind == 'rx' else 'DAC'}, beyond zone 1 (0 .. {half:g} MHz). ")
+    if kind == "rx":
+        return head + ("The ADC folds every zone onto the same samples: add a bandpass "
+                       "filter for this zone at the RF input, or the signals and noise "
+                       "of the other zones land on the channel.")
+    return head + ("The DAC puts out an image of the signal in every zone: add a bandpass "
+                   "filter for this zone at the RF output to keep this one only.")
 
 
 def ticks_per_sample(tick_rate: float, rate: float) -> int:
@@ -241,6 +279,7 @@ class Backend(ABC):
     num_channels: int = 1         # N: channels in the loaded build (§9)
     adc_rate: float = 2.5e9
     dac_rate: float = 2.5e9
+    rf_max_hz: float = RF_MAX_HZ  # top of the tuning range (HwBackend: the board's)
     rx_decim: int = 2
     tx_interp: int = 2
     data_width: int = 8           # RFDC Data_Width (HwBackend: the build's)
@@ -387,15 +426,17 @@ class Backend(ABC):
         return self.samp_rate
 
     # -- tuning / gain -----------------------------------------------------
-    # Tuning is limited to the first Nyquist zone, 0 .. fs/2 of the raw
-    # converter rate (a design choice): the fine-mixer NCO runs
-    # within +-fs/2, and zones 2+ (undersampling, mirrored spectrum, the DAC's
-    # sinc roll-off) are not offered. A request outside is clamped.
+    # Tuning covers 0 .. rf_max_hz, the converters' analog bandwidth, whatever
+    # the loaded build's fs; a request outside is clamped. Beyond the first
+    # Nyquist zone (0 .. fs/2) the NCO is the carrier folded into +-fs/2
+    # (nyquist_plan): under-sampling on RX, an image of the DAC on TX. Both
+    # need a bandpass filter for the zone on the RF port, which the daemon and
+    # the host say when a channel is tuned there (zone_warning).
     def rx_freq_range(self, ch: int) -> Tuple[float, float]:
-        return (0.0, self.adc_rate / 2.0)
+        return (0.0, self.rf_max_hz)
 
     def tx_freq_range(self, ch: int) -> Tuple[float, float]:
-        return (0.0, self.dac_rate / 2.0)
+        return (0.0, self.rf_max_hz)
 
     def rx_gain_range(self, ch: int) -> Tuple[float, float, float]:
         return (-DSA_MAX_DB, 0.0, DSA_STEP_DB)
@@ -426,7 +467,7 @@ class Backend(ABC):
     # channel, the fine NCO, so the daemon keeps the two parts and programs
     # the NCO to the frequency they make together, with UHD's signs:
     #   RX: centre = rf - dsp      TX: centre = rf + dsp
-    # The centre stays in the first Nyquist zone (0 .. fs/2, clamped) and on
+    # The centre stays in the tuning range (0 .. rf_max_hz, clamped) and on
     # the NCO's 48-bit grid; the DSP offset reported back is whatever makes
     # rf -/+ dsp equal the centre actually programmed. get_*_freq returns rf,
     # get_*_dsp_freq the offset; with no offset rf IS the NCO frequency.
@@ -454,7 +495,7 @@ class Backend(ABC):
         half = self.samp_rate / 2.0
         dsp = min(half, max(-half, float(dsp)))
         centre = rf - dsp if kind == "rx" else rf + dsp
-        centre = min(hi, coerce_nco(min(hi, max(lo, centre)), fs))
+        centre = coerce_nco(min(hi, max(lo, centre)), fs, hi)
         if dsp == 0.0:
             return centre, 0.0, centre        # rf IS the NCO frequency
         dsp = rf - centre if kind == "rx" else centre - rf

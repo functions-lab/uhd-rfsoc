@@ -390,6 +390,11 @@ private:
         std::string ant;
     };
     std::vector<fe_cache> _rx_fe, _tx_fe;
+    //! the Nyquist zone each converter channel was last seen in (Protocol
+    //! §3): a channel that enters a zone beyond the first is warned about
+    std::vector<int> _rx_zone, _tx_zone;
+    void _note_zone(bool rx, size_t p);
+    void _note_zones();
     //! subdev spec: multi_usrp channel i (= stream channel i, DSP i) is the
     //! converter channel map[i] (frontend A:map[i]); identity by default
     std::vector<size_t> _rx_map, _tx_map;
@@ -839,6 +844,8 @@ void rfsoc_device::_build_tree(const device_addr_t& info)
 
     _rx_fe.resize(_st->num_rx);
     _tx_fe.resize(_st->num_tx);
+    _rx_zone.assign(_st->num_rx, 1);
+    _tx_zone.assign(_st->num_tx, 1);
     for (size_t ch = 0; ch < _st->num_rx; ch++)
         _rx_map.push_back(ch);
     for (size_t ch = 0; ch < _st->num_tx; ch++)
@@ -903,6 +910,42 @@ void rfsoc_device::_build_tree(const device_addr_t& info)
     _build_bf();
 }
 
+// Protocol §3: a carrier beyond the first Nyquist zone (0 .. fs/2) is tuned
+// like any other, but the converter cannot tell the zones apart -- that is
+// the job of a bandpass filter on the RF port. Said once per channel and zone.
+void rfsoc_device::_note_zone(bool rx, size_t p)
+{
+    auto& last = rx ? _rx_zone : _tx_zone;
+    if (p >= last.size())
+        return;
+    const fe_cache& fc = rx ? _rx_fe[p] : _tx_fe[p];
+    const double f     = rx ? fc.freq - fc.dsp : fc.freq + fc.dsp; // the NCO centre (§3b)
+    const int zone     = _st->nyquist_zone(rx, f);
+    if (zone == last[p])
+        return;
+    last[p] = zone;
+    if (zone < 2)
+        return;
+    const double half = (rx ? _st->adc_rate.load() : _st->dac_rate.load()) / 2e6;
+    ZLOG_WARN((rx ? "RX" : "TX")
+              << " channel " << p << ": " << f / 1e6 << " MHz is in Nyquist zone " << zone << " ("
+              << (zone - 1) * half << " .. " << zone * half << " MHz) of the " << 2 * half
+              << " MS/s " << (rx ? "ADC" : "DAC") << ", beyond zone 1 (0 .. " << half << " MHz). "
+              << (rx ? "The ADC folds every zone onto the same samples: add a bandpass filter "
+                       "for this zone at the RF input, or the signals and noise of the other "
+                       "zones land on the channel."
+                     : "The DAC puts out an image of the signal in every zone: add a bandpass "
+                       "filter for this zone at the RF output to keep this one only."));
+}
+
+void rfsoc_device::_note_zones()
+{
+    for (size_t p = 0; p < _rx_zone.size(); p++)
+        _note_zone(true, p);
+    for (size_t p = 0; p < _tx_zone.size(); p++)
+        _note_zone(false, p);
+}
+
 std::string rfsoc_device::_at()
 {
     std::lock_guard<std::mutex> l(_cmd_mutex);
@@ -955,13 +998,18 @@ void rfsoc_device::_build_chan(bool rx, size_t ch)
             throw uhd::runtime_error("rfsoc: empty reply to " + line);
         fc.freq = parse_double(t[0], "tuned rf");
         fc.dsp  = t.size() > 1 ? parse_double(t[1], "tuned dsp") : 0.0;
+        _note_zone(rx, p);
     };
 
     // ---- DSP: sample rate, and the DSP part of a tune request (+-rate/2)
     const meta_range_t rates = rates_range(ctrl->call_tokens("get_" + dir + "_rates " + c));
     _tree->create<meta_range_t>(dsp / "rate/range").set(rates);
     _tree->create<double>(dsp / "rate/value")
-        .set_coercer([st, rx, ch](double r) { return st->set_rate(rx, ch, r); })
+        .set_coercer([this, st, rx, ch](double r) {
+            const double actual = st->set_rate(rx, ch, r);
+            _note_zones(); // a build of another fs (§8a) moves the zone edges
+            return actual;
+        })
         .set_publisher([&rate_cache] { return rate_cache.load(); });
     _tree->create<meta_range_t>(dsp / "freq/range").set_publisher([&rate_cache] {
         const double r = rate_cache.load();
@@ -1017,9 +1065,9 @@ void rfsoc_device::_build_chan(bool rx, size_t ch)
     _tree->create<bool>(fe / "use_lo_offset").set(false);
     _tree->create<bool>(fe / "enabled").set(true);
 
-    // 0 .. fs/2 of the loaded build, re-read by set_rate() (a rate of the
-    // other clock family changes fs, Protocol §8a); UHD's tune helper clips
-    // the RF part to it
+    // 0 .. the converters' analog bandwidth (Protocol §3), whatever the
+    // loaded build's fs; UHD's tune helper clips the RF part to it. Beyond
+    // the first Nyquist zone, 0 .. fs/2, a tune warns (_note_zone)
     if (ch == 0)
         _st->refresh_freq_ranges();
     auto& fstart = rx ? _st->rx_freq_start : _st->tx_freq_start;
@@ -1032,6 +1080,7 @@ void rfsoc_device::_build_chan(bool rx, size_t ch)
     } catch (const uhd::runtime_error&) {
         cache.dsp = 0.0; // a daemon from before §3b
     }
+    _note_zone(rx, ch); // a carrier the daemon kept from an earlier session
     auto set_rf = [tune, ch, &cache](double f) {
         tune(ch, f, cache.dsp);
         return cache.freq;

@@ -19,7 +19,7 @@ short version for people; this file is the reference for the code.
   (`board_config.py`), the management address from each incoming request.
 - `hw_backend.py` names no board: everything board-specific (bitstream
   prefix, channel map, dual-ADC slice numbering, unpowered tiles, MTS tiles,
-  GT refclk source, default build, clock limits) is a `Board` in
+  GT refclk source, default build, clock limits, tuning range) is a `Board` in
   `boards.py`, plain data, passed on to `rfsoc_lib` as arguments. A new
   board is a new entry there (with its case in `tests/test_boards.py`).
 - Tests: `python3 -m unittest discover -s tests` must pass without a board
@@ -132,11 +132,15 @@ can carry in the client's formats is refused before anything is reloaded.
 
 ## Choices made where the Protocol is silent
 
-* `set_rx_freq`: NCO = `-(f mod fs)` (rfsoc_lib's real -> I/Q convention),
-  Nyquist zone parity from f vs fs/2, the driver folds and handles the
-  even-zone inversion; the value reported is f on the 48-bit NCO grid; the
-  range is the first Nyquist zone of the loaded build, 0 .. fs/2, a request
-  outside is clamped. After every NCO change the phases of the direction's
+* `set_rx_freq`: NCO = `-g`, g = f folded by multiples of fs into
+  [-fs/2, fs/2] (`backend.nyquist_plan`; the sign is rfsoc_lib's real -> I/Q
+  convention), `set_tx_freq`: NCO = `g`; the block's Nyquist zone parity from
+  f vs fs/2. The fold is the daemon's, so the driver writes the value as it
+  is (its own fold of a frequency beyond +-fs/2 mirrors the even zones,
+  Protocol §3e). The value reported is f on the 48-bit NCO grid; the range
+  is 0 .. `Board.rf_max_hz` (6 GHz), a request outside is clamped; a channel
+  entering a zone beyond the first is logged as a warning
+  (`backend.zone_warning`, `HwBackend._program_nco`). After every NCO change the phases of the direction's
   channels are reset together (§3d; `--nco-phase-reset`).
 * `get_*_lo_locked`: the channel's tile judged like the bring-up readback.
   `ref_locked` = ADC and DAC tile clocks good (the LMK04828 / LMX2594 are

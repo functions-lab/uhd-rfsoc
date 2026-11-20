@@ -72,9 +72,13 @@ Each board offers several channel counts and sample rates ([Sampling rate option
 
 | Board | Converters | Channel counts (`channels=N`) | Max rate per channel | Carrier range |
 |---|---|---|---|---|
-| [**Xilinx RFSoC ZCU216**](https://www.amd.com/en/products/adaptive-socs-and-fpgas/evaluation-boards/zcu216.html) | 16T16R | 1, 2, 4, 8, 16 | 1250 MS/s | 0 .. 1250 MHz |
-| [**Real Digital RFSoC 4x2**](https://www.realdigital.org/hardware/rfsoc-4x2) | 2T4R | 1, 2 | 2500 MS/s | 0 .. 2500 MHz |
+| [**Xilinx RFSoC ZCU216**](https://www.amd.com/en/products/adaptive-socs-and-fpgas/evaluation-boards/zcu216.html) | 16T16R | 1, 2, 4, 8, 16 | 1250 MS/s | 0 .. 6000 MHz (first Nyquist zone 0 .. 1250 MHz) |
+| [**Real Digital RFSoC 4x2**](https://www.realdigital.org/hardware/rfsoc-4x2) | 2T4R | 1, 2 | 2500 MS/s | 0 .. 6000 MHz (first Nyquist zone 0 .. 2500 MHz) |
 | **Other Xilinx RFSoC boards** | Work in progress | | | |
+
+A carrier above the first Nyquist zone (half the converter rate) is tuned
+like any other, and UHD logs a warning: the converter cannot tell the zones
+apart, so put a bandpass filter for the carrier's zone on the RF port.
 
 ## Quick start
 
