@@ -1,0 +1,60 @@
+id: rfsoc_waterfall_view
+label: RFSoC Waterfall View
+category: '[uhd-rfsoc]'
+flags: [ python ]
+
+parameters:
+-   id: nch
+    label: Channels
+    dtype: int
+    default: '1'
+-   id: bins
+    label: Bins per Line
+    dtype: int
+    default: '1024'
+-   id: rows
+    label: History (lines)
+    dtype: int
+    default: '256'
+-   id: floor
+    label: Colour Floor (dB)
+    dtype: real
+    default: '-120'
+-   id: ceil
+    label: Colour Ceiling (dB)
+    dtype: real
+    default: '-50'
+-   id: gui_hint
+    label: GUI Hint
+    dtype: gui_hint
+    hide: part
+
+inputs:
+-   domain: stream
+    dtype: float
+    vlen: ${ bins }
+    multiplicity: ${ nch }
+
+templates:
+    imports: |-
+        from PyQt5 import Qt
+        from rfsoc_waterfall_view import rfsoc_waterfall_view
+    make: |-
+        <%
+            win = 'self._%s_win' % id
+        %>\
+        rfsoc_waterfall_view(nch=${nch}, bins=${bins}, rows=${rows}, floor=${floor}, ceil=${ceil})
+        ${win} = self.${id}.widget()
+        ${gui_hint() % win}
+    callbacks:
+    - set_range(${floor}, ${ceil})
+
+documentation: |-
+    One scrolling waterfall per channel, newest line on top, in one Qt widget (tabs
+    of 4 channels above 4), for the outputs of RFSoC Spectrogram (CUDA).
+    Each axis has three fixed labels: x = offset from the RF centre in MHz
+    (-BW/2, 0, +BW/2), y = time in seconds (0 at the top, -T/2, -T). Call
+    attach(<spectrogram block>) after construction so BW and T follow the rate the
+    board serves and the line rate chosen from it.
+
+file_format: 1

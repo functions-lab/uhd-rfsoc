@@ -1,0 +1,103 @@
+id: rfsoc_spectrogram
+label: RFSoC Spectrogram (CUDA)
+category: '[uhd-rfsoc]'
+
+parameters:
+-   id: dev_args
+    label: Device Args
+    dtype: string
+    default: '"type=rfsoc"'
+    hide: part
+-   id: nch
+    label: Channels
+    dtype: int
+    default: '1'
+-   id: rate
+    label: Sample Rate (per channel)
+    dtype: real
+    default: '125e6'
+-   id: freq
+    label: RF Centre (Hz)
+    dtype: real
+    default: '950e6'
+-   id: gain
+    label: RX Gain (dB)
+    dtype: real
+    default: '0'
+-   id: nfft
+    label: FFT Size
+    dtype: int
+    default: '4096'
+    options: ['256', '512', '1024', '2048', '4096', '8192', '16384', '32768', '65536']
+-   id: overlap
+    label: Frame Overlap (%)
+    dtype: int
+    default: '50'
+    options: ['0', '50', '75']
+-   id: window
+    label: Window
+    dtype: string
+    default: blackmanharris
+    options: [hann, blackmanharris]
+    option_labels: [Hann, Blackman-Harris]
+-   id: bins
+    label: Display Bins (divides FFT size)
+    dtype: int
+    default: '1024'
+-   id: detector
+    label: Detector (0 average, 1 peak hold)
+    dtype: int
+    default: '0'
+-   id: line_rate
+    label: Lines per Second (0 = automatic from the bandwidth)
+    dtype: real
+    default: '0'
+-   id: otw
+    label: Wire Format
+    dtype: string
+    default: sc16
+    options: [sc16, sc12, sc8]
+-   id: sim
+    label: Synthetic Source (0 device, 1 paced, 2 unpaced)
+    dtype: int
+    default: '0'
+    hide: part
+-   id: sim_tone
+    label: Synthetic Tone (Hz)
+    dtype: real
+    default: '10e6'
+    hide: ${ ('none' if int(sim) else 'all') }
+
+outputs:
+-   domain: stream
+    dtype: float
+    vlen: ${ bins }
+    multiplicity: ${ nch }
+
+templates:
+    imports: from rfsoc_spectrogram import rfsoc_spectrogram
+    make: |-
+        rfsoc_spectrogram(dev_args=${dev_args}, nch=${nch}, rate=${rate}, freq=${freq},
+            gain=${gain}, nfft=${nfft}, overlap=${overlap}, window=${window},
+            bins=${bins}, detector=${detector}, line_rate=${line_rate}, otw=${otw},
+            sim=${sim}, sim_tone=${sim_tone})
+    callbacks:
+    - set_center_freq(${freq})
+    - set_gain(${gain})
+    - set_detector(${detector})
+    - set_line_rate(${line_rate})
+
+documentation: |-
+    Gap-free spectrogram of an N-channel uhd-rfsoc stream, computed on the GPU.
+    The samples never pass through GNU Radio: the block reads them from UHD's
+    rx_streamer, runs window / cuFFT / power / average or peak-hold on the GPU
+    and outputs one spectrum line per channel every 1/line_rate s: a vector of
+    `bins` floats, dB relative to a full-scale complex tone, low to high frequency
+    across RF centre +- rate/2. The line rate is chosen from the bandwidth when it
+    is 0 (a line averages 8192 FFT frames, kept to 5-50 lines/s). Connect the
+    outputs to RFSoC Waterfall View for scrolling waterfalls.
+
+    Needs librfsoc_waterfall.so (cmake -S rfsoc_spectrogram -B rfsoc_spectrogram/build)
+    and the directory on PYTHONPATH (host/gnuradio/run_waterfall.sh does both).
+
+file_format: 1

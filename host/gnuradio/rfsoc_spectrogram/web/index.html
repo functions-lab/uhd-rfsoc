@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RFSoC GPU Waterfall</title>
+<style>
+  :root {
+    --bg: #111418; --panel: #1a1f26; --line: #2b323c; --fg: #d8dee6; --dim: #8b96a3;
+    --accent: #f2a33a; --bad: #ff6b5e;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: var(--bg); color: var(--fg);
+    font: 13px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { display: flex; flex-direction: column; padding: 10px 14px 12px; gap: 8px; }
+  #ctl { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px 18px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+  .ctl { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .ctl label { color: var(--dim); white-space: nowrap; min-width: 74px; }
+  .ctl input[type=range] { flex: 1; min-width: 60px; accent-color: var(--accent); }
+  input[type=number], select { background: #0e1115; color: var(--fg); border: 1px solid var(--line);
+    border-radius: 5px; padding: 3px 6px; width: 92px; font: inherit; }
+  select { width: auto; }
+  #status { color: var(--dim); font-variant-numeric: tabular-nums; min-height: 1.4em; }
+  #status.lost b { color: var(--bad); }
+  #tabs { display: flex; gap: 6px; }
+  #tabs button { background: var(--panel); color: var(--fg); border: 1px solid var(--line);
+    border-radius: 6px 6px 0 0; padding: 4px 12px; cursor: pointer; font: inherit; }
+  #tabs button.on { border-color: var(--accent); color: var(--accent); }
+  #plots { flex: 1; min-height: 0; display: grid; gap: 10px; grid-auto-rows: minmax(0, 1fr); }
+  .plot { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+  .ptitle { text-align: center; color: var(--fg); }
+
+  /* one plot: [y labels | image | colour bar] x [RF title, RF labels, image, offset labels, offset title] */
+  .pgrid { flex: 1; min-height: 0; display: grid; grid-template-columns: 58px minmax(0, 1fr) 62px;
+    grid-template-rows: 16px 30px minmax(0, 1fr) 30px 16px; color: var(--dim);
+    font-variant-numeric: tabular-nums; }
+  .ttl { text-align: center; font-size: 12px; }
+  .ytl { grid-area: 3 / 1; }
+  .xtop { grid-area: 2 / 2; } .xbot { grid-area: 4 / 2; } .ylab { grid-area: 3 / 1; }
+  .ttop { grid-area: 1 / 2; } .tbot { grid-area: 5 / 2; }
+  .cw { grid-area: 3 / 2; position: relative; min-height: 0; }
+  .cbar { grid-area: 3 / 3; position: relative; margin-left: 10px; }
+  .xtop, .xbot, .ylab { position: relative; }
+  .lb { position: absolute; white-space: nowrap; }
+  .xbot .lb { top: 9px; transform: translateX(-50%); }
+  .xtop .lb { bottom: 9px; transform: translateX(-50%); }
+  .ylab .lb { right: 8px; transform: translateY(-50%); }
+  .tk { position: absolute; background: var(--dim); }
+  .xbot .tk { top: 0; width: 1px; height: 6px; } .xbot .tk.minor { height: 3px; }
+  .xtop .tk { bottom: 0; width: 1px; height: 6px; } .xtop .tk.minor { height: 3px; }
+  .ylab .tk { right: 0; height: 1px; width: 6px; } .ylab .tk.minor { width: 3px; }
+  .wcv, .gcv { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; }
+  .wcv { background: #000; border: 1px solid var(--line); }
+  .gcv { pointer-events: none; }
+  .cbar canvas { position: absolute; left: 0; top: 0; bottom: 0; width: 12px; height: 100%;
+    border: 1px solid var(--line); }
+  .clab { position: absolute; left: 18px; top: 0; bottom: 0; width: 40px; }
+  .clab span { position: absolute; left: 0; transform: translateY(-50%); white-space: nowrap; }
+  .ytl .t { position: absolute; left: 2px; top: 50%; transform: translateY(-50%) rotate(180deg);
+    writing-mode: vertical-rl; font-size: 12px; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div id="ctl">
+  <div class="ctl"><label for="fnum">RF centre (MHz)</label>
+    <input id="fslider" type="range" min="0" max="2500" step="1">
+    <input id="fnum" type="number" min="0" max="2500" step="0.1"></div>
+  <div class="ctl"><label for="gnum">RX gain (dB)</label>
+    <input id="gslider" type="range" min="-30" max="0" step="0.5">
+    <input id="gnum" type="number" min="-30" max="0" step="0.5"></div>
+  <div class="ctl"><label for="det">Detector</label>
+    <select id="det"><option value="0">Average</option><option value="1">Peak hold</option></select></div>
+  <div class="ctl"><label for="floor">Colour (dB)</label>
+    <input id="floor" type="number" step="5" value="-120" title="floor">
+    <span style="color:var(--dim)">to</span>
+    <input id="ceil" type="number" step="5" value="-50" title="ceiling"></div>
+</div>
+<div id="status">connecting...</div>
+<div id="tabs"></div>
+<div id="plots"></div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+let info, geo, centre, bufs = [], ctxs = [], imgs = [], u32s = [], plots = [], cbs = [], dirty = true, group = 0;
+const STOPS = [[0, 0, 0, 4], [.13, 27, 12, 65], [.25, 74, 12, 107], [.38, 120, 28, 109],
+  [.5, 165, 44, 96], [.63, 207, 68, 70], [.75, 237, 105, 37], [.88, 251, 155, 6],
+  [.95, 247, 209, 61], [1, 252, 255, 164]];       // inferno
+
+function color(t) {
+  t = Math.min(1, Math.max(0, t));
+  let i = 1;
+  while (i < STOPS.length - 1 && STOPS[i][0] < t) i++;
+  const a = STOPS[i - 1], b = STOPS[i], f = (t - a[0]) / (b[0] - a[0]);
+  return [0, 1, 2].map(k => Math.round(a[k + 1] + f * (b[k + 1] - a[k + 1])));
+}
+
+// ---- axes (the same rules as rfsoc_waterfall_view.py) -------------------------------------
+// Ticks are multiples of a 1-2-5 step, one per X_MIN_PX / Y_MIN_PX at most, so they follow the
+// plot size; 0 and both edges are always labelled and a tick that would crowd an edge label is
+// dropped; minor ticks between; units scale to the span.
+const X_MIN_PX = 70, Y_MIN_PX = 40;
+const X_UNITS = [[1e9, 1e9, "GHz"], [1e6, 1e6, "MHz"], [1e3, 1e3, "kHz"], [0, 1, "Hz"]];
+const Y_UNITS = [[7200, 3600, "h"], [120, 60, "min"], [1, 1, "s"], [1e-3, 1e-3, "ms"], [0, 1e-6, "µs"]];
+function autoUnit(span, table) {
+  for (const [lo, size, name] of table) if (span >= lo) return [size, name];
+  return table[table.length - 1].slice(1);
+}
+function niceStep(span, n) {
+  const raw = span / Math.max(n, 1), mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  for (const m of [1, 2, 5, 10]) if (m * mag >= raw * (1 - 1e-9)) return m * mag;
+}
+function makeTicks(lo, hi, px, minPx, zero) {
+  const step = niceStep(hi - lo, px / minPx), near = 0.55 * minPx / px * (hi - lo);
+  const k0 = Math.ceil(lo / step - 1e-9), k1 = Math.floor(hi / step + 1e-9);
+  let inner = [];
+  for (let k = k0; k <= k1; k++) { const v = k * step; if (v >= lo + near && v <= hi - near) inner.push(v); }
+  if (zero && lo < 0 && hi > 0 && !inner.some(v => Math.abs(v) < step * 1e-6)) { inner.push(0); inner.sort((a, b) => a - b); }
+  const major = [[lo, true], ...inner.map(v => [v, false]), [hi, true]];
+  const mant = step / Math.pow(10, Math.floor(Math.log10(step) + 1e-9));
+  const mstep = step / (Math.abs(mant - 2) < 1e-6 ? 4 : 5);
+  const minor = [];
+  for (let k = Math.ceil(lo / mstep - 1e-9), m1 = Math.floor(hi / mstep + 1e-9); k <= m1; k++) {
+    const v = k * mstep;
+    if (v > lo && v < hi && major.every(([m]) => Math.abs(v - m) > mstep * 1e-3)) minor.push(v);
+  }
+  return { major, minor, step };
+}
+const decimals = step => Math.max(0, Math.ceil(-Math.log10(step) - 1e-9));
+function tickLabel(v, step, edge, signed, sig = 4) {
+  if (Math.abs(v) < step * 1e-6) return "0";
+  const t = edge ? String(Number(v.toPrecision(sig))) : v.toFixed(decimals(step));
+  return signed && v > 0 ? "+" + t : t;
+}
+
+function layoutAxes(c) {
+  const el = plots[c], cw = el.querySelector(".cw"), W = cw.clientWidth, H = cw.clientHeight;
+  if (!geo || W < 40 || H < 40) return;
+  const xt = makeTicks(-geo.h, geo.h, W, X_MIN_PX, true), yt = makeTicks(0, geo.t, H, Y_MIN_PX, false);
+  const fx = v => ((v + geo.h) / (2 * geo.h) * 100).toFixed(3) + "%";
+  const fy = v => (v / geo.t * 100).toFixed(3) + "%";
+  const [fs, fn] = autoUnit(Math.abs(centre), X_UNITS), k = geo.xs / fs, astep = xt.step * k;
+  let bot = "", top = "", left = "";
+  xt.minor.forEach(v => { const i = `<i class="tk minor" style="left:${fx(v)}"></i>`; bot += i; top += i; });
+  xt.major.forEach(([v, e]) => {
+    const i = `<i class="tk" style="left:${fx(v)}"></i>`;
+    bot += i + `<span class="lb" style="left:${fx(v)}">${tickLabel(v, xt.step, e, true)}</span>`;
+    top += i + `<span class="lb" style="left:${fx(v)}">${tickLabel(centre / fs + v * k, astep, e, false, 7)}</span>`;
+  });
+  yt.minor.forEach(v => { left += `<i class="tk minor" style="top:${fy(v)}"></i>`; });
+  yt.major.forEach(([v, e]) => {
+    left += `<i class="tk" style="top:${fy(v)}"></i><span class="lb" style="top:${fy(v)}">${tickLabel(-v, yt.step, e, false)}</span>`;
+  });
+  el.querySelector(".xbot").innerHTML = bot;
+  el.querySelector(".xtop").innerHTML = top;
+  el.querySelector(".ylab").innerHTML = left;
+  el.querySelector(".ttop").textContent = `RF frequency (${fn})`;
+  // faint grid lines at the inner major ticks
+  const g = el.querySelector(".gcv"), dpr = window.devicePixelRatio || 1, ctx = g.getContext("2d");
+  g.width = Math.round(W * dpr); g.height = Math.round(H * dpr);
+  ctx.scale(dpr, dpr);
+  ctx.fillStyle = "rgba(255,255,255,0.15)";
+  xt.major.forEach(([v, e]) => { if (!e) ctx.fillRect(Math.round((v + geo.h) / (2 * geo.h) * W), 0, 1, H); });
+  yt.major.forEach(([v, e]) => { if (!e) ctx.fillRect(0, Math.round(v / geo.t * H), W, 1); });
+}
+
+// one-byte value -> packed RGBA for the current colour range
+let lut = new Uint32Array(256);
+function buildLut() {
+  const lo = parseFloat($("floor").value), hi = parseFloat($("ceil").value);
+  for (let q = 0; q < 256; q++) {
+    const db = info.qmin + q / 255 * (info.qmax - info.qmin);
+    const [r, g, b] = color((db - lo) / Math.max(hi - lo, 1e-6));
+    lut[q] = (255 << 24) | (b << 16) | (g << 8) | r;     // little endian ABGR = RGBA bytes
+  }
+  cbs.forEach(cv => {
+    const c = cv.getContext("2d"), im = c.createImageData(1, 256);
+    for (let y = 0; y < 256; y++) {
+      const [r, g, b] = color(1 - y / 255);
+      im.data.set([r, g, b, 255], y * 4);
+    }
+    c.putImageData(im, 0, 0);
+  });
+  document.querySelectorAll(".clab").forEach(el => {
+    let h = "";
+    const t = makeTicks(lo, hi, 300, 36, false);   // dB ticks on the colour bar: edges and nice steps
+    t.major.forEach(([v, e]) => { h += `<span style="top:${((hi - v) / (hi - lo) * 100).toFixed(2)}%">${tickLabel(v, t.step, e, false, 5)}</span>`; });
+    el.innerHTML = h;
+  });
+  dirty = true;
+}
+
+function build() {
+  const n = info.nch, bins = info.bins, rows = info.rows;
+  const T = rows / info.line_rate;
+  const [xs, xn] = autoUnit(info.rate, X_UNITS), [ys, yn] = autoUnit(T, Y_UNITS);
+  geo = { xs, xn, h: info.rate / xs / 2, ys, yn, t: T / ys };
+  centre = info.freq;
+  const root = $("plots");
+  root.style.gridTemplateColumns = n === 1 ? "1fr" : "1fr 1fr";
+  for (let c = 0; c < n; c++) {
+    const el = document.createElement("div");
+    el.className = "plot";
+    el.innerHTML = `<div class="ptitle">ch ${c}</div>
+      <div class="pgrid">
+        <div class="ttl ttop"></div><div class="xtop"></div>
+        <div class="ylab"></div>
+        <div class="ytl"><div class="t">time (${yn})</div></div>
+        <div class="cw"><canvas class="wcv" width="${bins}" height="${rows}"></canvas><canvas class="gcv"></canvas></div>
+        <div class="cbar"><canvas width="1" height="256"></canvas><div class="clab"></div></div>
+        <div class="xbot"></div>
+        <div class="ttl tbot">offset from centre (${xn})</div>
+      </div>`;
+    root.appendChild(el);
+    plots.push(el);
+    const cv = el.querySelector(".wcv"), ctx = cv.getContext("2d");
+    ctxs.push(ctx);
+    imgs.push(ctx.createImageData(bins, rows));
+    u32s.push(new Uint32Array(imgs[c].data.buffer));
+    bufs.push(new Uint8Array(rows * bins));
+    cbs.push(el.querySelector(".cbar canvas"));
+    new ResizeObserver(() => layoutAxes(c)).observe(el.querySelector(".cw"));  // ticks follow the size
+  }
+  if (n > 4) {
+    const tabs = $("tabs");
+    for (let g = 0; g * 4 < n; g++) {
+      const b = document.createElement("button");
+      b.textContent = `ch ${g * 4}-${Math.min(g * 4 + 3, n - 1)}`;
+      b.onclick = () => { group = g; showGroup(); };
+      tabs.appendChild(b);
+    }
+    showGroup();
+  }
+}
+function showGroup() {
+  const n = info.nch;
+  if (n <= 4) return;
+  plots.forEach((el, c) => { el.style.display = Math.floor(c / 4) === group ? "" : "none"; });
+  [...$("tabs").children].forEach((b, g) => b.classList.toggle("on", g === group));
+  dirty = true;
+}
+
+// newest line at row 0: shift the history down one row, put the line on top
+function pushLine(bytes) {
+  const bins = info.bins, rows = info.rows;
+  for (let c = 0; c < info.nch; c++) {
+    const b = bufs[c];
+    b.copyWithin(bins, 0, (rows - 1) * bins);
+    b.set(bytes.subarray(c * bins, (c + 1) * bins), 0);
+  }
+  dirty = true;
+}
+function setHistory(bytes) {   // n lines, oldest first
+  const w = info.nch * info.bins, n = Math.min(bytes.length / w, info.rows);
+  bufs.forEach(b => b.fill(0));
+  for (let k = 0; k < n; k++) {
+    const row = n - 1 - k;
+    for (let c = 0; c < info.nch; c++)
+      bufs[c].set(bytes.subarray(k * w + c * info.bins, k * w + (c + 1) * info.bins), row * info.bins);
+  }
+  dirty = true;
+}
+const b64 = s => Uint8Array.from(atob(s), ch => ch.charCodeAt(0));
+
+function frame() {
+  if (dirty) {
+    dirty = false;
+    for (let c = 0; c < info.nch; c++) {
+      if (info.nch > 4 && Math.floor(c / 4) !== group) continue;   // hidden tab: history only
+      const b = bufs[c], u = u32s[c];
+      for (let i = 0; i < b.length; i++) u[i] = lut[b[i]];
+      ctxs[c].putImageData(imgs[c], 0, 0);
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+function post(d) {
+  return fetch("/api/control", { method: "POST", body: JSON.stringify(d) }).then(r => r.json());
+}
+function debounce(f, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => f(...a), ms); }; }
+function setCentre(hz) {      // the top axis follows the RF centre
+  if (hz !== centre) { centre = hz; plots.forEach((_, c) => layoutAxes(c)); }
+}
+
+function wire() {
+  const setF = debounce(mhz => post({ freq: mhz * 1e6 }).then(r => {
+    if (r.freq !== undefined) { $("fnum").value = (r.freq / 1e6).toFixed(3); $("fslider").value = r.freq / 1e6; setCentre(r.freq); }
+  }), 150);
+  $("fslider").oninput = e => { $("fnum").value = e.target.value; setF(+e.target.value); };
+  $("fnum").onchange = e => { $("fslider").value = e.target.value; setF(+e.target.value); };
+  const setG = debounce(db => post({ gain: db }), 150);
+  $("gslider").oninput = e => { $("gnum").value = e.target.value; setG(+e.target.value); };
+  $("gnum").onchange = e => { $("gslider").value = e.target.value; setG(+e.target.value); };
+  $("det").onchange = e => post({ detector: +e.target.value });
+  $("floor").oninput = buildLut;
+  $("ceil").oninput = buildLut;
+  $("fnum").value = (info.freq / 1e6).toFixed(3); $("fslider").value = info.freq / 1e6;
+  $("gnum").value = info.gain; $("gslider").value = info.gain;
+  $("det").value = info.detector;
+}
+
+function connect() {
+  const es = new EventSource("/api/stream");
+  let session = null;   // the server restarted (another channel count, rate...): load the page again
+  es.addEventListener("hello", e => { if (session && session !== e.data) location.reload(); session = e.data; });
+  es.addEventListener("history", e => setHistory(b64(e.data)));
+  es.addEventListener("line", e => pushLine(b64(e.data)));
+  es.addEventListener("status", e => {
+    const s = JSON.parse(e.data), st = $("status");
+    setCentre(s.freq);
+    st.className = s.lost ? "lost" : "";
+    st.innerHTML = `centre ${(s.freq / 1e6).toFixed(3)} MHz | ${(s.rate / 1e6).toFixed(3)} MS/s x ${info.nch} ch | ` +
+      `${s.line_rate.toFixed(1)} lines/s, ${s.history_s.toFixed(1)} s of history | GPU ${s.gpu_pct.toFixed(0)}% of real time | ` +
+      `UHD overflows ${s.overflows} | dropped batches ${s.dropped}` +
+      (s.lost ? " <b>(samples lost in the last 10 s)</b>" : "") + (s.error ? ` | <b>${s.error}</b>` : "");
+  });
+  es.onerror = () => { $("status").textContent = "connection lost, retrying..."; };
+}
+
+fetch("/api/info").then(r => r.json()).then(i => {
+  info = i;
+  document.title = `RFSoC GPU Waterfall - ${info.nch} ch`;
+  build(); wire(); buildLut(); connect(); requestAnimationFrame(frame);
+  plots.forEach((_, c) => layoutAxes(c));
+});
+</script>
+</body>
+</html>

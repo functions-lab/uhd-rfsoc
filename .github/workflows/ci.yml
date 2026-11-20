@@ -93,5 +93,7 @@ jobs:
       - name: Every flowgraph compiles
         run: |
           mkdir -p out
+          # waterfall_*ch.grc use the custom block in rfsoc_spectrogram/
+          export GRC_BLOCKS_PATH=$PWD/host/gnuradio/rfsoc_spectrogram
           for g in host/gnuradio/grc/*.grc; do echo "$g"; grcc -o out "$g"; done
           python3 -m py_compile out/*.py

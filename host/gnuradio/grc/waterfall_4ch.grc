@@ -1,0 +1,490 @@
+options:
+  parameters:
+    author: ''
+    catch_exceptions: 'True'
+    category: '[GRC Hier Blocks]'
+    cmake_opt: ''
+    comment: ''
+    copyright: ''
+    description: 4-channel gap-free GPU waterfall (CUDA), any board with 4-channel builds
+    gen_cmake: 'On'
+    gen_linking: dynamic
+    generate_options: qt_gui
+    hier_block_src_path: '.:'
+    id: waterfall_4ch
+    max_nouts: '0'
+    output_language: python
+    placement: (0,0)
+    qt_qss_theme: ''
+    realtime_scheduling: ''
+    run: 'True'
+    run_command: /bin/bash -c 'exec pkexec env DISPLAY="$DISPLAY" XAUTHORITY="$XAUTHORITY" PYTHONPATH="$RFSOC_SPECTROGRAM_DIR"
+      /usr/local/bin/uhd-rfsoc "$0" -u "$1"' {python} {filename}
+    run_options: prompt
+    sizing_mode: fixed
+    thread_safe_setters: ''
+    title: 4ch GPU waterfall (CUDA cuFFT, gap-free)
+    window_size: (1500,1000)
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate:
+    - 8
+    - 8
+    rotation: 0
+    state: enabled
+blocks:
+- name: addr
+  id: parameter
+  parameters:
+    alias: ''
+    comment: ''
+    hide: none
+    label: 'board address (empty: discover)'
+    short_id: ''
+    type: str
+    value: ''
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    rotation: 0
+    state: enabled
+    coordinate:
+    - 200
+    - 8
+- name: samp_rate
+  id: parameter
+  parameters:
+    alias: ''
+    comment: ''
+    hide: none
+    label: per-channel sample rate (S/s; the daemon serves the highest at or below it)
+    short_id: r
+    type: eng_float
+    value: '625000000.0'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    rotation: 0
+    state: enabled
+    coordinate:
+    - 8
+    - 96
+- name: freq
+  id: parameter
+  parameters:
+    alias: ''
+    comment: ''
+    hide: none
+    label: RF centre (Hz)
+    short_id: f
+    type: eng_float
+    value: '9.5e+08'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    rotation: 0
+    state: enabled
+    coordinate:
+    - 360
+    - 8
+- name: nfft
+  id: parameter
+  parameters:
+    alias: ''
+    comment: ''
+    hide: none
+    label: FFT size
+    short_id: n
+    type: intx
+    value: '4096'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    rotation: 0
+    state: enabled
+    coordinate:
+    - 8
+    - 184
+- name: overlap
+  id: parameter
+  parameters:
+    alias: ''
+    comment: ''
+    hide: none
+    label: frame overlap in % (0, 50, 75)
+    short_id: ''
+    type: intx
+    value: '50'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    rotation: 0
+    state: enabled
+    coordinate:
+    - 200
+    - 184
+- name: bins
+  id: parameter
+  parameters:
+    alias: ''
+    comment: ''
+    hide: none
+    label: display bins per line (divides the FFT size)
+    short_id: b
+    type: intx
+    value: '1024'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    rotation: 0
+    state: enabled
+    coordinate:
+    - 392
+    - 184
+- name: otw
+  id: parameter
+  parameters:
+    alias: ''
+    comment: ''
+    hide: none
+    label: wire format (sc16, sc12, sc8; the narrow ones reach higher rates)
+    short_id: ''
+    type: str
+    value: sc16
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    rotation: 0
+    state: enabled
+    coordinate:
+    - 584
+    - 184
+- name: extra
+  id: parameter
+  parameters:
+    alias: ''
+    comment: ''
+    hide: none
+    label: extra UHD device args, e.g. app_cpus=1-4 (CPUs for the GUI and capture threads)
+    short_id: ''
+    type: str
+    value: ''
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    rotation: 0
+    state: enabled
+    coordinate:
+    - 968
+    - 184
+- name: sim
+  id: parameter
+  parameters:
+    alias: ''
+    comment: ''
+    hide: none
+    label: '1: synthetic source instead of the board (no hardware)'
+    short_id: ''
+    type: intx
+    value: '0'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    rotation: 0
+    state: enabled
+    coordinate:
+    - 776
+    - 184
+- name: nchan
+  id: variable
+  parameters:
+    comment: ''
+    value: '4'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    rotation: 0
+    state: enabled
+    coordinate:
+    - 176
+    - 96
+- name: rows
+  id: variable
+  parameters:
+    comment: ''
+    value: '256'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    rotation: 0
+    state: enabled
+    coordinate:
+    - 344
+    - 96
+- name: dev_args
+  id: variable
+  parameters:
+    comment: ''
+    value: '"type=rfsoc" + (",addr=" + addr if addr else "") + (",otw=" + otw if otw != "sc16" else "")
+      + ("," + extra if extra else "")'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    rotation: 0
+    state: enabled
+    coordinate:
+    - 512
+    - 96
+- name: rf_freq
+  id: variable_qtgui_range
+  parameters:
+    comment: ''
+    gui_hint: 0, 0, 1, 4
+    label: RF centre (Hz)
+    min_len: '200'
+    orient: QtCore.Qt.Horizontal
+    rangeType: float
+    start: '0'
+    step: 1e6
+    stop: 2.5e9
+    value: freq
+    widget: counter_slider
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    rotation: 0
+    state: enabled
+    coordinate:
+    - 8
+    - 260
+- name: rx_gain
+  id: variable_qtgui_range
+  parameters:
+    comment: ''
+    gui_hint: 1, 0, 1, 4
+    label: RX gain (dB)
+    min_len: '100'
+    orient: QtCore.Qt.Horizontal
+    rangeType: float
+    start: '-30'
+    step: '0.5'
+    stop: '0'
+    value: '0'
+    widget: counter_slider
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    rotation: 0
+    state: enabled
+    coordinate:
+    - 8
+    - 340
+- name: detector
+  id: variable_qtgui_chooser
+  parameters:
+    comment: ''
+    gui_hint: 2, 0, 1, 1
+    label: detector
+    num_opts: '0'
+    option0: '0'
+    option1: '1'
+    option2: '2'
+    option3: '3'
+    option4: '4'
+    label0: ''
+    label1: ''
+    label2: ''
+    label3: ''
+    label4: ''
+    options: '[0, 1]'
+    labels: '[''Average'', ''Peak hold'']'
+    orient: QtCore.Qt.Horizontal
+    type: int
+    value: '0'
+    widget: combo_box
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    rotation: 0
+    state: enabled
+    coordinate:
+    - 8
+    - 420
+- name: wf
+  id: rfsoc_spectrogram
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: 'GPU spectrogram: samples go from UHD to the GPU, not through GNU Radio'
+    dev_args: dev_args
+    nch: nchan
+    rate: samp_rate
+    freq: rf_freq
+    gain: rx_gain
+    nfft: nfft
+    overlap: overlap
+    window: blackmanharris
+    bins: bins
+    detector: detector
+    line_rate: '0'
+    otw: otw
+    sim: sim
+    sim_tone: 10e6
+    maxoutbuf: '0'
+    minoutbuf: '0'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    rotation: 0
+    state: enabled
+    coordinate:
+    - 360
+    - 300
+- name: wv
+  id: rfsoc_waterfall_view
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    nch: nchan
+    bins: bins
+    rows: rows
+    floor: '-120'
+    ceil: '-50'
+    gui_hint: 4, 0, 1, 4
+    maxoutbuf: '0'
+    minoutbuf: '0'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    rotation: 0
+    state: enabled
+    coordinate:
+    - 700
+    - 300
+- name: ui
+  id: snippet
+  parameters:
+    alias: ''
+    code: |
+      import os
+      from PyQt5 import Qt as _Qt
+      # bandwidth and line rate come from the source, the RF centre follows it: the axes get their ticks from them
+      self.wv.attach(self.wf)
+      self.wv.set_centre(self.wf.center_freq)
+      # colour range of every waterfall: two spin boxes, dB relative to a full-scale tone
+      _box = _Qt.QWidget()
+      _lay = _Qt.QHBoxLayout(_box)
+      _lay.setContentsMargins(0, 0, 0, 0)
+      _spins = []
+      for _txt, _v in (("floor (dB)", -120.0), ("ceiling (dB)", -50.0)):
+          _lay.addWidget(_Qt.QLabel(_txt))
+          _s = _Qt.QDoubleSpinBox()
+          _s.setRange(-200.0, 20.0)
+          _s.setSingleStep(5.0)
+          _s.setValue(_v)
+          _lay.addWidget(_s)
+          _spins.append(_s)
+      def _range(_=None, tb=self):
+          tb.wv.set_range(_spins[0].value(), _spins[1].value())
+      for _s in _spins:
+          _s.valueChanged.connect(_range)
+      _range()
+      self.top_grid_layout.addWidget(_box, 2, 1, 1, 3)
+      # status line: what the GPU pipeline is doing
+      _lbl = _Qt.QLabel()
+      self.top_grid_layout.addWidget(_lbl, 3, 0, 1, 4)
+      import time
+      _seen = [0, 0, 0.0]  # overflows, dropped batches, time of the last loss
+      def _status(tb=self):
+          s = tb.wf.sg.stats()
+          tb.wv.set_centre(s.center_freq)  # the top axis follows a retune
+          if s.overflows > _seen[0] or s.batches_dropped > _seen[1]:
+              _seen[2] = time.time()
+          _seen[0], _seen[1] = s.overflows, s.batches_dropped
+          lost = time.time() - _seen[2] < 10.0
+          _lbl.setText("centre %.3f MHz | %.3f MS/s x 4 ch | %.1f lines/s, %.1f s of history | GPU %.0f%% of "
+                       "real time | UHD overflows %d | dropped batches %d%s"
+                       % (s.center_freq / 1e6, s.rate / 1e6, tb.wf.get_line_rate(), tb.rows / tb.wf.get_line_rate(),
+                          100 * s.gpu_ms_per_batch / max(s.batch_ms, 1e-9), s.overflows, s.batches_dropped,
+                          "  (samples lost in the last 10 s)" if lost else ""))
+      _t = _Qt.QTimer(self)
+      _t.timeout.connect(_status)
+      _t.start(500)
+      # the waterfall takes the room the controls leave
+      for _r in range(4):
+          self.top_grid_layout.setRowStretch(_r, 0)
+      self.top_grid_layout.setRowStretch(4, 1)
+      # UHD_RFSOC_GR_SNAPSHOT=<png>: save the window after UHD_RFSOC_GR_SNAPSHOT_S (default 8) s and quit
+      _snap = os.environ.get("UHD_RFSOC_GR_SNAPSHOT")
+      if not _snap:
+          # fit the window to the screen: after show() and after GNU Radio has restored the
+          # geometry it saved on the last run, which would otherwise win
+          def _fit(tb=self):
+              _g = _Qt.QApplication.primaryScreen().availableGeometry()
+              tb.showNormal()
+              tb.setGeometry(_g.x() + _g.width() // 20, _g.y() + _g.height() // 20,
+                             _g.width() * 9 // 10, _g.height() * 9 // 10)
+          _Qt.QTimer.singleShot(300, _fit)
+          _Qt.QTimer.singleShot(1200, _fit)
+      if _snap:
+          self.resize(1500, 1000)
+          def _shot(tb=self):
+              _status()
+              tb.grab().save(_snap)
+              _st = tb.wf.sg.stats()
+              print("snapshot %s: %d lines, UHD overflows %d, dropped batches %d, GPU %.0f%%"
+                    % (_snap, _st.lines, _st.overflows, _st.batches_dropped,
+                       100 * _st.gpu_ms_per_batch / max(_st.batch_ms, 1e-9)), flush=True)
+              tb.close()
+          _Qt.QTimer.singleShot(int(1000 * float(os.environ.get("UHD_RFSOC_GR_SNAPSHOT_S", "8"))), _shot)
+    comment: ''
+    priority: '0'
+    section: main_after_init
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    rotation: 0
+    state: enabled
+    coordinate:
+    - 700
+    - 8
+connections:
+- - wf
+  - '0'
+  - wv
+  - '0'
+- - wf
+  - '1'
+  - wv
+  - '1'
+- - wf
+  - '2'
+  - wv
+  - '2'
+- - wf
+  - '3'
+  - wv
+  - '3'
+metadata:
+  file_format: 1

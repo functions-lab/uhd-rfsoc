@@ -1,6 +1,7 @@
 # build output
 fpga/build/
 host/build*/
+host/gnuradio/rfsoc_spectrogram/build/
 fpga/ip/src/uhd_ip/sim/xsim*/
 .Xil/
 *.jou
