@@ -1,17 +1,20 @@
-# cmac_100g — 100 GbE MAC for the ZCU216 zSFP28 cages and the RFSoC 4x2 QSFP28
+# cmac_100g — the 100 GbE MAC
 
-RTL wrapper around the Xilinx CMAC (`cmac_usplus`, CAUI-4, RS-FEC) and a GTY
-wizard: on the ZCU216 split across quads 128/129 to reach the four zSFP28
-cages (`CMAC_LANES zsfp`, default), on the RFSoC 4x2 the QSFP28 on quad 128
-(`CMAC_LANES qsfp128`). Used by the `zcu216_v49_<N>ch_qsfp` and
-`rfsoc4x2_v49_<N>ch_qsfp` designs in the RTL top, not in the block design.
+An RTL wrapper around the Xilinx 100G MAC (`cmac_usplus`, CAUI-4, RS-FEC)
+and its GTY transceivers. Every `<board>_v49_<N>ch_qsfp` design uses it, in
+the generated RTL top rather than in the block design.
 
-- `cmac_100g.v` — top: CMAC + GT + clocking; ctl/status words and refclk/user-clock
-  frequency counters (bits documented in the header).
-- `create_cmac_ip.tcl` — creates the CMAC and GT wizard IP in the current
-  project and adds the RTL; `CMAC_REFCLK` picks `refclk_156.25/` (default, the
-  8A34001-driven clock) or `refclk_161.1328125/`.
-- `cmac_caui4_*.v` — the wizard's support wrappers, retargeted to the board's GT sites.
+| board | port | lanes | `CMAC_LANES` |
+|---|---|---|---|
+| ZCU216 | the four zSFP28 cages | quads 128 and 129 | `zsfp` (default) |
+| RFSoC 4x2 | the QSFP28 | quad 128 | `qsfp128` |
 
-Each board's `fpga/flow/build.tcl` sources
-`create_cmac_ip.tcl`; nothing here is built on its own.
+| file | what |
+|---|---|
+| `cmac_100g.v` | the top: MAC, transceivers, clocking, control / status words, clock frequency counters (bits documented in its header) |
+| `create_cmac_ip.tcl` | creates the MAC and transceiver IP in the current project and adds the RTL |
+| `cmac_caui4_*.v` | the transceiver wizard's support wrappers, retargeted to the board's GT sites |
+| `refclk_156.25/`, `refclk_161.1328125/` | the variants per reference clock: `CMAC_REFCLK` picks one (default 156.25 MHz) |
+
+Nothing here is built on its own: `fpga/flow/build.tcl` sources
+`create_cmac_ip.tcl` for every build.

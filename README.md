@@ -1,156 +1,194 @@
-# uhd-rfsoc
+<h1 align="center">uhd-rfsoc</h1>
 
-AMD RFSoC boards as UHD devices over 100 GbE. Stock UHD 4.6 applications
-(`uhd_usrp_probe`, `rx_samples_to_file`, `benchmark_rate`, GNU Radio, Python
-`uhd`) see the board as device `type=rfsoc`: up to 16 RF channels in one
-stream, 2.5 GS/s aggregate in sc16 (5.0 GS/s in sc8), TX and RX beamforming,
-full-rate TX and RX at once. The sample rate (= bandwidth) is whatever the
-application asks for through UHD (`set_rx_rate`, `--rate`); the board
-retunes or reloads itself to serve it.
+<p align="center">
+  <a href="https://github.com/functions-lab/uhd-rfsoc/actions/workflows/ci.yml"><img src="https://github.com/functions-lab/uhd-rfsoc/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://arxiv.org/abs/2611.17723"><img src="https://img.shields.io/badge/arXiv-2611.17723-b31b1b?logo=arxiv&logoColor=white" alt="arXiv: 2611.17723"></a>
+  <a href="https://github.com/functions-lab/uhd-rfsoc/releases/latest"><img src="https://img.shields.io/github/v/release/functions-lab/uhd-rfsoc?label=Release&color=2f4f4f" alt="Latest release"></a>
+  <a href="https://github.com/functions-lab/uhd-rfsoc-bitstream/releases"><img src="https://img.shields.io/badge/Bitstreams-prebuilt-e67e22" alt="Prebuilt bitstreams"></a>
+  <a href="QUICK_START.md"><img src="https://img.shields.io/badge/UHD-4.6-1f6feb" alt="UHD 4.6"></a>
+  <a href="QUICK_START.md"><img src="https://img.shields.io/badge/PYNQ-2.7%20%7C%203.0%20%7C%203.1-8250df" alt="PYNQ 2.7, 3.0, 3.1"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0--or--later-b8a133" alt="License: GPL-3.0-or-later"></a>
+</p>
 
-[![CI](https://github.com/WeiCheng14159/uhd-rfsoc/actions/workflows/ci.yml/badge.svg)](https://github.com/WeiCheng14159/uhd-rfsoc/actions/workflows/ci.yml)
+<p align="center">Unleash the full capability of your RFSoC: uhd-rfsoc is an RFSoC driver for UHD, so your board is a standard UHD device.<br>
+<b>Every ecosystem built around UHD (GNU Radio, OCUDU, Duranta and more) works out of the box.</b></p>
 
-## Boards
+<p align="center"><img src="docs/img/uhd-rfsoc-demo.gif" alt="uhd-rfsoc demo on a ZCU216: uhd_find_devices, uhd_usrp_probe, then benchmark_rate on 4 TX and 4 RX channels at 625 MS/s each" width="100%"></p>
 
-| board | channels | converter rate fs (MS/s) | per-channel rate (MS/s) | carrier |
+<p align="center"><b>Standard UHD tools on a ZCU216:</b> 4 TX and 4 RX channels at 625 MS/s each in sc16, 80 Gb/s each way for 10 s, with no drops, overruns or underruns.<br><a href="QUICK_START.md"><b>▶ Set up your own board in four steps</b></a><br><a href="https://arxiv.org/abs/2611.17723"><b>▶ Read the paper</b></a></p>
+
+## News
+
+- 🔥 **2026-11-14**: [uhd-rfsoc v1.0](https://github.com/functions-lab/uhd-rfsoc/releases/tag/v1.0) is released, with [prebuilt bitstreams](https://github.com/functions-lab/uhd-rfsoc-bitstream/releases/tag/v1.0) for every supported board.
+- **2026-11-13**: the paper, [uhd-rfsoc: Bringing Off-the-Shelf RFSoC Boards to Unmodified UHD Applications](https://arxiv.org/abs/2611.17723), is on arXiv.
+
+## Architecture
+
+The board's FPGA streams I/Q samples to the host over a 100 GbE link, a daemon on the board takes control commands over the 1 GbE LAN, and a UHD device module on the host makes the two look like one USRP.
+
+<p align="center"><img src="docs/img/overview.png" alt="uhd-rfsoc architecture: the RFSoC board (PS daemon, FPGA fabric) and the host PC (UHD device module), joined by a 1 GbE control link and a 100 GbE data link" width="100%"></p>
+
+## Features
+
+<table>
+<tr><th>Feature</th><th>Description</th></tr>
+<tr>
+<td><b>Standard UHD device</b></td>
+<td><b>No application changes.</b> The board is a device of <code>type=rfsoc</code>: <code>uhd_find_devices</code>, <code>uhd_usrp_probe</code>, <code>benchmark_rate</code>, the UHD blocks of GNU Radio and the Python <code>uhd</code> bindings run unmodified.</td>
+</tr>
+<tr>
+<td><b>100 GbE data plane</b></td>
+<td><b>Wideband streaming without drops.</b> Samples travel as VITA-49-style UDP packets over a 100 GbE link, with DPDK kernel bypass on the host. The demo above carries 80 Gb/s each way.</td>
+</tr>
+<tr>
+<td><b>Run-time sample rate</b></td>
+<td><b>The application chooses the bandwidth.</b> A standard UHD rate request sets the rate per channel, from 60 MS/s to 2500 MS/s, with the LTE / 5G NR rates among them. The board retunes itself.</td>
+</tr>
+<tr>
+<td><b>Multi-channel</b></td>
+<td><b>1 to 16 channels, aligned.</b> The device argument <code>channels=N</code> selects 1, 2, 4, 8 or 16 TX and RX channels on a ZCU216 (1 or 2 on an RFSoC 4x2), aligned by multi-tile sync like a multi-channel USRP.</td>
+</tr>
+<tr>
+<td><b>Wire formats</b></td>
+<td><b>Trade sample width for bandwidth.</b> The FPGA converts between the converters' 16-bit samples and sc16, sc12 or sc8 on the wire, so a narrower format carries a higher rate on the same link.</td>
+</tr>
+<tr>
+<td><b>Beamforming</b></td>
+<td><b>TX and RX phasers in the FPGA.</b> One complex weight per channel, set as a steering angle or as raw weights through UHD, for beamforming and calibration.</td>
+</tr>
+<tr>
+<td><b>x86 and Arm hosts</b></td>
+<td><b>SIMD on both.</b> The host module builds on x86_64 (AVX-512) and aarch64 (NEON)</td>
+</tr>
+<tr>
+<td><b>5G NR</b></td>
+<td><b>A radio for open-source 5G stacks.</b> OCUDU and Duranta gNBs run unmodified with an RFSoC board as their radio, over cable and over the air (<a href="#5g-nr-with-ocudu-and-duranta">below</a>).</td>
+</tr>
+</table>
+
+## Supported boards
+
+Each board offers several channel counts and sample rates ([Sampling rate options](#sampling-rate-options)).
+
+| Board | Converters | Channel counts (`channels=N`) | Max rate per channel | Carrier range |
 |---|---|---|---|---|
-| AMD ZCU216 | 1, 2, 4, 8, 16 | 2500, 2457.6 or 2400 | 60 .. 1250 | 0 .. fs/2 |
-| Real Digital RFSoC 4x2 | 1, 2 | 5000, 4915.2 or 4800 | 120 .. 2500 | 0 .. fs/2 |
+| [**Xilinx RFSoC ZCU216**](https://www.amd.com/en/products/adaptive-socs-and-fpgas/evaluation-boards/zcu216.html) | 16T16R | 1, 2, 4, 8, 16 | 1250 MS/s | 0 .. 1250 MHz |
+| [**Real Digital RFSoC 4x2**](https://www.realdigital.org/hardware/rfsoc-4x2) | 2T4R | 1, 2 | 2500 MS/s | 0 .. 2500 MHz |
+| **Other Xilinx RFSoC boards** | Work in progress | | | |
 
-Another RFSoC board can be added: `fpga/README.md` ("Add a board") and a
-`Board` entry in `rfsoc/server/boards.py`.
+## Quick start
 
-## What you need
+### Before you run
 
-| side | what |
-|---|---|
-| board | one of the above with PYNQ, and a QSFP28 100G cable to the host |
-| host | Linux on x86_64 (AVX-512 used when present) or aarch64, a ConnectX-5/6/7 100G NIC (mlx5), Ubuntu 24.04 packages `libuhd-dev` 4.6, `uhd-host`, `python3-uhd`, `dpdk` / `libdpdk-dev` 23.11, `rdma-core`; optionally `gnuradio` 3.10 |
-| bitstreams | for the board's PYNQ version (2.7, 3.0 or 3.1): the `bitstreams/` submodule, a [release](https://github.com/WeiCheng14159/uhd-rfsoc/releases), or built with that version's Vivado release (2021.1 for PYNQ 2.7, `fpga/README.md`) |
+- **Board:** a ZCU216 or RFSoC 4x2 running PYNQ 2.7, 3.0 or 3.1 ([how to flash it](QUICK_START.md#before-you-start-pynq-on-the-sd-card)), on the LAN, with a QSFP28 100G cable to the host.
+- **Host:** Linux (x86_64 or aarch64) with a ConnectX-5, -6 or -7 100G NIC. Tested with UHD 4.6, DPDK 23.11 and GNU Radio 3.10.
+- **Bitstreams:** prebuilt for every board and PYNQ version in [uhd-rfsoc-bitstream](https://github.com/functions-lab/uhd-rfsoc-bitstream/releases). The setup fetches the one set your board needs (15-55 MB).
 
-### Submodules
+### 1. Set up the board and the host
 
-| path | what | needed for |
-|---|---|---|
-| `bitstreams/` | the prebuilt bitstreams, [uhd-rfsoc-bitstream](https://github.com/WeiCheng14159/uhd-rfsoc-bitstream), tagged like this repository (`v1.0` here pins its `v1.0`) | installing bitstreams on a board (on the PC) |
-| `host/uhd` | UHD v4.6.0.0 sources, reference only | nothing: building uses the installed UHD |
-| `host/gnuradio/gnuradio` | GNU Radio v3.10.9.2 sources, reference only | nothing |
+**[QUICK_START.md](QUICK_START.md)** takes a board with a fresh PYNQ image and a fresh host to the GNU Radio demo in four steps:
 
-`bitstreams/` is fetched over SSH (`git@github.com:...`): it needs an SSH
-key registered with GitHub. It comes as a shallow clone of its pinned
-commit; `host/uhd` and `host/gnuradio/gnuradio` come with their full history
-(larger, and nothing needs them).
+1. [Clone](QUICK_START.md#1-clone-on-the-pc) the repository.
+2. [Set up the board](QUICK_START.md#2-set-up-the-board-on-the-board-user-xilinx): install the bitstreams and start the daemon.
+3. [Set up the host](QUICK_START.md#3-set-up-the-host-on-the-pc): the 100G port, DPDK and the UHD module.
+4. [Run](QUICK_START.md#4-run) the demo.
+
+### 2. Discover, probe, stream
+
+The demo at the top of this page is these three standard UHD tools against a ZCU216. The `uhd-rfsoc` wrapper adds `sudo`, which the DPDK data plane needs, and finds UHD's examples.
 
 ```sh
-git clone git@github.com:WeiCheng14159/uhd-rfsoc.git && cd uhd-rfsoc
-git submodule update --init bitstreams      # only the bitstreams (~180 MB)
-git submodule update --init                 # or every submodule
-git pull && git submodule update bitstreams     # later: follow a new pin
+# discover the board; no root needed
+uhd_find_devices --args type=rfsoc
 ```
 
-`git clone --recurse-submodules` fetches all of them at once. The board's
-checkout needs none: bitstreams are copied to it from the PC (step 2).
-
-## Get started
-
-**1. Bitstreams.** Every set, per PYNQ version and board, is in the
-`bitstreams/` submodule (`bitstreams/pynq<version>/<board>/`, `.bit` +
-`.hwh`; "Submodules" above):
-
 ```sh
-git submodule update --init bitstreams
-(cd bitstreams/pynq2.7/zcu216 && sha256sum -c --quiet SHA256SUMS)   # check a set
-```
-
-or download `uhd-rfsoc-bitstreams-<board>-pynq<version>.zip` from the
-release, or build them:
-
-```sh
-cd fpga && make BOARD=zcu216 templates   # or BOARD=rfsoc4x2; PYNQ 2.7 -> fpga/build/<board>/bitstreams/
-cd fpga && make BOARD=zcu216 PYNQ=3.0 templates   # PYNQ 3.0 (Vivado 2022.1) -> fpga/build/pynq3.0/<board>/bitstreams/
-```
-
-**2. The board** (PYNQ, user `xilinx`):
-
-```sh
-git clone https://github.com/WeiCheng14159/uhd-rfsoc.git ~/jupyter_notebooks/uhd-rfsoc
-cd ~/jupyter_notebooks/uhd-rfsoc
-sudo rfsoc/setup_board.sh       # once: xrfdc MTS bindings if missing, rfsoc/server/uhd_rfsoc.conf
-# set data_ip (the FPGA's 100G address, on the host port's subnet) in rfsoc/server/uhd_rfsoc.conf
-```
-
-Copy the bitstreams into `rfsoc/server/` (from the PC:
-`rfsoc/push_bitstreams.sh bitstreams/pynq<version>/<board> xilinx@<board-ip>`,
-or `fpga/build/<board>/bitstreams` for your own builds),
-then on the board:
-
-```sh
-./run_daemon.sh                 # start; returns once it serves (~20 s)
-./run_daemon.sh status          # also: stop, restart, log, fg; log /tmp/uhd_daemon.log
-```
-
-**3. The host:**
-
-```sh
-sudo apt install libuhd-dev uhd-host python3-uhd dpdk libdpdk-dev rdma-core ibverbs-providers cmake g++ pkg-config
-sudo host/setup_cx5.sh <100g-iface> <host-data-ip>/24   # 100G CAUI-4, RS-FEC, MTU 9000
-sudo host/setup_dpdk.sh <100g-iface> --install          # hugepages, mlx5 / RDMA checks
-cmake -S host -B host/build -DCMAKE_BUILD_TYPE=Release && cmake --build host/build -j
-sudo cmake --install host/build                         # the module into UHD's module dir, the wrapper uhd-rfsoc
-```
-
-Keep NetworkManager off the 100G port (`sudo nmcli device set <100g-iface>
-managed no`). `host/README.md` has the details.
-
-**4. Run** any UHD application as root (the data plane is DPDK);
-`uhd-rfsoc <app>` adds `sudo` and finds UHD's examples:
-
-```sh
-uhd_find_devices --args type=rfsoc                      # every board (no root needed)
+# probe it as a 4-channel UHD device
 uhd-rfsoc uhd_usrp_probe --args type=rfsoc,addr=<board-ip>,channels=4
-uhd-rfsoc benchmark_rate --args type=rfsoc,addr=<board-ip> --rx_rate 1.25e9 --rx_cpu sc16
-uhd-rfsoc tx_waveforms --args type=rfsoc,channels=2 --rate 625e6 --freq 950e6 --wave-type SINE --wave-freq 10e6
-host/gnuradio/run_tones.sh 1 --addr <board-ip>          # GNU Radio: a tone out, its spectrum in
 ```
 
-Device args: `addr=` picks a board (else discovery), `channels=N` the
-channel count (a new N reloads the bitstream, ~16 s), `product=zcu216` /
-`rfsoc4x2` filters by board. The names from before the rename still work:
-`type=zcu216` (any board) and `type=rfsoc4x2` (RFSoC 4x2 only).
+```sh
+# stream 4 TX and 4 RX channels at 625 MS/s each in sc16 (80 Gb/s each way) for 10 s
+uhd-rfsoc benchmark_rate --args type=rfsoc,addr=<board-ip>,nports=4,channels=4 \
+    --channels 0,1,2,3 --rx_rate 625e6 --tx_rate 625e6 \
+    --rx_otw sc16 --tx_otw sc16 --rx_cpu sc16 --tx_cpu sc16 --duration 10
+```
 
-## Sample rate (bandwidth) and carrier
+### 3. Run your own UHD application
 
-Each channel is digitised at fs / F, F the RFDC decimation (= interpolation)
-factor, and the RFDC filters pass 0.96 x that rate (-3 dB), so the rate IS
-the bandwidth (`get_rx_bandwidth()` reports it).
+```sh
+# any UHD application, here a 10 MHz tone on 2 channels at 950 MHz
+uhd-rfsoc tx_waveforms --args type=rfsoc,channels=2 --rate 625e6 --freq 950e6 \
+    --wave-type SINE --wave-freq 10e6
+```
 
-* A rate request is met from below: the highest offered rate at or below it
-  (else the lowest). RX and TX always run at the same rate.
-* A rate of the loaded bitstream retunes in place (~1 s); another
-  bitstream's rate (another fs) reloads (10-20 s). Streaming
-  stops either way: set the rate before streaming, as UHD applications do.
-* Rates only a narrower wire format fits on the link are offered when the
-  client declares it: device arg `otw=sc8` (or `sc12`) and the matching
-  `--wirefmt` / `--otw`.
-* The carrier is the RFDC fine-mixer NCO, per channel and direction,
-  anywhere in 0 .. fs/2 of the loaded build.
+| Device argument | Meaning |
+|---|---|
+| `addr=<board-ip>` | which board; without it, the one discovery finds |
+| `channels=N` | the channel count (default 1); a new N reloads the bitstream (~16 s) |
+| `otw=sc8` / `otw=sc12` | a narrower wire format, for the orange and red rates of the [rate table](#sampling-rate-options) |
 
-Each channel count has one run-time-rate build per fs (a template) that serves every factor F of 2 3 4 5 6 8 10 12 16 20 24 40 from
-its top rate down. The rates, in MS/s per channel (wire formats in brackets
-where not every one fits):
+## Sampling rate options
 
-| board | N | fs 2500 / 5000 (250 MHz family) | fs 2400 / 4800 (250 MHz family) | fs 2457.6 / 4915.2 (245.76 MHz family) |
+The data rate $(R)$ on the 100 GbE link (connecting your radio and host machine) is the channel count $(N)$ times the per-channel I/Q sample rate $(f_s)$ times the size of one sample on the wire $(b_{\text{otw}})$:
+
+$$R = N \cdot f_s \cdot b_{\text{otw}} \;\le\;100\ \text{Gb/s}$$
+
+| Symbol | Meaning |
+|---|---|
+| $N$ | channel count |
+| $f_s$ | per-channel I/Q sample rate, which is also the bandwidth |
+| $b_{\text{otw}}$ | bits per I/Q sample of the over-the-wire (OTW) format: 32 for sc16, 24 for sc12, 16 for sc8 |
+
+Example with $N = 4$ on a ZCU216:
+
+| $f_s$ (MS/s) | sc16 | sc12 | sc8 | Formats that fit |
 |---|---|---|---|---|
-| ZCU216 | 1, 2 | 1250, 833.33, 625, 500, 416.67, 312.5, 250, 208.33, 156.25, 125, 104.17, 62.5 | 1200, 800, 600, 480, 400, 300, 240, 200, 150, 120, 100, 60 | 1228.8, 819.2, 614.4, 491.52, 409.6, 307.2, 245.76, 204.8, 153.6, 122.88, 102.4, 61.44 |
-| | 4 | 1250 [sc8], 833.33 [sc12 sc8], 625 .. 62.5 | 1200 [sc8], 800 [sc12 sc8], 600 .. 60 | 1228.8 [sc8], 819.2 [sc12 sc8], 614.4 .. 61.44 |
-| | 8 | 625 [sc8], 500, 416.67 [sc12 sc8], 312.5 .. 62.5 | 600 [sc8], 480, 400 [sc12 sc8], 300 .. 60 | 614.4 [sc8], 491.52, 409.6 [sc12 sc8], 307.2 .. 61.44 |
-| | 16 | 312.5 [sc8], 250, 208.33 [sc12 sc8], 156.25 .. 62.5 | 300 [sc8], 240, 200 [sc12 sc8], 150 .. 60 | 307.2 [sc8], 245.76, 204.8 [sc12 sc8], 153.6 .. 61.44 |
-| RFSoC 4x2 | 1 | 2500, 1666.67, 1250 .. 125 | 2400, 1600, 1200 .. 120 | 2457.6, 1638.4, 1228.8 .. 122.88 |
-| | 2 | 1250 .. 125; with the extra sc8max build also 2500 [sc8], 1666.67 [sc12 sc8] | 2400 [sc8], 1600 [sc12 sc8], 1200 .. 120 | 2457.6 [sc8], 1638.4 [sc12 sc8], 1228.8 .. 122.88 |
+| 625 | 80 Gb/s | 60 Gb/s | 40 Gb/s | sc16, sc12, sc8 |
+| 833.33 | 107 Gb/s (x) | 80 Gb/s | 53 Gb/s | sc12, sc8 |
+| 1250 | 160 Gb/s (x) | 120 Gb/s (x) | 80 Gb/s | sc8 only |
 
-Only installed bitstreams count: install every fs for every rate. The
-daemon's `info rate_otw=` lists each rate's formats (Protocol §9, §10 in
-`AGENTS.md`).
+Choose the channel count with the device argument `channels=N` and the sample rate with `--tx_rate` and `--rx_rate`. The OTW format is sc16 by default: pass the device argument `otw=sc8` or `otw=sc12` to ask for a narrower one.
+
+```sh
+# 4 channels at 625 MS/s each, sc16 (the default format)
+uhd-rfsoc benchmark_rate --args type=rfsoc,channels=4 --channels 0,1,2,3 --rx_rate 625e6 --tx_rate 625e6
+```
+
+```sh
+# 4 channels at 1250 MS/s each: only sc8 fits
+uhd-rfsoc benchmark_rate --args type=rfsoc,channels=4,otw=sc8 --channels 0,1,2,3 --rx_rate 1.25e9
+```
+
+### Rates per board and channel count
+
+- **Bold** rates are the LTE / 5G NR rates.
+- ${\color{orange}\textsf{Orange}}$ rates are only available for sc12 or sc8. ${\color{red}\textsf{Red}}$ rates are only available for sc8.
+- Uncoloured rates fit in every format.
+
+| Board | f_RFDC (GS/s) | Carrier (MHz) | Channels | Max f_s in sc16 / sc12 / sc8 (MS/s) | Supported f_s per channel (MS/s) |
+|---|---|---|---|---|---|
+| **ZCU216** | 2.5 | 0 .. 1250 | 1 | 1250 / 1250 / 1250 | 62.5, 104.17, 125, 156.25, 208.33, 250, 312.5, 416.67, 500, 625, 833.33, 1250 |
+| | | | 2 | 1250 / 1250 / 1250 | 62.5, 104.17, 125, 156.25, 208.33, 250, 312.5, 416.67, 500, 625, 833.33, 1250 |
+| | | | 4 | 625 / 833.33 / 1250 | 62.5, 104.17, 125, 156.25, 208.33, 250, 312.5, 416.67, 500, 625, ${\color{orange}\textsf{833.33}}$, ${\color{red}\textsf{1250}}$ |
+| | | | 8 | 312.5 / 500 / 625 | 62.5, 104.17, 125, 156.25, 208.33, 250, 312.5, ${\color{orange}\textsf{416.67}}$, ${\color{orange}\textsf{500}}$, ${\color{red}\textsf{625}}$ |
+| | | | 16 | 156.25 / 250 / 312.5 | 62.5, 104.17, 125, 156.25, ${\color{orange}\textsf{208.33}}$, ${\color{orange}\textsf{250}}$, ${\color{red}\textsf{312.5}}$ |
+| | 2.4576 | 0 .. 1228.8 | 1 | 1228.8 / 1228.8 / 1228.8 | **61.44**, 102.4, **122.88**, 153.6, 204.8, **245.76**, 307.2, 409.6, **491.52**, 614.4, 819.2, 1228.8 |
+| | | | 2 | 1228.8 / 1228.8 / 1228.8 | **61.44**, 102.4, **122.88**, 153.6, 204.8, **245.76**, 307.2, 409.6, **491.52**, 614.4, 819.2, 1228.8 |
+| | | | 4 | 614.4 / 819.2 / 1228.8 | **61.44**, 102.4, **122.88**, 153.6, 204.8, **245.76**, 307.2, 409.6, **491.52**, 614.4, ${\color{orange}\textsf{819.2}}$, ${\color{red}\textsf{1228.8}}$ |
+| | | | 8 | 307.2 / 491.52 / 614.4 | **61.44**, 102.4, **122.88**, 153.6, 204.8, **245.76**, 307.2, ${\color{orange}\textsf{409.6}}$, ${\color{orange}\textsf{\textbf{491.52}}}$, ${\color{red}\textsf{614.4}}$ |
+| | | | 16 | 153.6 / 245.76 / 307.2 | **61.44**, 102.4, **122.88**, 153.6, ${\color{orange}\textsf{204.8}}$, ${\color{orange}\textsf{\textbf{245.76}}}$, ${\color{red}\textsf{307.2}}$ |
+| | 2.4 | 0 .. 1200 | 1 | 1200 / 1200 / 1200 | 60, 100, 120, 150, 200, 240, 300, 400, 480, 600, 800, 1200 |
+| | | | 2 | 1200 / 1200 / 1200 | 60, 100, 120, 150, 200, 240, 300, 400, 480, 600, 800, 1200 |
+| | | | 4 | 600 / 800 / 1200 | 60, 100, 120, 150, 200, 240, 300, 400, 480, 600, ${\color{orange}\textsf{800}}$, ${\color{red}\textsf{1200}}$ |
+| | | | 8 | 300 / 480 / 600 | 60, 100, 120, 150, 200, 240, 300, ${\color{orange}\textsf{400}}$, ${\color{orange}\textsf{480}}$, ${\color{red}\textsf{600}}$ |
+| | | | 16 | 150 / 240 / 300 | 60, 100, 120, 150, ${\color{orange}\textsf{200}}$, ${\color{orange}\textsf{240}}$, ${\color{red}\textsf{300}}$ |
+| **RFSoC 4x2** | 5.0 | 0 .. 2500 | 1 | 2500 / 2500 / 2500 | 125, 208.33, 250, 312.5, 416.67, 500, 625, 833.33, 1000, 1250, 1666.67, 2500 |
+| | | | 2 | 1250 / 1666.67 / 2500 | 125, 208.33, 250, 312.5, 416.67, 500, 625, 833.33, 1000, 1250, ${\color{orange}\textsf{1666.67}}$, ${\color{red}\textsf{2500}}$ |
+| | 4.9152 | 0 .. 2457.6 | 1 | 2457.6 / 2457.6 / 2457.6 | **122.88**, 204.8, **245.76**, 307.2, 409.6, **491.52**, 614.4, 819.2, 983.04, 1228.8, 1638.4, 2457.6 |
+| | | | 2 | 1228.8 / 1638.4 / 2457.6 | **122.88**, 204.8, **245.76**, 307.2, 409.6, **491.52**, 614.4, 819.2, 983.04, 1228.8, ${\color{orange}\textsf{1638.4}}$, ${\color{red}\textsf{2457.6}}$ |
+| | 4.8 | 0 .. 2400 | 1 | 2400 / 2400 / 2400 | 120, 200, 240, 300, 400, 480, 600, 800, 960, 1200, 1600, 2400 |
+| | | | 2 | 1200 / 1600 / 2400 | 120, 200, 240, 300, 400, 480, 600, 800, 960, 1200, ${\color{orange}\textsf{1600}}$, ${\color{red}\textsf{2400}}$ |
 
 ## TX digital predistortion
 
@@ -169,23 +207,95 @@ uhd-rfsoc python3 tools/rfsoc_dpd.py --args type=rfsoc,addr=<board-ip> --rate 62
 uhd-rfsoc python3 tools/rfsoc_dpd.py --args type=rfsoc,addr=<board-ip> --rate 62.5e6 --freq 1e9 --fit 4 --keep
 ```
 
-## Layout
+## GNU Radio demo
 
-| directory | what | runs on |
+A 4-channel GNU Radio flowgraph with uhd-rfsoc, each DAC cabled to its ADC: 625 MS/s per channel in sc16, a 10 MHz tone on a carrier.
+
+```sh
+# ZCU216: 4T4R at 625 MS/s per channel
+host/gnuradio/run_tones.sh 4
+```
+
+```sh
+# RFSoC 4x2: 1T1R at 2500 MS/s
+host/gnuradio/run_tones.sh 1 -r 2.5e9
+```
+
+| GNU Radio flowgraph | Spectrum of RX 0-3 | RX 0-3 with TX shifted 90° apart |
+|:---:|:---:|:---:|
+| ![The 4-channel flowgraph](docs/img/gnuradio_flowgraph.png) | ![Spectrum of the four RX channels](docs/img/gnuradio_spectrum.png) | ![Time plots of the four RX channels](docs/img/gnuradio_phase.png) |
+
+- **Standard UHD blocks only:** UHD USRP Sink and Source, Qt GUI sinks.
+- **Spectrum:** a clean tone in the expected frequency band.
+- **Phaser control:** one phase per TX and RX channel.
+
+The flowgraphs for 1, 2, 4, 8 and 16 channels and their options are in [host/gnuradio/README.md](host/gnuradio/README.md).
+
+## 5G NR with OCUDU and Duranta
+
+Two open-source 5G RAN stacks, [OCUDU](https://ocudu.org) and [Duranta](https://lfnetworking.org/projects/duranta/), run unmodified as Split 8 gNBs with an RFSoC board as their radio.
+
+<p align="center"><img src="docs/img/5g_setup.png" alt="The eight tested gNB-UE pairs: four over cable with srsUE, four over the air with commodity phones" width="100%"></p>
+
+<table>
+<tr><th>Setup</th><th>Description</th></tr>
+<tr>
+<td><b>Pairs 1-4, over cable</b></td>
+<td><b>OCUDU gNB and srsUE on a 20 MHz FDD cell in band n28.</b> The RFSoC boards run at 122.88 MS/s, the USRP X310 at 23.04 MS/s.</td>
+</tr>
+<tr>
+<td><b>Pairs 5-8, over the air</b></td>
+<td><b>A commodity phone on a 100 MHz TDD cell in band n78.</b> The carrier is 3609.99 MHz, in the second Nyquist zone of the RFSoC 4x2.</td>
+</tr>
+<tr>
+<td><b>Hosts</b></td>
+<td><b>x86 and Arm.</b> An x86 workstation, or an Arm-based NVIDIA DGX Spark.</td>
+</tr>
+</table>
+
+## Repository layout
+
+| Path | What | Documentation |
 |---|---|---|
-| `fpga/` | the bitstreams: one build flow for every board in `fpga/boards/<board>/`, the custom IP in `fpga/ip/` | Vivado |
-| `rfsoc/` | the board daemon (`server/`) and the `rfsoc_lib` it uses (RFDC, clocks, MTS); `run_daemon.sh` (top) starts it | board (PYNQ) |
-| `host/` | the UHD module `libuhd_rfsoc.so` (DPDK data plane), the `uhd-rfsoc` wrapper and tools, hardware tests (`benchmark/`), GNU Radio flowgraphs (`gnuradio/`) | host PC |
+| `host/` | the UHD device module, the `uhd-rfsoc` wrapper and the host setup scripts | [host/README.md](host/README.md) |
+| `host/gnuradio/` | the GNU Radio flowgraphs | [host/gnuradio/README.md](host/gnuradio/README.md) |
+| `host/benchmark/` | tests on a real board over the 100G link | [host/benchmark/README.md](host/benchmark/README.md) |
+| `rfsoc/` | the board side: the daemon, the board library and the board setup scripts | [rfsoc/README.md](rfsoc/README.md) |
+| `fpga/` | the FPGA build flow, the block designs of each board and the custom IP | [fpga/README.md](fpga/README.md) |
+| `bitstreams/` | the prebuilt bitstreams, per PYNQ version and board (submodule) | [uhd-rfsoc-bitstream](https://github.com/functions-lab/uhd-rfsoc-bitstream) |
 
-Each directory's `README.md` is for users, its `AGENTS.md` for contributors;
-`AGENTS.md` here has the rules and the wire protocol.
+Troubleshooting: [rfsoc/README.md](rfsoc/README.md) for the board, [host/README.md](host/README.md) for the host.
 
-## Continuous integration
+## Contribute
 
-`.github/workflows/ci.yml` builds the host module on x86_64 and aarch64
-(Ubuntu 24.04, UHD 4.6, DPDK 23.11), checks the SIMD kernels against the
-scalar ones bit for bit, runs the daemon's unit tests, compiles every
-flowgraph and checks the Python and shell sources. A `v*` tag publishes a
-release (`.github/workflows/release.yml`). The bitstreams are not built in
-CI (GitHub's runners have no Vivado): they are built locally, one set per
-board and PYNQ version (`fpga/README.md`).
+Bug reports, questions and pull requests are welcome in the [issue tracker](https://github.com/functions-lab/uhd-rfsoc/issues). The `AGENTS.md` files under `host/`, `rfsoc/` and `fpga/` describe the internals and the rules a change has to keep.
+
+## Acknowledgements
+
+uhd-rfsoc is built on these open-source projects, and we are grateful to their authors:
+
+- **[UHD](https://github.com/EttusResearch/uhd)**: the USRP Hardware Driver, whose device interface uhd-rfsoc implements.
+- **[GNU Radio](https://www.gnuradio.org)**: the SDR framework of the flowgraph demo.
+- **[PYNQ](https://www.pynq.io)**: the framework the board daemon runs on.
+- **[DPDK](https://www.dpdk.org)**: the kernel-bypass data plane on the host.
+- **[OCUDU](https://ocudu.org)**, **[Duranta](https://lfnetworking.org/projects/duranta/)** and **[srsRAN](https://github.com/srsran/srsRAN_4G)**: the 5G stacks of the gNB and UE tests.
+
+## License
+
+[GPL-3.0-or-later](LICENSE), the license of UHD and GNU Radio. Files that carry their own notice, such as the RFSoC 4x2 board files under `fpga/boards/rfsoc4x2/board_files/`, keep it.
+
+## Citation
+
+If you use uhd-rfsoc in your research, please cite [our paper](https://arxiv.org/abs/2611.17723):
+
+```bibtex
+@misc{uhdrfsoc2026,
+  title        = {{uhd-rfsoc}: Bringing Off-the-Shelf {RFSoC} Boards to Unmodified {UHD} Applications},
+  author       = {Wei Cheng and Yiming Li and Junyao Zheng and Cheng-Bin Chen and Tingjun Chen},
+  year         = {2026},
+  eprint       = {2611.17723},
+  archivePrefix = {arXiv},
+  primaryClass = {cs.NI},
+  url          = {https://arxiv.org/abs/2611.17723}
+}
+```

@@ -1,7 +1,7 @@
 # Release: on a v* tag, run CI, then publish a GitHub release with the host
-# module built for Ubuntu 24.04 (x86_64, aarch64). The bitstreams are built
-# with Vivado outside CI and attached to the release afterwards
-# (README.md, "Bitstreams").
+# module built for Ubuntu 24.04 (x86_64, aarch64). No bitstreams here: they
+# are built with Vivado outside CI and published in the uhd-rfsoc-bitstream
+# repository (the bitstreams/ submodule) and its releases.
 name: Release
 
 on:
@@ -28,6 +28,11 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           name: uhd-rfsoc ${{ github.ref_name }}
+          body: |
+            Host module for Ubuntu 24.04, x86_64 and aarch64 (`uhd-rfsoc-host-*.tar.gz`, `SHA256SUMS`).
+
+            Prebuilt bitstreams for this version, one zip per board and PYNQ version:
+            https://github.com/functions-lab/uhd-rfsoc-bitstream/releases/tag/${{ github.ref_name }}
           generate_release_notes: true
           prerelease: ${{ startsWith(github.ref_name, 'v0.') }}
           files: |

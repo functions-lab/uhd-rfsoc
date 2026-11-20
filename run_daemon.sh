@@ -32,7 +32,7 @@ addr() { ip -4 -br addr show eth0 2>/dev/null | awk '{print $3}' | cut -d/ -f1; 
 check() {
     [ -x "$PY" ] || { echo "no PYNQ Python at $PY: run this on the board (or set UHD_DAEMON_PYTHON)" >&2; exit 1; }
     [ -f "$SRV/uhd_rfsoc.conf" ] || { echo "no $SRV/uhd_rfsoc.conf: run 'sudo rfsoc/setup_board.sh' once (it creates it from uhd_rfsoc.conf.example), then set data_ip in it" >&2; exit 1; }
-    compgen -G "$SRV/*_v49_*ch_qsfp*.bit" > /dev/null || { echo "no bitstreams in $SRV: copy them from the build machine with rfsoc/push_bitstreams.sh <bit_dir> <user>@<board> (or the .bit/.hwh files of a release)" >&2; exit 1; }
+    compgen -G "$SRV/*_v49_*ch_qsfp*.bit" > /dev/null || { echo "no bitstreams in $SRV: install them from the PC with rfsoc/get_bitstreams.sh <user>@<board> (prebuilt) or rfsoc/push_bitstreams.sh <bit_dir> <user>@<board> (your builds)" >&2; exit 1; }
 }
 
 # the channel counts of the bitstreams here (<board>_v49_<N>ch_qsfp*.bit), e.g. 1/2/4/8/16

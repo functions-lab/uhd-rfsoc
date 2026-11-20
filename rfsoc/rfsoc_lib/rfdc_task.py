@@ -13,7 +13,7 @@ class RfdcTask(OverlayTask):
     the NCOs. Run on its own thread (start() / join()); MTS is the caller's
     (rfsoc_lib.mts.MyMTS, run by the daemon after this task)."""
 
-    def __init__(self, overlay, debug_mode=False, board="ZCU216", masked_tiles=()):
+    def __init__(self, overlay, debug_mode=False, board="ZCU216", masked_tiles=(), clock_source="internal"):
         """board: the xrfclk/<board>/ register files; masked_tiles: the DAC
         and ADC tiles left unpowered (tiles the board does not wire: init()
         skips them instead of timing out on their PLLs)."""
@@ -22,6 +22,7 @@ class RfdcTask(OverlayTask):
         rfdc_ip = overlay.rfdc.usp_rf_data_converter
         self.my_rfdc = MyRFdc(rfdc_ip, debug_mode=debug_mode)
         self.board = board
+        self.clock_source = clock_source      # LMK04828 reference: internal | external
         for t in masked_tiles:
             self.my_rfdc.rfdc_status.dac_tile_mask_out[t] = True
             self.my_rfdc.rfdc_status.adc_tile_mask_out[t] = True
@@ -44,9 +45,9 @@ class RfdcTask(OverlayTask):
             raise RuntimeError(f"RFSoC board {self.board}: no clock register files in {config_dir}")
         lmk_config, lmx_config = clock_plan(
             config_dir, lmx_out=RFDC_CONFIG['RefClockForPLL'],
-            pl_clk=RFDC_CONFIG.get('MTSPLClockFreq', 300.0))
+            pl_clk=RFDC_CONFIG.get('MTSPLClockFreq', 300.0), source=self.clock_source)
         self.clock_files = (lmk_config.file, lmx_config.file)
-        logging.info(f"clock plan: {lmk_config.file} + {lmx_config.file}")
+        logging.info(f"clock plan ({self.clock_source} reference): {lmk_config.file} + {lmx_config.file}")
 
         _lmk_prop, _lmx_prop = program_clocks(lmk_config, lmx_config)
         if self.debug_mode:

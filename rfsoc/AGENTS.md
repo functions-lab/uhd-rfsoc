@@ -13,7 +13,9 @@ the board setup for people; this file is the rules of the board side.
   load-bearing (`backend.find_lib_root` finds it from the daemon's
   directory): do not rename or move either.
 - The board holds a git clone of the repository; code reaches it by `git
-  pull`, bitstreams by `push_bitstreams.sh <bit_dir> <user@board>`.
+  pull`, bitstreams by `push_bitstreams.sh <bit_dir> <user@board>`
+  (`get_bitstreams.sh` fetches one prebuilt set into `bitstreams/` as a
+  sparse, blob-less checkout of the pinned commit, and can push it).
   `server/uhd_rfsoc.conf` and `server/*.bit` / `*.hwh` are board-local and
   gitignored (top `.gitignore`); never add a board's addresses or files to
   the code.
@@ -45,4 +47,4 @@ the board setup for people; this file is the rules of the board side.
 | RFDC bring-up, clocks, MTS, run-time MMCM retune | `rfsoc_lib/rfdc_task.py`, `rfdc.py`, `clocks.py`, `mts.py`, `clk_wiz.py` |
 | LMK04828 / LMX2594 register files per board | `rfsoc_lib/xrfclk/<board>/` |
 | 8A34001 GT refclk (ZCU216) | `rfsoc_lib/gt_refclk.py` + `xrfclk/ZCU216/gt_refclk_8a34001_156M25.txt` |
-| board setup, bitstream copy, launcher | `setup_board.sh`, `xrfdc_mts_patch.py`, `push_bitstreams.sh`, `../run_daemon.sh` |
+| board setup, bitstream copy, launcher | `setup_board.sh`, `xrfdc_mts_patch.py`, `get_bitstreams.sh`, `push_bitstreams.sh`, `../run_daemon.sh` |

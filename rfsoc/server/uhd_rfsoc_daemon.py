@@ -266,6 +266,9 @@ def build_argparser() -> argparse.ArgumentParser:
                    help="FPGA 100G MAC [config data_mac, else derived from the eth0 MAC]")
     p.add_argument("--serial", default=None, help="device serial [from eth0 MAC]")
     p.add_argument("--name", default=None, help="device name [config name, else the board: zcu216, rfsoc4x2]")
+    p.add_argument("--clock-source", default=None, choices=("internal", "external"),
+                   help="LMK04828 reference: external = the reference input (a GPSDO's 10 MHz), falling back to the "
+                        "board's own oscillator; internal = the oscillator only [config clock_source, else external]")
     p.add_argument("--log", default=None, help="log file (default: stderr)")
     p.add_argument("--chain-grace-ms", type=float, default=1.0,
                    help="an open num_more chain streams this long past its end "
@@ -333,6 +336,7 @@ def make_backend(args, board):
                      rx_freq=args.rx_freq, tx_freq=args.tx_freq,
                      nco_phase_reset=args.nco_phase_reset,
                      rx_chain_grace_s=args.chain_grace_ms / 1e3,
+                     clock_source=args.clock_source,
                      **link_opts(args))
 
 
@@ -350,6 +354,12 @@ def main(argv=None) -> int:
     except board_config.ConfigError as e:
         log.error("%s", e)
         return 2
+    try:
+        args.clock_source, cs_from = board_config.clock_source(args.clock_source, config=args.config)
+    except board_config.ConfigError as e:
+        log.error("%s", e)
+        return 2
+    log.info("clock source: %s (%s)", args.clock_source, cs_from)
     log.info("addresses: management = the address each request arrives on%s; %s",
              f" (overridden: {args.mgmt_ip})" if args.mgmt_ip else "", how)
     if os.geteuid() != 0:
